@@ -1,0 +1,161 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= glow-adoc
+
+An AsciiDoc terminal reader using AsciidoctorJ, Aesh and TamboUI.
+The default interactive view is a pager. Redirected output is plain text.
+
+== Build and run
+
+Use Java 27. Application libraries target Java 25 bytecode, while the JVM CLI requires Java 27.
+
+[source,shell]
+----
+./gradlew checkAll
+java -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar README.adoc
+./cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT-app.jar README.adoc
+java -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --no-pager README.adoc
+cat README.adoc | java -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar -
+----
+
+The executable jar selects an installed Java 27+ at launch time, in this order:
+mise, SDKMAN!, asdf-vm, jenv, jabba, `JAVA_HOME`, then `java` on PATH.
+Within a manager it tries the current selection when available, then other installed candidates.
+Missing or incompatible runtimes are skipped. It does not download JDKs or change manager defaults.
+The launcher accepts JVM options through `JAVA_OPTS` and preserves application arguments.
+Direct `java -jar` invocation uses the Java executable you select yourself.
+Run `./gradlew :cli-jvm:install` to install it as `~/.local/bin/glow-adoc`.
+Add `~/.local/bin` to `PATH` to invoke `glow-adoc` directly. Installing replaces an existing executable at that path.
+The ordinary jar supports `java -jar`. Both contain their runtime dependencies.
+JRuby can emit Java 27 warnings about its use of `sun.misc.Unsafe`.
+
+Pager controls: arrows or `j/k`, Page Up/Down or `b/Space`, `g/G`, `/` to search,
+`n/N` for matches, `r` to refresh terminal colours, and `q` to quit.
+Left/right scroll wide code and tables. Resize reflows ordinary text.
+
+== Configuration
+
+Copy link:docs/config.toml[the example configuration] to
+`$XDG_CONFIG_HOME/glow-adoc/config.toml`, falling back to `~/.config/glow-adoc/config.toml`.
+Windows uses `%APPDATA%/glow-adoc/config.toml`, falling back to `~/AppData/Roaming/glow-adoc/config.toml`.
+Interactive Windows support is deferred; direct text output can be used there.
+
+CLI arguments override configuration. Use `--config PATH` for an explicit file.
+Missing default files are allowed; malformed files and unknown keys produce an error.
+
+[source,shell]
+----
+java -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --theme=light --color=always --width=100 document.adoc
+----
+
+`--color` accepts `auto`, `always` and `never`; auto respects `NO_COLOR` and `TERM=dumb`.
+`--theme` accepts `auto`, `light` and `dark`.
+`--images=never` disables graphics. `--no-pager` emits text and diagram source directly.
+
+== Terminal capabilities
+
+The pager queries foreground/background colours and selected palette entries using OSC 10/11/4.
+It queries light/dark mode using `CSI ? 996 n` and enables mode 2031 notifications when supported.
+It refreshes colours after notifications. Without notifications, bounded queries run every two seconds;
+two unanswered rounds stop polling until manual refresh or focus regain.
+Explicit light/dark configuration fixes the reader's appearance.
+No replies means a static dark fallback. Terminal-global colours are preserved.
+
+Kitty graphics are detected by a protocol query. PNG/JPEG images and generated diagrams are transmitted
+as data, so the terminal does not need access to local paths. Unsupported terminals retain image descriptions
+and diagram source. Multiplexers may block queries or graphics; text remains available.
+
+Reference: https://ghostty.org/docs/vt/reference[Ghostty VT],
+https://contour-terminal.org/vt-extensions/color-palette-update-notifications/[theme notifications],
+https://sw.kovidgoyal.net/kitty/graphics-protocol/[Kitty graphics].
+
+== Highlighting and diagrams
+
+Lumis4J provides source highlighting in its own module. The small `highlight` contract returns styled spans;
+another implementation can replace Lumis4J without changing the parser, pager or diagram integrations.
+Unknown grammars retain plain source. Only recognised ANSI styling becomes terminal output.
+
+PlantUML is embedded and uses Smetana for graph layout. Mermaid graphics use an optional `merman-cli`
+executable on PATH or the `merman` configuration value. Missing or failed renderers retain source,
+highlighted when the selected highlighter supports the language.
+
+Install Merman separately using one of these channels:
+
+[source,shell]
+----
+brew install merman-cli
+cargo binstall merman-cli
+----
+
+Homebrew provides Linux packages as well as macOS packages. Direct platform archives are available from
+https://github.com/Latias94/merman/releases[Merman releases]; verify their checksums before installation.
+Package channels can carry different versions. Linux archive compatibility depends on glibc requirements.
+Check `merman-cli --version`; the integration is tested against 0.8.0.
+Gradle does not download, install or compile Merman.
+
+Document resources stay local. Includes and images are restricted to the document base directory.
+Include selectors (`tag`, `tags`, `lines`) currently produce an unavailable-include marker.
+PlantUML runs with its sandbox profile, and include/import/theme directives are rejected.
+Merman uses its constrained resource profile. Diagram processes have a 15-second limit and bounded output.
+These resource controls are not an operating-system sandbox.
+
+== Packaging and startup
+
+Shadow creates the ordinary jar. A separate task prepends a quoted POSIX launcher to an executable copy,
+following jardiff's packaging technique. A dependency-free Java 8 bootstrap reports the required Java version.
+Service files, JRuby resources and multi-release metadata are preserved; dependencies are not minimised.
+
+Train an optional AOT cache against the packaged jar:
+
+[source,shell]
+----
+./gradlew :cli-jvm:aotTrain
+java -XX:AOTMode=auto -XX:AOTCache=cli-jvm/build/aot/glow-adoc.aot -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --no-pager README.adoc
+----
+
+Regenerate caches when the jar, JDK build, operating system or architecture changes.
+Use `-XX:AOTMode=required` during verification to detect cache rejection.
+No startup improvement is claimed without measurements.
+
+The link:packaging/homebrew/glow-adoc.rb[suggested Homebrew formula] requires the repository,
+release version and checksum to be filled in after a release. It does not install Merman.
+
+Native Image is experimental:
+
+[source,shell]
+----
+GRAALVM_HOME=/path/to/graalvm ./gradlew :cli-native:nativeCompile
+----
+
+The feasibility build includes AsciidoctorJ/JRuby and the complete reader. Successful compilation alone
+does not establish runtime compatibility. Run the showcase with the resulting executable.
+See link:docs/VERIFICATION.adoc[verification notes] for current evidence.
+
+== Development and CI
+
+`checkAll` runs module tests and packaged-jar tests. The latter exercise stdin, configuration overrides,
+executable paths containing spaces and pager input through a pseudo-terminal.
+`GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :diagrams:test` enables the external integration test.
+
+GitHub workflows cover Linux/macOS builds, configuration-cache reuse, AOT, pinned Merman integration,
+a manually triggered Native Image check and tag-triggered draft releases.
+Actions are pinned to commits. Release publication remains manual.
+
+See link:CONTRIBUTING.md[the contributing guide], link:ARCHITECTURE.md[the architecture overview]
+and link:AGENTS.md[repository agent instructions] for development conventions and module boundaries.
+
+== Licence
+
+glow-adoc's own source uses the Mozilla Public License 2.0. See link:LICENSE[the licence text].
+Third-party components retain their licences and notices; see link:THIRD-PARTY.md[the dependency review].
+The embedded PlantUML dependency is its MIT distribution. Ditaa is not included.
+
+== Future TUI
+
+A later TamboUI module can add a document browser, section outline and link navigation.
+It will reuse the document model, layout, search and asset handling. The current pager already uses
+TamboUI's Aesh backend and one terminal connection.
+
+Deferred features include Windows interactive support, Sixel/iTerm graphics, arbitrary extensions,
+STEM rendering and a document browser. Rendering behaviour on real Ghostty/Kitty windows still requires
+manual visual verification.

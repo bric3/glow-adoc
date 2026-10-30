@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MPL-2.0
+
+# Copy to $XDG_CONFIG_HOME/glow-adoc/config.toml or ~/.config/glow-adoc/config.toml.
+pager = true
+width = 0 # Follow terminal width; direct output defaults to 80 columns.
+color = "auto" # auto, always, never
+theme = "auto" # auto, light, dark
+images = "auto" # auto, never
+merman = "merman-cli" # Executable name on PATH or an absolute path.

@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= Verification
+
+Tests cover custom conversion, nested inline styles, tables/lists, local includes, highlighter output,
+wide-character layout, TOML configuration, terminal reply framing, diagram fallbacks and packaged CLI execution.
+
+Automated pseudo-terminal tests verify pager startup, search input, quit, alternate-screen restoration,
+simulated dark/light notifications, Kitty image transmission and application-owned image cleanup.
+They do not verify visual placement, fonts or graphics appearance.
+
+Native Image compilation succeeded locally on macOS ARM64 with Oracle GraalVM 25.0.4.1.1.
+The resulting executable failed while creating AsciidoctorJ: JRuby's `LoggerFactory` reflectively loads
+`org.jruby.util.log.StandardErrorLogger`, which was absent from the image's reachability metadata.
+This establishes a runtime blocker; native packaging remains experimental. GraalVM 27 is configured
+in the manual workflow but has not been exercised locally.
+
+The JVM jar renders the showcase. All 29 module and packaged-jar tests pass, including the optional
+integration with a verified Merman 0.8.0 macOS ARM64 release binary. AOT training and required-cache
+loading both pass with the matching Java 27 build. Training enables `AOTCompatibleOopCompression`
+so cache loading tolerates changes to the heap address layout; five consecutive required-cache
+launches pass. Repeating the final Gradle invocation reuses
+the configuration cache. Actionlint and Homebrew formula Ruby syntax checks pass.
+
+The Java and Kotlin sources use consistent four-space formatting, with explicit Java control-flow
+blocks and resolved imports. Ktlint checks pass. PlantUML's MIT artifact at version 1.2026.6 passes
+the embedded rendering test. Packaged-jar checks verify the project licence and separate upstream
+notices. The runtime dependency graph no longer contains the default GPL PlantUML artifact.
+
+Packaged-launcher tests verify manager priority, incompatible selected runtimes, installed-version
+fallbacks, custom manager directories, paths with spaces, JVM/application arguments and exit codes.
+The install task copies the launcher to a temporary `~/.local/bin`; the installed executable runs.
+
+These are local macOS ARM64 results. GitHub-hosted Linux/macOS jobs have been prepared but not executed.
+The Homebrew formula remains a template until repository, release version and checksum are supplied.
+
+Before release, manually check Ghostty and Kitty on macOS/Linux, a terminal without graphics,
+SSH, resize while images are visible, light/dark changes and terminal restoration after cancellation.

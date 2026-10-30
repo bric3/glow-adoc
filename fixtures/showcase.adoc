@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= glow-adoc showcase
+
+AsciiDoc in your terminal, with *bold*, _emphasis_, `inline code` and https://asciidoctor.org[links].
+
+== Lists
+
+* First item
+** Nested item
+* Second item
+
+term:: A description.
+
+NOTE: Includes and diagrams stay local.
+
+== Source
+
+[source,java]
+----
+public class Hello {
+    public static void main(String[] args) {
+        System.out.println("Hello, terminal!");
+    }
+}
+----
+
+== Table
+
+|===
+|Format |Reader
+|AsciiDoc |glow-adoc
+|===
+
+== Diagrams
+
+[plantuml]
+----
+Alice -> Bob: Hello
+----
+
+[mermaid]
+----
+flowchart LR
+  Source --> Reader --> Terminal
+----
+
+== Unicode
+
+Diacritics: café. Wide text: 日本語. Emoji: 👩‍💻.
+
+== References
+
+See <<_source>>. A footnote footnote:[Footnote content].
