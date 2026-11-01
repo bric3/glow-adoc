@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
+package io.github.bric3.glowadoc.buildlogic
+
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.PathSensitive
@@ -24,6 +26,5 @@ abstract class PackagedCliArguments : CommandLineArgumentProvider {
         "-Dglow.executable=${executable.get().asFile.absolutePath}",
         "-Dglow.fixture=${fixture.get().asFile.absolutePath}",
         "-Dlauncher.executable=${executable.get().asFile.absolutePath}",
-        "-Dlauncher.minimum=27",
     )
 }

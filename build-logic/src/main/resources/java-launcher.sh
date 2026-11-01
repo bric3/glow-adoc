@@ -1,154 +1,176 @@
 #!/bin/sh
 # SPDX-License-Identifier: MPL-2.0
 
-minimum_java_version=@MINIMUM_JAVA_VERSION@
+cache_generation=@CACHE_GENERATION@
 
-# Discovery and shim execution must never install a missing runtime.
-export MISE_AUTO_INSTALL=0 MISE_OFFLINE=1
+# Manager execution must never install a missing runtime.
+export MISE_AUTO_INSTALL=0 MISE_EXEC_AUTO_INSTALL=0 MISE_OFFLINE=1
 
-hash_stdin() {
-    if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum | cut -d ' ' -f 1
-    elif command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 | cut -d ' ' -f 1
-    else
-        return 1
+launch_timings=no
+for option do
+    [ "$option" != --timings ] || launch_timings=yes
+done
+
+launch_stage() {
+    if [ "$launch_timings" = yes ]; then
+        printf 'glow-adoc launcher: %s\n' "$1" >&2
     fi
 }
 
-try_java() {
-    java_executable=$1
+launch_stage entered
+
+hash_stdin() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        hash_result=$(sha256sum) || return 1
+    elif command -v shasum >/dev/null 2>&1; then
+        hash_result=$(shasum -a 256) || return 1
+    else
+        return 1
+    fi
+    printf '%s\n' "${hash_result%% *}"
+}
+
+exec_selected() {
+    case "$java_manager" in
+        mise) exec mise exec -- "$@" ;;
+        asdf|jenv) exec "$java_manager" exec "$@" ;;
+        *) exec "$@" ;;
+    esac
+}
+
+launch_java() {
+    launch_mode=$1
     shift
-    [ -x "$java_executable" ] || return 1
+    if [ -n "$artifact_hash" ]; then
+        set -- "-Dglowadoc.launcher.artifact=$launcher_location" \
+            "-Dglowadoc.launcher.sha256=$artifact_hash" "$@"
+    fi
+    launch_stage jvm-exec
+    # This JDK property also lets Java 8 reach the bootstrap's version guard.
+    # JAVA_OPTS intentionally supplies JVM arguments; application arguments stay quoted.
+    # shellcheck disable=SC2086
+    if [ "$launch_mode" = cached ]; then
+        exec_selected java -Dsun.misc.unsafe.memory.access=allow \
+            -Xlog:aot=off:stdout -Xlog:aot=warning:stderr ${JAVA_OPTS:-} "$@"
+    fi
+    # shellcheck disable=SC2086
+    exec_selected java -Dsun.misc.unsafe.memory.access=allow ${JAVA_OPTS:-} "$@"
+}
 
-    java_version=$("$java_executable" -version 2>&1) || return 1
-    java_identity=$java_version
-    java_version=$(printf '%s\n' "$java_version" |
-        sed -n 's/.*version "\([^"]*\)".*/\1/p' | head -n 1)
-    case "$java_version" in
-        1.*) java_version=${java_version#1.} ;;
-    esac
-    java_major=${java_version%%[!0-9]*}
-    case "$java_major" in
-        ''|*[!0-9]*) return 1 ;;
-    esac
-    [ "$java_major" -ge "$minimum_java_version" ] || return 1
+java_manager=PATH
+sdkman_java=${SDKMAN_CANDIDATES_DIR:-${SDKMAN_DIR:-"$HOME/.sdkman"}/candidates}/java/current
+in_java_environment=no
+if [ "${GLOW_ADOC_JAVA_CONTEXT:-}" = "$cache_generation" ]; then
+    in_java_environment=yes
+else
+    launch_stage manager-query
+    if command -v mise >/dev/null 2>&1; then
+        java_manager=mise
+    elif [ -x "$sdkman_java/bin/java" ] || [ -x "$sdkman_java/Contents/Home/bin/java" ]; then
+        # SDKMAN! is a shell function; use its selected candidate without sourcing a profile.
+        java_manager=SDKMAN
+        JAVA_HOME=$sdkman_java
+        [ -x "$JAVA_HOME/bin/java" ] || JAVA_HOME=$JAVA_HOME/Contents/Home
+        export JAVA_HOME
+        PATH=$JAVA_HOME/bin:$PATH
+        export PATH
+    elif command -v asdf >/dev/null 2>&1; then
+        java_manager=asdf
+    elif command -v jenv >/dev/null 2>&1; then
+        java_manager=jenv
+    elif command -v jabba >/dev/null 2>&1; then
+        java_manager=jabba
+        JAVA_HOME=$(jabba which --home) || exit "$?"
+        [ -n "$JAVA_HOME" ] || { printf 'jabba has no selected JDK.\n' >&2; exit 1; }
+        export JAVA_HOME
+        PATH=$JAVA_HOME/bin:$PATH
+        export PATH
+    fi
+    launch_stage manager-selected
+fi
+unset GLOW_ADOC_JAVA_CONTEXT
 
-    for option do
-        if [ "$option" = --timings ]; then
-            printf 'glow-adoc timing java: %s\n' "$java_executable" >&2
+if [ "$launch_timings" = yes ]; then
+    printf 'glow-adoc timing java-manager: %s\n' "$java_manager" >&2
+fi
+
+aot_root=${XDG_CACHE_HOME:-"$HOME/.cache"}/glow-adoc/aot
+aot_cache=
+artifact_hash=
+use_cache=yes
+aot_options="${JAVA_OPTS:-} ${JAVA_TOOL_OPTIONS:-} ${JDK_JAVA_OPTIONS:-} ${_JAVA_OPTIONS:-}"
+case "${1:-}" in --help|--version) use_cache=no ;; esac
+case "$aot_options" in *AOT*|*-agent*|*-javaagent*|*StartFlightRecording*) use_cache=no ;; esac
+matching_generation=no
+if [ "$use_cache" = yes ]; then
+    for stored_cache in "$aot_root/$cache_generation-"*.aot; do
+        if [ -f "$stored_cache" ]; then
+            matching_generation=yes
+            break
         fi
     done
-
-    case "$java_executable" in
-        */bin/java)
-            JAVA_HOME=${java_executable%/bin/java}
-            export JAVA_HOME
-            ;;
-    esac
-    aot_root=${XDG_CACHE_HOME:-"$HOME/.cache"}/glow-adoc/aot
-    aot_cache=
-    use_cache=yes
-    case "${1:-}" in --help|--version) use_cache=no ;; esac
-    case "${JAVA_OPTS:-}" in *AOT*|*-agent*|*StartFlightRecording*) use_cache=no ;; esac
-    if [ "${1:-}" = --train-aot ] || { [ "$use_cache" = yes ] && [ -d "$aot_root" ]; }; then
+fi
+if [ "${1:-}" = --train-aot ] || [ "$matching_generation" = yes ]; then
+    if [ "$in_java_environment" = no ]; then
+        # Resolve AOT identity inside the manager's environment, including its JVM option variables.
+        export GLOW_ADOC_JAVA_CONTEXT=$cache_generation
+        if [ "$java_manager" = asdf ]; then
+            # asdf exec accepts managed shims; env runs a utility in the Java shim's environment.
+            exec asdf env java /bin/sh "$0" "$@"
+        fi
+        exec_selected /bin/sh "$0" "$@"
+    fi
+    launch_stage runtime-identity
+    java_executable=$(command -v java 2>/dev/null)
+    java_identity=
+    if [ -n "$java_executable" ] && [ -r "${java_executable%/*}/../release" ]; then
+        while IFS= read -r release_line || [ -n "$release_line" ]; do
+            java_identity="$java_identity$release_line
+"
+        done < "${java_executable%/*}/../release"
+    fi
+    if [ -n "$java_identity" ]; then
+        [ "$launch_timings" != yes ] || printf 'glow-adoc timing java: %s\n' "$java_executable" >&2
+        launch_stage artifact-hash-start
         artifact_hash=$(hash_stdin < "$0")
+        launch_stage artifact-hash-ready
         if [ -n "$artifact_hash" ]; then
             launcher_dir=${0%/*}
             [ "$launcher_dir" != "$0" ] || launcher_dir=.
             launcher_location=$(CDPATH= cd "$launcher_dir" && printf '%s/%s' "$(pwd -P)" "${0##*/}")
-            aot_key=$(printf '%s\n' "$artifact_hash" "$launcher_location" "$java_executable" "$java_identity" "${JAVA_OPTS:-}" "$(uname -sm)" | hash_stdin)
-            [ -z "$aot_key" ] || aot_cache=$aot_root/$aot_key.aot
+            aot_key=$(printf '%s\n' "$artifact_hash" "$launcher_location" "$java_executable" "$java_identity" "${JAVA_OPTS:-}" "${JAVA_TOOL_OPTIONS:-}" "${JDK_JAVA_OPTIONS:-}" "${_JAVA_OPTIONS:-}" "$(uname -sm)" | hash_stdin)
+            [ -z "$aot_key" ] || aot_cache=$aot_root/$cache_generation-$aot_key.aot
+            launch_stage cache-key-ready
         fi
     fi
-    if [ "${1:-}" = --train-aot ]; then
-        if [ "$#" -ne 2 ] || [ -z "$aot_cache" ]; then
-            printf 'Usage: glow-adoc --train-aot FILE (requires sha256sum or shasum)\n' >&2
-            exit 2
-        fi
-        umask 077
-        mkdir -p "$aot_root" || exit 1
-        training_dir=$(mktemp -d "$aot_root/.training.XXXXXX") || exit 1
-        trap 'rm -rf "$training_dir"' EXIT
-        trap 'exit 130' INT
-        trap 'exit 143' HUP TERM
-        # JAVA_OPTS supplies JVM arguments, matching ordinary launcher execution.
-        # shellcheck disable=SC2086
-        "$java_executable" --sun-misc-unsafe-memory-access=allow ${JAVA_OPTS:-} \
-            -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression \
-            -XX:AOTCacheOutput="$training_dir/cache.aot" -jar "$0" \
-            --no-cache --no-pager --color=always "$2" > /dev/null || exit "$?"
-        mv "$training_dir/cache.aot" "$aot_cache" || exit 1
-        printf 'AOT cache: %s\n' "$aot_cache"
-        exit 0
+fi
+launch_stage cache-lookup-ready
+if [ "${1:-}" = --train-aot ]; then
+    if [ "$#" -ne 2 ] || [ -z "$aot_cache" ]; then
+        printf 'Usage: glow-adoc --train-aot FILE (requires JDK release metadata and sha256sum or shasum)\n' >&2
+        exit 2
     fi
-    case "${JAVA_OPTS:-}" in
-        *AOT*|*-agent*|*StartFlightRecording*) aot_cache= ;;
-    esac
-    if [ -n "$aot_cache" ] && [ -r "$aot_cache" ]; then
-        for option do
-            if [ "$option" = --timings ]; then
-                printf 'glow-adoc timing aot-cache: %s\n' "$aot_cache" >&2
-            fi
-        done
-        # Auto mode falls back to normal startup when the VM cannot use the cache.
-        # shellcheck disable=SC2086
-        exec "$java_executable" --sun-misc-unsafe-memory-access=allow \
-            -Xlog:aot=off:stdout -Xlog:aot=warning:stderr ${JAVA_OPTS:-} \
-            -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression \
-            -XX:AOTMode=auto -XX:AOTCache="$aot_cache" -jar "$0" "$@"
-    fi
-    # JAVA_OPTS intentionally supplies separate JVM arguments; application arguments stay quoted.
+    umask 077
+    mkdir -p "$aot_root" || exit 1
+    training_dir=$(mktemp -d "$aot_root/.training.XXXXXX") || exit 1
+    trap 'rm -rf "$training_dir"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' HUP TERM
+    # Run in a child so the parent can publish the cache and remove temporary files.
     # shellcheck disable=SC2086
-    exec "$java_executable" --sun-misc-unsafe-memory-access=allow ${JAVA_OPTS:-} -jar "$0" "$@"
-}
-
-try_java_home() {
-    candidate_home=$1
-    shift
-    [ -n "$candidate_home" ] || return 1
-    try_java "$candidate_home/bin/java" "$@"
-    try_java "$candidate_home/Contents/Home/bin/java" "$@"
-}
-
-if command -v mise >/dev/null 2>&1; then
-    try_java_home "$(mise where java 2>/dev/null)" "$@"
-    try_java_home "$(mise where "java@$minimum_java_version" 2>/dev/null)" "$@"
-    # Only installed versions are listed; resolve each path through mise.
-    for installed_version in $(mise ls --installed --no-header java 2>/dev/null |
-        sed -n 's/^java[[:space:]][[:space:]]*\([^[:space:]]*\).*/\1/p'); do
-        try_java_home "$(mise where "java@$installed_version" 2>/dev/null)" "$@"
-    done
+    (exec_selected java -Dsun.misc.unsafe.memory.access=allow ${JAVA_OPTS:-} \
+        -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression \
+        -XX:AOTCacheOutput="$training_dir/cache.aot" -jar "$0" \
+        --no-cache --no-pager --color=always "$2") > /dev/null || exit "$?"
+    mv "$training_dir/cache.aot" "$aot_cache" || exit 1
+    printf 'AOT cache: %s\n' "$aot_cache"
+    exit 0
 fi
-
-# SDKMAN! is a shell function; inspect its installed candidates without sourcing shell profiles.
-sdkman_java=${SDKMAN_CANDIDATES_DIR:-${SDKMAN_DIR:-"$HOME/.sdkman"}/candidates}/java
-try_java_home "$sdkman_java/current" "$@"
-for candidate in "$sdkman_java"/*; do
-    try_java_home "$candidate" "$@"
-done
-
-if command -v asdf >/dev/null 2>&1; then
-    try_java_home "$(asdf where java 2>/dev/null)" "$@"
+if [ -n "$aot_cache" ] && [ -r "$aot_cache" ]; then
+    [ "$launch_timings" != yes ] || printf 'glow-adoc timing aot-cache: %s\n' "$aot_cache" >&2
+    # Auto mode falls back to normal startup when the VM cannot use the cache.
+    launch_java cached \
+        -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression \
+        -XX:AOTMode=auto -XX:AOTCache="$aot_cache" -jar "$0" "$@"
 fi
-for candidate in "${ASDF_DATA_DIR:-"$HOME/.asdf"}/installs/java"/*; do
-    try_java_home "$candidate" "$@"
-done
-
-if command -v jenv >/dev/null 2>&1; then
-    try_java_home "$(jenv prefix 2>/dev/null)" "$@"
-fi
-for candidate in "${JENV_ROOT:-"$HOME/.jenv"}/versions"/*; do
-    try_java_home "$candidate" "$@"
-done
-
-for candidate in "${JABBA_HOME:-"$HOME/.jabba"}/jdk"/*; do
-    try_java_home "$candidate" "$@"
-done
-
-try_java_home "${JAVA_HOME:-}" "$@"
-try_java "$(command -v java 2>/dev/null)" "$@"
-
-printf 'No Java %s+ installation found. Checked mise, SDKMAN!, asdf-vm, jenv, jabba, JAVA_HOME and PATH.\n' \
-    "$minimum_java_version" >&2
-exit 1
+launch_java normal -jar "$0" "$@"

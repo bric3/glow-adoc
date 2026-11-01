@@ -247,12 +247,53 @@ class PackagedCliTest {
         assertTrue(executable.toFile().setExecutable(true));
         var versionBuilder =
                 new ProcessBuilder(executable.toString(), "--version").redirectErrorStream(true);
-        versionBuilder.environment().put("JAVA_HOME", System.getProperty("java.home"));
+        selectTestJava(versionBuilder);
         var version = versionBuilder.start();
         String versionOutput = new String(version.getInputStream().readAllBytes());
         assertTrue(version.waitFor(10, TimeUnit.SECONDS));
         assertEquals(0, version.exitValue(), versionOutput);
         assertTrue(versionOutput.contains("glow-adoc"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void rendersAdmonitionTitleBarsWithAndWithoutColour(boolean colour) throws Exception {
+        var process =
+                new ProcessBuilder(
+                                java,
+                                "-jar",
+                                System.getProperty("glow.jar"),
+                                "--no-pager",
+                                "--width=32",
+                                "--icons=ascii",
+                                "--theme=dark",
+                                "--color=" + (colour ? "always" : "never"),
+                                "-")
+                        .redirectError(directory.resolve("admonition-errors").toFile())
+                        .start();
+        try {
+            process.getOutputStream()
+                    .write("CAUTION: Mind the gap.\n".getBytes(StandardCharsets.UTF_8));
+            process.getOutputStream().close();
+            String output =
+                    new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(
+                    0,
+                    process.exitValue(),
+                    Files.readString(directory.resolve("admonition-errors")));
+            String text = output.replaceAll("\u001b\\[[0-9;]*m", "");
+            assertTrue(text.startsWith("+-- ! CAUTION "), text);
+            assertTrue(text.contains("Mind the gap."), text);
+            if (colour) {
+                assertTrue(output.contains("48;2;198;144;38"), "CAUTION has an orange background");
+            } else {
+                assertFalse(
+                        output.contains("\u001b"), "Monochrome output has no terminal controls");
+            }
+        } finally {
+            process.destroyForcibly();
+        }
     }
 
     @Test
@@ -689,7 +730,7 @@ class PackagedCliTest {
                         "--center=false",
                         "--table-stripes=false",
                         "-");
-        builder.environment().put("JAVA_HOME", System.getProperty("java.home"));
+        selectTestJava(builder);
         var process = builder.redirectError(errors.toFile()).start();
         process.getOutputStream()
                 .write("{{< tag >}} visible\n\n[%collapsible]\n====\nExpanded\n====\n".getBytes());
@@ -700,6 +741,13 @@ class PackagedCliTest {
         assertTrue(output.contains("{{< tag >}} visible"), output);
         assertTrue(output.contains("Expanded"), output);
         assertFalse(Files.readString(errors).contains("sun.misc.Unsafe"), Files.readString(errors));
+    }
+
+    private void selectTestJava(ProcessBuilder builder) {
+        builder.environment()
+                .put("PATH", Path.of(System.getProperty("java.home"), "bin").toString());
+        builder.environment()
+                .put("SDKMAN_CANDIDATES_DIR", directory.resolve("unused-sdkman").toString());
     }
 
     private static void await(Process process, Path transcript, String text) throws Exception {

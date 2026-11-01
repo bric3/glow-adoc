@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
+package io.github.bric3.glowadoc.buildlogic
+
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.InputFile

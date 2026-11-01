@@ -32,6 +32,10 @@ Each input path retains one variant, replaced after source or settings change.
 The key covers source bytes, base directory, attributes, shortcode policy, application bytes,
 JDK version, user home, locale and time-zone environment. Restoring a file timestamp does not hide edits.
 
+A normal warmup primes the selected file's converted output. A new file, source edit or changed
+attributes miss that entry and start AsciidoctorJ/JRuby again. Repeat-open measurements describe
+documents with valid entries, rather than the first open of an arbitrary document.
+
 Stdin, non-regular inputs, documents that process includes and sources referencing date/time attributes
 are not cached. Exploded development classpaths are also excluded. Entries are limited to 8 MiB;
 invalid, inaccessible and corrupt entries fall back to conversion. Cached XML uses the same secure parser.
@@ -66,16 +70,29 @@ glow-adoc --timings document.adoc
 The source tree's showcase supplies varied highlighted content. AOT training bypasses both document
 caches and does not open a pager.
 
+A trained AOT cache can serve other documents: the document argument is not part of its identity.
+It does not preconvert other files or retain an AsciidoctorJ engine between CLI processes.
+Each document still needs its own valid conversion entry to bypass JRuby startup.
+
 Caches live under `$XDG_CACHE_HOME/glow-adoc/aot`, falling back to `~/.cache/glow-adoc/aot`.
-Identity includes executable bytes and location, selected Java path and full version output,
-OS/architecture and JAVA_OPTS. Train again after any of these change.
+Identity includes executable bytes and location, selected Java path and complete JDK release metadata,
+OS/architecture and JVM option environment. `JAVA_OPTS`, `JAVA_TOOL_OPTIONS`, `JDK_JAVA_OPTIONS`
+and `_JAVA_OPTIONS` participate in identity. Train again after any of these change.
+New cache filenames start with a build-generation hash covering the launcher template and Shadow jar.
+This hint only skips impossible lookups: training and possible hits still hash the entire executable
+and validate the complete runtime identity. Manually editing a jar while retaining its generation hint
+therefore invalidates existing caches. Caches from earlier launcher formats require retraining;
+an executable update already invalidates their identity.
 Installation never trains a cache. No cache means normal startup; incompatible/corrupt cache loading
 uses the JVM's auto fallback and may report diagnostics on stderr.
 
 The launcher supplies the same compressed-reference compatibility flags during training and loading.
-Explicit AOT flags, Java agents and flight-recording options in JAVA_OPTS bypass automatic selection.
+Explicit AOT flags, Java agents and flight-recording options in these variables bypass automatic selection.
 Help and version skip cache hashing. Direct `java -jar` invocation does not select these caches automatically.
-Cache hashing requires `sha256sum` or `shasum`; without either, ordinary startup still works.
+Training and possible matches enter the manager's environment before resolving the runtime and JVM
+option variables. This adds a shell invocation only on these AOT paths. Ordinary launches delegate
+directly to the manager. AOT requires JDK `release` metadata and `sha256sum` or `shasum`; without
+them, ordinary startup still works and explicit training reports an error.
 Remove obsolete cache files from the cache directory when they are no longer needed.
 
 For direct Java invocation, train and load an explicitly named cache with the same JDK and jar:
@@ -94,6 +111,7 @@ Use an installed Java 27 and JBang. Run benchmarks without concurrent builds or 
 ----
 glow-adoc --no-pager --color=never document.adoc
 jbang --java 27 tools/Benchmark.java --runs 20 --pty -- glow-adoc document.adoc
+jbang --java 27 tools/Benchmark.java --runs 20 --stages -- glow-adoc --timings document.adoc
 jbang --java 27 tools/Benchmark.java --runs 20 --pty --empty-cache -- glow-adoc document.adoc
 jbang --java 27 tools/Benchmark.java --runs 20 --scroll -- glow-adoc -a image-assets="$PWD/static/assets" content/posts/post.adoc
 jbang --java 27 tools/StartupMatrix.java /path/to/java cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc
@@ -117,6 +135,28 @@ These are experiments, not recommended JAVA_OPTS defaults.
 conversion, first pager frame/image, highlighting completion or direct output completion. JVM launch and manager discovery
 precede that timer and are included in the external benchmark.
 A conversion hit reports `conversion-cache-hit` and omits `jruby-ready`.
+
+The launcher also emits phase markers on stderr with `--timings`: entry, manager selection, AOT runtime
+identity, artifact hashing, cache-key construction and JVM execution. `Benchmark.java --stages`
+timestamps these markers and application milestones from the parent process. It implies `--pty`
+and requires `--timings` in the application command. Marker observations include the benchmark's
+5 ms polling interval; the launcher does not start clock processes. `command-*` rows start at a
+marker immediately before command execution, excluding PTY, shell and `stty` setup. The ordinary
+run rows retain the complete process-start timer.
+
+Normal startup uses `mise exec -- java`, SDKMAN!'s current candidate, `asdf exec java`,
+`jenv exec java`, or jabba's configured JDK, in that order. The first available manager owns runtime
+selection and errors. With no manager, the launcher runs `java` on PATH; `JAVA_HOME` alone does not
+select a runtime. No version probe, JDK search or installation runs. The Java bootstrap checks the
+actual running JVM's minimum version. Manager execution can still take time.
+
+Only AOT training and possible hits read the installed JDK's `release` file, containing version,
+vendor and build metadata. Checksum parsing uses shell builtins. When AOT lookup has already hashed the artifact,
+the launcher passes its canonical path and SHA-256 through the internal JVM properties
+`glowadoc.launcher.artifact` and `glowadoc.launcher.sha256`. The cache accepts the digest only when
+the path identifies its own packaged code source and the value contains 64 hex digits. Missing or
+invalid launcher hash metadata falls back to hashing the jar. Full-content hashing and cache identity remain in use;
+this avoids reading the same jar twice during one launch.
 
 For a startup recording, pass `-XX:StartFlightRecording=filename=startup.jfr,settings=profile` to Java
 and inspect it with `jfr summary` or a JFR viewer. Keep profiling separate from timed comparisons.
@@ -142,6 +182,101 @@ java --sun-misc-unsafe-memory-access=allow \
 ----
 
 == Local measurements
+
+=== Manager delegation, 2026-11-01
+
+Twenty interleaved before/after pairs used the supplied CompletableFuture post, explicit image assets,
+OpenJDK 27+35-2325 and an 80 x 24 PTY. The baseline is the executable immediately before manager
+delegation. Each copy had a separate populated document cache and no matching AOT cache; pair order
+alternated. Every measured launch hit the conversion cache. Complete highlighted output hashes matched.
+
+[cols="3,1,1",options="header"]
+|===
+|First frame |Before |After
+|Median |360.9 ms |349.9 ms
+|p95 |1121.7 ms |356.5 ms
+|===
+
+The change mainly removes slow launches. Baseline samples varied between fast and delayed startup;
+the median improvement was small. See link:benchmarks/manager-exec-paired.csv[all paired samples].
+No build or other benchmark ran concurrently.
+
+Twenty launches through the actual installed command measured 370.1 ms median and 382.3 ms p95.
+The command-only timer measured 328.4 ms median and 343.7 ms p95, excluding PTY/shell/`stty` setup.
+These repeat opens meet the one-second p95 target in this run, without a matching AOT cache.
+See link:benchmarks/manager-exec-installed.csv[installed samples]. These are PTY observations,
+not physical display timings.
+
+Five launches with a new empty application cache each time measured 1368.0 ms median and 1378.1 ms
+p95. They still initialise AsciidoctorJ/JRuby and exceed one second.
+See link:benchmarks/manager-exec-empty-cache.csv[empty-cache samples]. An image-scrolling check
+measured a 356.9 ms first frame, 4.4 ms scroll p95, 18338 bytes and no image reuploads over 20 steps:
+link:benchmarks/manager-exec-scroll.csv[scroll sample].
+
+The packaged launcher reached the bootstrap guard under installed Java 8, 11, 17, 21, 25 and 26,
+reporting the Java 27 requirement. Java 27 started successfully. Other manager adapters use isolated
+fake executables in tests; the local measurements use mise.
+Real AOT training, five required-mode cache loads and corrupt-cache fallback passed with the exact
+manager-selected OpenJDK 27+35-2325 runtime. Fallback diagnostics remained on stderr.
+
+=== Launcher, 2026-11-01
+
+These measurements predate direct manager delegation.
+
+Twenty interleaved baseline/candidate pairs used the exact supplied CompletableFuture post and
+`-a image-assets` argument, OpenJDK 27+35-2325, macOS ARM64 and an 80 x 24 PTY. Each version had a
+separate private cache root, seeded once with complete highlighted output. Both cache roots contained
+an AOT directory, with no matching AOT cache. Pair order alternated; all samples were retained.
+The baseline is the installed executable saved before the launcher changes, including the pending
+admonition rendering update. The copies used matching temporary `.local/bin` layouts.
+
+[cols="3,1,1",options="header"]
+|===
+|First frame |Before |After
+|Median |708.8 ms |360.8 ms
+|p95 |2216.4 ms |1122.6 ms
+|===
+
+Each measured invocation reported a conversion-cache hit; complete highlighted output hashes also
+matched. No build or other benchmark ran concurrently.
+See link:benchmarks/launcher-paired.csv[all samples and observed stage times]. Baseline launcher-stage
+fields are empty because that executable predates the new markers. This measures PTY output,
+rather than physical display latency or a cold operating-system cache. Timers include PTY creation,
+shell and `stty` setup; launcher-entry markers expose that initial overhead separately.
+
+Twenty fresh JVMs through the actual `~/.local/bin/glow-adoc` command, after seeding its document
+caches with the same attributes, measured 1109.3 ms median and 1141.8 ms p95. The command-only
+timer measured 1087.5 ms median and 1112.9 ms p95. No matching AOT cache was used.
+See link:benchmarks/launcher-installed.csv[installed samples]. The one-second p95 target was not
+achieved. Earlier installed runs ranged from 452.7 to 1103.9 ms median, with p95 near 1125 ms.
+Slow samples include about 510 ms between the command marker and launcher entry, and 275 ms in
+`mise` lookup. These waits remain outside the JVM; subtracting PTY setup does not remove them.
+
+The first implementation removed parsing subprocesses and reused the artifact hash, but its
+20-pair comparison was mixed: median 698.9 to 661.2 ms, p95 1330.1 to 1916.0 ms.
+See link:benchmarks/launcher-initial-paired.csv[initial samples]. Slow stage observations included
+roughly 250 ms waits around subprocess operations. Artifact-prefixed AOT filenames then removed
+runtime-key generation from cache misses, avoiding another checksum process and `uname`.
+That intermediate version measured 702.6 to 506.6 ms median and 2215.9 to 649.8 ms p95 in its paired
+comparison: link:benchmarks/launcher-prefilter-paired.csv[intermediate samples].
+
+Those temporary-path results did not hold for the actual installed path: twenty opens measured
+1482.9 ms median and 1728.9 ms p95. See link:benchmarks/launcher-prefilter-installed.csv[installed samples].
+Shell sampling found blocking reads while collecting subprocess output. The subsequent implementation
+uses JDK release metadata and a build-generation hint to avoid both the version probe and AOT checksum
+processes on ordinary cache misses. Full-content hashing remains inside Java for document-cache validation.
+The operating-system cause of the waits remains unconfirmed. A disposable read-based `mise` lookup
+with producer reaping showed no sustained improvement; the portable lookup remains in use.
+
+These results cover repeated opens with document caches populated. A first open after changing
+the executable, source or attributes can still initialise AsciidoctorJ/JRuby.
+Five installed-command launches with a new empty application cache each time measured 1423.5 ms
+median and 1472.3 ms p95: link:benchmarks/launcher-empty-cache.csv[empty-cache samples].
+The subsecond target is not met for these first opens.
+
+A final installed-command image check measured a 370.7 ms first frame and 3.1 ms p95 over 20
+single-line scrolls. Scrolling emitted 18338 bytes and uploaded no images again.
+See link:benchmarks/launcher-installed-scroll.csv[scroll sample].
 
 === Blog corpus, 2026-11-01
 

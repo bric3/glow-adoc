@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import io.github.bric3.glowadoc.buildlogic.AotTrain
+import io.github.bric3.glowadoc.buildlogic.CollectDependencyNotices
+import io.github.bric3.glowadoc.buildlogic.ExecutableJar
+import io.github.bric3.glowadoc.buildlogic.PackagedCliArguments
+
 plugins {
     id("glow.java")
     id("com.gradleup.shadow") version "9.4.0"

@@ -15,8 +15,10 @@ Build from source with Java 27:
 export PATH="$HOME/.local/bin:$PATH"
 ----
 
-Installation replaces `~/.local/bin/glow-adoc`. The launcher selects an installed Java through
-mise, SDKMAN!, asdf-vm, jenv, jabba, JAVA_HOME, then PATH. It never downloads a JDK.
+Installation replaces `~/.local/bin/glow-adoc`. The launcher uses the first available manager:
+mise, SDKMAN!'s current candidate, asdf-vm, jenv, then jabba. Otherwise it runs `java` on PATH.
+The selected runtime must be Java 27+; the Java bootstrap reports older versions. The launcher
+does not probe versions, search other installations or download a JDK.
 
 A link:packaging/homebrew/glow-adoc.rb[Homebrew formula template] is supplied for future releases.
 Fill in its repository, version and checksum before use. Native Image remains experimental.

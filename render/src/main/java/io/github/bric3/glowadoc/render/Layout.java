@@ -12,6 +12,7 @@ import io.github.bric3.glowadoc.highlight.Highlighter;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -213,25 +214,30 @@ public final class Layout {
             while (!source && !lines.isEmpty() && lines.getLast().text().isBlank()) {
                 lines.removeLast();
             }
+            boolean admonition = block.kind() == Block.Kind.ADMONITION;
             String title =
-                    block.kind() == Block.Kind.ADMONITION
+                    admonition
                             ? icon(block.format().variant())
                                     + " "
-                                    + block.format().variant().toUpperCase()
+                                    + block.format().variant().toUpperCase(Locale.ROOT)
                             : block.kind() == Block.Kind.DETAILS ? "" : block.format().title();
             String accent =
-                    block.kind() == Block.Kind.ADMONITION
-                            ? palette.admonition(block.format().variant())
-                            : palette.border();
+                    admonition ? palette.admonition(block.format().variant()) : palette.border();
             Style border = Style.PLAIN.colours(accent, palette.surface());
             var framed = new ArrayList<RenderedLine>();
             framed.addAll(lines.stream().filter(line -> line.disclosure() == position).toList());
             boolean inlineCaption =
-                    block.kind() == Block.Kind.CODE && !title.isEmpty() && inner >= 4;
+                    (block.kind() == Block.Kind.CODE || admonition)
+                            && !title.isEmpty()
+                            && inner >= 4;
             if (!title.isEmpty()) {
                 List<Span> caption =
-                        block.kind() == Block.Kind.ADMONITION
-                                ? List.of(new Span(title))
+                        admonition
+                                ? List.of(
+                                        new Span(
+                                                title,
+                                                palette.admonitionTitleStyle(
+                                                        block.format().variant())))
                                 : theme(block.format().titleSpans(), palette);
                 caption =
                         caption.stream()
@@ -249,10 +255,14 @@ public final class Layout {
                         var row = new ArrayList<Span>();
                         row.add(
                                 new Span(
-                                        i == 0
-                                                ? (options.ascii() ? "+-- " : "┌── ")
-                                                : (options.ascii() ? "|   " : "│   "),
+                                        (i == 0
+                                                        ? (options.ascii() ? "+--" : "┌──")
+                                                        : (options.ascii() ? "|  " : "│  "))
+                                                + (admonition ? "" : " "),
                                         border));
+                        if (admonition) {
+                            row.add(new Span(" ", caption.getFirst().style()));
+                        }
                         for (Span span : captionRows.get(i)) {
                             row.add(
                                     new Span(
@@ -266,10 +276,13 @@ public final class Layout {
                                                                     ? border.background()
                                                                     : span.style().background())));
                         }
+                        if (admonition) {
+                            row.add(new Span(" ", caption.getFirst().style()));
+                        }
                         int padding = inner - 2 - TextLayout.width(captionRows.get(i));
                         row.add(
                                 new Span(
-                                        " "
+                                        (admonition ? "" : " ")
                                                 + (i == 0 ? (options.ascii() ? "-" : "─") : " ")
                                                         .repeat(Math.max(0, padding))
                                                 + (i == 0

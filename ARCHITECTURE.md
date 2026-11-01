@@ -76,7 +76,15 @@ Unsupported capabilities and failed renderers retain readable text.
 The Gradle daemon uses Java 27; application bytecode targets 25 and the bootstrap targets 8.
 Shadow preserves service registrations, JRuby resources and multi-release metadata.
 The executable jar prepends a POSIX launcher with Java-manager selection.
+The launcher delegates to the first available manager, then falls back to `java` on PATH.
+It performs no version probes or installed-version searches; the Java 8-compatible bootstrap checks
+the Java 27 minimum. A generation hash of the launcher template and Shadow jar filters impossible
+AOT lookups. Possible hits still require the full executable hash and runtime identity. When the launcher hashes the jar
+for AOT lookup, it supplies that digest and the artifact path to Java. The document cache reuses the
+digest only for a matching code source and a valid SHA-256 value; ordinary Java invocation hashes the jar itself.
 
-AOT training is explicit. Cache identity includes executable bytes and location, Java path and version output,
-OS/architecture and JAVA_OPTS. A missing cache selects ordinary startup.
+AOT training is explicit. Training and possible hits enter the selected manager's environment before
+resolving Java and reading its release metadata. Cache identity includes executable bytes and location,
+Java path and release metadata, OS/architecture and JVM option environment. Missing metadata disables
+automatic AOT and prevents training. A missing cache selects ordinary startup.
 Source uses MPL 2.0; dependencies retain their own licences and notices.

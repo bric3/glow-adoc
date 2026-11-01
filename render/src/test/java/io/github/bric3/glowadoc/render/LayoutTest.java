@@ -15,13 +15,140 @@ import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 class LayoutTest {
+    @ParameterizedTest
+    @CsvSource({
+        "LIGHT, note, #ffffff",
+        "LIGHT, tip, #000000",
+        "LIGHT, important, #000000",
+        "LIGHT, warning, #000000",
+        "LIGHT, caution, #000000",
+        "DARK, note, #000000",
+        "DARK, tip, #000000",
+        "DARK, important, #000000",
+        "DARK, warning, #000000",
+        "DARK, caution, #000000"
+    })
+    void embedsAdmonitionLabelsWithPaddedContrastingBackgrounds(
+            Appearance appearance, String kind, String foreground) {
+        var palette = Palette.forAppearance(appearance);
+        var lines =
+                layout.render(
+                        new Document(
+                                List.of(admonition(kind, Block.text(Block.Kind.PARAGRAPH, "body"))),
+                                Path.of(".")),
+                        32,
+                        appearance);
+        var header = lines.getFirst();
+        var label =
+                header.spans().stream()
+                        .filter(span -> span.style().background().equals(palette.admonition(kind)))
+                        .toList();
+        String icon =
+                switch (kind) {
+                    case "tip" -> "\uf0eb";
+                    case "warning", "caution" -> "\uf071";
+                    case "important" -> "\uf06a";
+                    default -> "\uf05a";
+                };
+        String title = icon + " " + kind.toUpperCase(Locale.ROOT);
+        assertEquals(
+                " " + title + " ", label.stream().map(Span::text).collect(Collectors.joining()));
+        assertTrue(
+                label.stream()
+                        .allMatch(
+                                span ->
+                                        span.style().bold()
+                                                && span.style().foreground().equals(foreground)));
+        assertTrue(header.text().startsWith("┌── " + title + " "));
+        assertEquals("body", lines.get(1).text().substring(2, 6));
+        assertTrue(
+                lines.stream()
+                        .filter(line -> !line.text().isEmpty())
+                        .allMatch(line -> CharWidth.of(line.text()) == 32));
+        assertEquals(
+                Style.PLAIN.colours(palette.admonition(kind), palette.surface()),
+                header.spans().getFirst().style());
+        assertEquals(header.spans().getFirst().style(), header.spans().getLast().style());
+    }
+
+    @Test
+    void keepsNestedAdmonitionLabelsInsideTheirFrames() {
+        Block nested =
+                container(
+                        Block.Kind.QUOTE,
+                        admonition(
+                                "warning",
+                                admonition(
+                                        "caution",
+                                        Block.text(Block.Kind.PARAGRAPH, "nested body"))));
+        var lines = render(nested, 44);
+        var label =
+                lines.stream()
+                        .filter(line -> line.text().contains("CAUTION"))
+                        .findFirst()
+                        .orElseThrow();
+        assertTrue(label.text().startsWith("│ │ ┌── \uf071 CAUTION "), label.text());
+        assertTrue(
+                label.spans().stream()
+                        .anyMatch(
+                                span ->
+                                        span.text().contains("CAUTION")
+                                                && span.style().background().equals("#c69026")
+                                                && span.style().foreground().equals("#000000")));
+        assertTrue(lines.stream().allMatch(line -> CharWidth.of(line.text()) <= 44));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {5, 7, 8, 12, 18})
+    void wrapsAsciiAdmonitionLabelsAndPreservesTheNarrowFallback(int width) {
+        var ascii =
+                new Layout((s, l, a) -> List.of(new Span(s)), new RenderOptions("ascii", false));
+        var lines =
+                ascii.render(
+                        new Document(
+                                List.of(
+                                        admonition(
+                                                "important",
+                                                Block.text(Block.Kind.PARAGRAPH, "body"))),
+                                Path.of(".")),
+                        width,
+                        Appearance.DARK);
+        assertTrue(
+                lines.stream().allMatch(line -> CharWidth.of(line.text()) <= width),
+                lines.toString());
+        String title =
+                lines.stream()
+                        .flatMap(line -> line.spans().stream())
+                        .filter(span -> span.style().background().equals("#c69026"))
+                        .map(Span::text)
+                        .collect(Collectors.joining())
+                        .replace(" ", "");
+        assertEquals("!IMPORTANT", title);
+        assertEquals(width >= 8, lines.getFirst().text().startsWith("+--"));
+    }
+
+    private static Block admonition(String kind, Block child) {
+        return new Block(
+                Block.Kind.ADMONITION,
+                "",
+                List.of(),
+                List.of(child),
+                "",
+                "",
+                new Block.Format("", kind, "", 1, 1, 0, false));
+    }
+
     @Test
     void rendersMatchingSourceAndListCalloutsWithNumberFallback() {
         var markers =

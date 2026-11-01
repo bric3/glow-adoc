@@ -37,4 +37,24 @@ public record Palette(
             default -> accent;
         };
     }
+
+    Style admonitionTitleStyle(String kind) {
+        String background = admonition(kind);
+        int rgb = Integer.parseInt(background.substring(1), 16);
+        // WCAG relative luminance selects the higher-contrast black or white text.
+        double luminance =
+                0.2126 * linear(rgb >> 16)
+                        + 0.7152 * linear((rgb >> 8) & 255)
+                        + 0.0722 * linear(rgb & 255);
+        double blackContrast = (luminance + 0.05) / 0.05;
+        double whiteContrast = 1.05 / (luminance + 0.05);
+        return Style.PLAIN
+                .bolded()
+                .colours(blackContrast >= whiteContrast ? "#000000" : "#ffffff", background);
+    }
+
+    private static double linear(int component) {
+        double value = component / 255.0;
+        return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+    }
 }

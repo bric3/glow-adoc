@@ -1,6 +1,8 @@
 //JAVA 27
-// DEPS com.datadoghq:reggie:0.5.0
+//DEPS com.datadoghq:reggie:0.5.0
 // SPDX-License-Identifier: MPL-2.0
+
+package io.github.bric3.glowadoc.tools;
 
 import com.datadoghq.reggie.Reggie;
 

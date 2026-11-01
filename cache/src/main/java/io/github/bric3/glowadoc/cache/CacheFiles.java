@@ -10,6 +10,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -22,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 
 /** Private, bounded cache entries. Unavailable storage behaves like an empty cache. */
 public final class CacheFiles {
@@ -63,6 +65,10 @@ public final class CacheFiles {
                 if (!Files.isRegularFile(artifact)) {
                     return null;
                 }
+                String supplied = launcherIdentity(artifact);
+                if (supplied != null) {
+                    return supplied;
+                }
                 var digest = digest();
                 try (var stream = new DigestInputStream(Files.newInputStream(artifact), digest)) {
                     stream.transferTo(OutputStream.nullOutputStream());
@@ -71,6 +77,25 @@ public final class CacheFiles {
             } catch (IOException | URISyntaxException | SecurityException e) {
                 return null;
             }
+        }
+    }
+
+    /** Reuse the launcher's full hash only for the artifact supplying these classes. */
+    static String launcherIdentity(Path artifact) {
+        try {
+            String path = System.getProperty("glowadoc.launcher.artifact");
+            String hash = System.getProperty("glowadoc.launcher.sha256");
+            if (path == null || hash == null || hash.length() != 64) {
+                return null;
+            }
+            for (int i = 0; i < hash.length(); i++) {
+                if (!HexFormat.isHexDigit(hash.charAt(i))) {
+                    return null;
+                }
+            }
+            return Files.isSameFile(artifact, Path.of(path)) ? hash.toLowerCase(Locale.ROOT) : null;
+        } catch (IOException | InvalidPathException | SecurityException e) {
+            return null;
         }
     }
 

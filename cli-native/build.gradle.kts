@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import io.github.bric3.glowadoc.buildlogic.NativeImage
+
 plugins {
     id("glow.java")
     application

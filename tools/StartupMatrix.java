@@ -2,6 +2,8 @@
 //JAVA 27
 //SOURCES Benchmark.java
 
+package io.github.bric3.glowadoc.tools;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;

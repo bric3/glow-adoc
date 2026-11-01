@@ -82,6 +82,49 @@ class CacheFilesTest {
     }
 
     @Test
+    void acceptsLauncherHashesOnlyForTheMatchingArtifactAndRestoresFallback() throws Exception {
+        Path artifact = Files.writeString(directory.resolve("app.jar"), "packaged bytes");
+        Path other = Files.writeString(directory.resolve("other.jar"), "other bytes");
+        String pathProperty = "glowadoc.launcher.artifact";
+        String hashProperty = "glowadoc.launcher.sha256";
+        String previousPath = System.getProperty(pathProperty);
+        String previousHash = System.getProperty(hashProperty);
+        try {
+            System.clearProperty(pathProperty);
+            System.clearProperty(hashProperty);
+            assertNull(CacheFiles.launcherIdentity(artifact));
+            System.setProperty(pathProperty, artifact.toString());
+            assertNull(CacheFiles.launcherIdentity(artifact));
+            System.setProperty(hashProperty, "AB".repeat(32));
+            assertEquals("ab".repeat(32), CacheFiles.launcherIdentity(artifact));
+            Path alias = Files.createSymbolicLink(directory.resolve("alias.jar"), artifact);
+            System.setProperty(pathProperty, alias.toString());
+            assertEquals("ab".repeat(32), CacheFiles.launcherIdentity(artifact));
+            assertNull(CacheFiles.launcherIdentity(other));
+            for (String malformed : List.of("", "a".repeat(63), "a".repeat(65), "g".repeat(64))) {
+                System.setProperty(hashProperty, malformed);
+                assertNull(CacheFiles.launcherIdentity(artifact));
+            }
+            System.setProperty(hashProperty, "ab".repeat(32));
+            System.setProperty(pathProperty, "bad\u0000path");
+            assertNull(CacheFiles.launcherIdentity(artifact));
+            System.setProperty(pathProperty, directory.resolve("missing").toString());
+            assertNull(CacheFiles.launcherIdentity(artifact));
+        } finally {
+            if (previousPath == null) {
+                System.clearProperty(pathProperty);
+            } else {
+                System.setProperty(pathProperty, previousPath);
+            }
+            if (previousHash == null) {
+                System.clearProperty(hashProperty);
+            } else {
+                System.setProperty(hashProperty, previousHash);
+            }
+        }
+    }
+
+    @Test
     void unavailableAndOversizedEntriesLeaveStorageUntouched() throws Exception {
         Path occupied = Files.writeString(directory.resolve("occupied"), "file");
         var cache = new CacheFiles(occupied);

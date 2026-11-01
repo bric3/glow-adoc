@@ -27,8 +27,13 @@ corrupt XML, external entities and unavailable storage.
 PTY checks cover keys/mouse, search, folding, themes, images and terminal restoration.
 Image tests assert unchanged frames emit no commands, scrolling reuses uploaded pixels,
 crops use source coordinates, off-screen data can be evicted and exit releases owned images.
-Launcher checks cover manager priority, installed-version selection, spaces, arguments,
+Launcher checks cover manager priority, direct delegation, PATH fallback, spaces, arguments,
 exit codes, opt-in AOT training, cache invalidation and corrupt-cache fallback with clean stdout.
+Fake runtimes reject version probes. Checks cover manager failure without fallback, missing JDK metadata,
+checksum failures, diagnostic markers and artifact-hash handoff. Cache checks reject malformed hashes
+and mismatched artifact paths.
+JDK metadata and manager-supplied JVM option changes invalidate AOT caches. Editing the executable with its generation hint
+unchanged must still invalidate AOT caches.
 
 == Performance
 

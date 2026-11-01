@@ -14,6 +14,7 @@
 ## Changes
 
 - Preserve existing work. Commit or push only when explicitly requested for this repository.
+- Use `io.github.bric3.glowadoc` as the base package for owned Java and Kotlin types, including tests, build logic and tools.
 - Read [Architecture](ARCHITECTURE.md) before changing boundaries. Keep AsciidoctorJ in `asciidoctor`, Lumis4J in `highlight-lumis4j`, and terminal/UI types in their adapters.
 - Put behaviour with its data and knowledge. Prefer existing APIs and narrow dependencies; avoid speculative abstractions.
 - Use four-space Java/Kotlin indentation, Google Java Format AOSP and ktlint IntelliJ style. Honour `.editorconfig`.
