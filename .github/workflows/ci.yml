@@ -32,7 +32,12 @@ jobs:
       - name: Train AOT cache
         run: ./gradlew :cli-jvm:aotTrain
       - name: Exercise AOT cache
-        run: java -XX:AOTMode=required -XX:AOTCache=cli-jvm/build/aot/glow-adoc.aot -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --no-pager --color=never fixtures/showcase.adoc
+        run: |
+          cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT-app.jar --timings --no-pager --color=always fixtures/showcase.adoc 2> cli-jvm/build/aot-check.log
+          grep 'timing aot-cache:' cli-jvm/build/aot-check.log
+          selected_java=$(sed -n 's/^glow-adoc timing java: //p' cli-jvm/build/aot-check.log)
+          aot_cache=$(sed -n 's/^glow-adoc timing aot-cache: //p' cli-jvm/build/aot-check.log)
+          "$selected_java" --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=required -XX:AOTCache="$aot_cache" -jar "$PWD/cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT-app.jar" --no-pager --color=always fixtures/showcase.adoc
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

@@ -4,25 +4,75 @@ package io.github.bric3.glowadoc.terminal;
 
 import dev.tamboui.terminal.Backend;
 
-import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
 
+/** Session-owned image data and viewport placements. */
 public final class KittyImages implements AutoCloseable {
     private final Backend backend;
+    private final long budget;
     private int nextId = 1 + new SecureRandom().nextInt(1_000_000_000);
-    private final java.util.List<Integer> ids = new java.util.ArrayList<>();
+    private final Map<Path, Image> images = new LinkedHashMap<>(16, .75f, true);
+    private Map<Integer, Placement> previous = Map.of();
+    private long resident;
+    private boolean refresh;
 
-    public KittyImages(Backend backend) {
-        this.backend = backend;
+    public void refreshPlacements() {
+        refresh = true;
+    }
+
+    public void invalidate(int id) {
+        var iterator = images.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            if (entry.getValue().id() == id) {
+                resident -= entry.getValue().bytes();
+                iterator.remove();
+                refresh = true;
+            }
+        }
     }
 
     public record Size(int columns, int rows) {}
+
+    public record Placement(
+            int id,
+            Path path,
+            int row,
+            int column,
+            int columns,
+            int rows,
+            int cropRows,
+            int totalRows) {}
+
+    private record Image(int id, int width, int height) {
+        long bytes() {
+            return (long) width * height * 4;
+        }
+    }
+
+    public KittyImages(Backend backend) {
+        this(backend, 128L * 1024 * 1024);
+    }
+
+    KittyImages(Backend backend, long budget) {
+        this.backend = backend;
+        this.budget = budget;
+    }
 
     public static Size measure(Path file, int width, int cellWidth, int cellHeight)
             throws IOException {
@@ -34,11 +84,8 @@ public final class KittyImages implements AutoCloseable {
             var reader = readers.next();
             try {
                 reader.setInput(stream);
-                int w = reader.getWidth(0);
-                int h = reader.getHeight(0);
-                if ((long) w * h > 20_000_000L) {
-                    throw new IOException("Image exceeds 20 megapixels");
-                }
+                int w = reader.getWidth(0), h = reader.getHeight(0);
+                checkDimensions(w, h);
                 int columns = Math.max(1, Math.min(width, (int) Math.ceil((double) w / cellWidth)));
                 return new Size(
                         columns,
@@ -52,70 +99,153 @@ public final class KittyImages implements AutoCloseable {
         }
     }
 
-    public void show(Path file, int row, int columns, int rows, int cropRows, int totalRows)
-            throws IOException {
-        int id = nextId++;
-        ids.add(id);
-        try (var stream = ImageIO.createImageInputStream(file.toFile())) {
+    public void render(List<Placement> placements) throws IOException {
+        var desired = new HashMap<Integer, Placement>();
+        for (var placement : placements) {
+            desired.put(placement.id(), placement);
+        }
+        if (desired.equals(previous) && !refresh) {
+            return;
+        }
+        backend.writeRaw("\u001b7");
+        try {
+            for (var old : previous.values()) {
+                var replacement = desired.get(old.id());
+                if (replacement == null || !replacement.path().equals(old.path())) {
+                    var image = images.get(old.path());
+                    if (image != null) {
+                        command("a=d,d=i,i=" + image.id() + ",p=" + old.id() + ",q=2");
+                    }
+                }
+            }
+            for (var placement : placements) {
+                if (placement.equals(previous.get(placement.id())) && !refresh) {
+                    continue;
+                }
+                Image image = images.get(placement.path());
+                if (image == null) {
+                    image = upload(placement.path());
+                    images.put(placement.path(), image);
+                    resident += image.bytes();
+                }
+                int y =
+                        (int)
+                                Math.min(
+                                        image.height() - 1L,
+                                        (long) placement.cropRows()
+                                                * image.height()
+                                                / placement.totalRows());
+                int end =
+                        (int)
+                                Math.min(
+                                        image.height(),
+                                        (long) (placement.cropRows() + placement.rows())
+                                                * image.height()
+                                                / placement.totalRows());
+                backend.writeRaw(
+                        "\u001b[" + (placement.row() + 1) + ";" + (placement.column() + 1) + "H");
+                command(
+                        "a=p,i="
+                                + image.id()
+                                + ",p="
+                                + placement.id()
+                                + ",q=1,C=1,x=0,y="
+                                + y
+                                + ",w="
+                                + image.width()
+                                + ",h="
+                                + Math.max(1, end - y)
+                                + ",c="
+                                + placement.columns()
+                                + ",r="
+                                + placement.rows());
+            }
+            previous = Map.copyOf(desired);
+            refresh = false;
+            Set<Path> visible =
+                    placements.stream().map(Placement::path).collect(Collectors.toSet());
+            var iterator = images.entrySet().iterator();
+            while (resident > budget && iterator.hasNext()) {
+                var entry = iterator.next();
+                // Visible images remain resident; the budget bounds retained off-screen data.
+                if (visible.contains(entry.getKey())) {
+                    continue;
+                }
+                command("a=d,d=I,i=" + entry.getValue().id() + ",q=2");
+                resident -= entry.getValue().bytes();
+                iterator.remove();
+            }
+        } finally {
+            backend.writeRaw("\u001b8");
+            backend.flush();
+        }
+    }
+
+    private Image upload(Path path) throws IOException {
+        try (var stream = ImageIO.createImageInputStream(path.toFile())) {
             var readers = ImageIO.getImageReaders(stream);
             if (!readers.hasNext()) {
-                throw new IOException("Unsupported image: " + file);
+                throw new IOException("Unsupported image format");
             }
             var reader = readers.next();
             try {
                 reader.setInput(stream);
-                if ((long) reader.getWidth(0) * reader.getHeight(0) > 20_000_000L) {
-                    throw new IOException("Image exceeds 20 megapixels");
+                var image = new Image(nextId++, reader.getWidth(0), reader.getHeight(0));
+                checkDimensions(image.width(), image.height());
+                if (reader.getFormatName().equalsIgnoreCase("png")) {
+                    try (var png = Files.newInputStream(path)) {
+                        transmit(image.id(), png);
+                    }
+                } else {
+                    var png = new ByteArrayOutputStream();
+                    ImageIO.write(reader.read(0), "png", png);
+                    try (var input = new ByteArrayInputStream(png.toByteArray())) {
+                        transmit(image.id(), input);
+                    }
                 }
-                BufferedImage image = reader.read(0);
-                int y = Math.min(image.getHeight() - 1, cropRows * image.getHeight() / totalRows);
-                int height =
-                        Math.max(
-                                1,
-                                Math.min(
-                                        image.getHeight() - y,
-                                        rows * image.getHeight() / totalRows));
-                image = image.getSubimage(0, y, image.getWidth(), height);
-                var png = new ByteArrayOutputStream();
-                ImageIO.write(image, "png", png);
-                String data = Base64.getEncoder().encodeToString(png.toByteArray());
-                backend.writeRaw("\u001b[" + (row + 1) + ";1H");
-                for (int offset = 0; offset < data.length(); offset += 4096) {
-                    boolean more = offset + 4096 < data.length();
-                    backend.writeRaw(
-                            "\u001b_G"
-                                    + (offset == 0
-                                            ? "a=T,t=d,f=100,q=2,i="
-                                                    + id
-                                                    + ",c="
-                                                    + columns
-                                                    + ",r="
-                                                    + rows
-                                                    + ","
-                                            : "")
-                                    + "m="
-                                    + (more ? 1 : 0)
-                                    + ";"
-                                    + data.substring(offset, Math.min(data.length(), offset + 4096))
-                                    + "\u001b\\");
-                }
-                backend.flush();
+                return image;
             } finally {
                 reader.dispose();
             }
         }
     }
 
-    public void clear() throws IOException {
-        for (int id : ids) {
-            backend.writeRaw("\u001b_Ga=d,d=I,i=" + id + ",q=2\u001b\\");
+    private void transmit(int id, InputStream input) throws IOException {
+        byte[] chunk = input.readNBytes(3072);
+        boolean first = true;
+        do {
+            byte[] next = input.readNBytes(3072);
+            backend.writeRaw(
+                    "\u001b_G"
+                            + (first ? "a=t,t=d,f=100,q=2,i=" + id + "," : "")
+                            + "m="
+                            + (next.length == 0 ? 0 : 1)
+                            + ";"
+                            + Base64.getEncoder().encodeToString(chunk)
+                            + "\u001b\\");
+            first = false;
+            chunk = next;
+        } while (chunk.length > 0);
+    }
+
+    private static void checkDimensions(int width, int height) throws IOException {
+        if (width <= 0 || height <= 0 || (long) width * height > 20_000_000L) {
+            throw new IOException("Image exceeds 20 megapixels");
         }
-        ids.clear();
-        backend.flush();
+    }
+
+    private void command(String controls) throws IOException {
+        backend.writeRaw("\u001b_G" + controls + ";\u001b\\");
     }
 
     @Override
     public void close() throws IOException {
-        clear();
+        for (var image : images.values()) {
+            command("a=d,d=I,i=" + image.id() + ",q=2");
+        }
+        images.clear();
+        previous = Map.of();
+        resident = 0;
+        backend.flush();
     }
 }

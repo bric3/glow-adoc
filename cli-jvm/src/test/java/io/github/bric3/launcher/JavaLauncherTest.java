@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -42,10 +43,24 @@ class JavaLauncherTest {
         minimum = Integer.parseInt(System.getProperty("launcher.minimum"));
         Files.copy(Path.of(System.getProperty("launcher.executable")), launcher);
         assertTrue(launcher.toFile().setExecutable(true));
-        for (String utility : List.of("sed", "head")) {
+        for (String utility :
+                List.of(
+                        "sed",
+                        "head",
+                        "cut",
+                        "uname",
+                        "mkdir",
+                        "mktemp",
+                        "rm",
+                        "mv",
+                        "shasum",
+                        "sha256sum")) {
             Path source = Path.of("/usr/bin", utility);
             if (!Files.exists(source)) {
                 source = Path.of("/bin", utility);
+            }
+            if (!Files.exists(source)) {
+                continue;
             }
             Files.createSymbolicLink(bin.resolve(utility), source);
         }
@@ -146,6 +161,7 @@ class JavaLauncherTest {
         assertEquals(
                 List.of(
                         "JAVA_HOME",
+                        "--sun-misc-unsafe-memory-access=allow",
                         "-Xmx64m",
                         "-Dexample=value",
                         "-jar",
@@ -193,6 +209,71 @@ class JavaLauncherTest {
         }
     }
 
+    @Test
+    void trainsAndSelectsOnlyMatchingLocalCaches() throws Exception {
+        environment.put("JAVA_HOME", javaHome("selected", minimum, "selected").toString());
+        environment.put("XDG_CACHE_HOME", directory.resolve("cache with spaces").toString());
+        assertEquals(0, run("--train-aot", "fixture with spaces.adoc"));
+        Path absoluteLauncher = launcher;
+        launcher = Path.of(".").resolve(directory.relativize(launcher));
+        assertEquals(0, run("document.adoc"));
+        assertTrue(arguments().contains("-XX:AOTMode=auto"), arguments().toString());
+        launcher = absoluteLauncher;
+        environment.put("JAVA_OPTS", "-Xmx128m");
+        assertEquals(0, run("document.adoc"));
+        assertFalse(arguments().contains("-XX:AOTMode=auto"));
+        environment.remove("JAVA_OPTS");
+        Files.writeString(launcher, "\n", StandardOpenOption.APPEND);
+        assertEquals(0, run("document.adoc"));
+        assertFalse(arguments().contains("-XX:AOTMode=auto"));
+    }
+
+    @Test
+    void corruptCacheFallsBackWithoutWritingJvmDiagnosticsToStdout() throws Exception {
+        Path selected = javaHome("selected", minimum, "selected");
+        String realJava = quote(Path.of(System.getProperty("java.home"), "bin/java").toString());
+        environment.put("JAVA_HOME", selected.toString());
+        environment.put("XDG_CACHE_HOME", directory.resolve("aot cache").toString());
+        Path document = directory.resolve("document.adoc");
+        Files.writeString(document, "= Hello\n\nAOT fallback\n");
+        // Keep the real JDK identity while deliberately producing an unreadable cache.
+        script(
+                selected.resolve("bin/java"),
+                String.join(
+                        "\n",
+                        "if [ \"$1\" = -version ]; then exec " + realJava + " \"$@\"; fi",
+                        "for option do",
+                        "  case \"$option\" in -XX:AOTCacheOutput=*) printf corrupt >"
+                                + " \"${option#*=}\" ;; esac",
+                        "done",
+                        "exit 0",
+                        ""));
+        assertEquals(0, run("--train-aot", document.toString()));
+        script(selected.resolve("bin/java"), "exec " + realJava + " \"$@\"\n");
+        Path stdout = directory.resolve("stdout");
+        Path stderr = directory.resolve("stderr");
+        var builder =
+                new ProcessBuilder(
+                                launcher.toString(),
+                                "--no-pager",
+                                "--color=never",
+                                document.toString())
+                        .directory(directory.toFile())
+                        .redirectOutput(stdout.toFile())
+                        .redirectError(stderr.toFile());
+        builder.environment().clear();
+        builder.environment().putAll(environment);
+        var process = builder.start();
+        try {
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(stderr));
+            assertEquals("Hello\n\nAOT fallback\n\n", Files.readString(stdout));
+            assertTrue(Files.readString(stderr).contains("[aot]"));
+        } finally {
+            process.destroyForcibly();
+        }
+    }
+
     private List<String> arguments() throws IOException {
         return Files.readAllLines(capture);
     }
@@ -217,6 +298,10 @@ class JavaLauncherTest {
                         "    printf '%s\\n' 'openjdk version \"" + version + "\"' >&2",
                         "    exit 0",
                         "fi",
+                        "for option do",
+                        "  case \"$option\" in -XX:AOTCacheOutput=*) printf cache >"
+                                + " \"${option#*=}\" ;; esac",
+                        "done",
                         "printf '%s\\n' " + quote(label) + " \"$@\" > \"$LAUNCHER_CAPTURE\"",
                         "exit \"$FAKE_JAVA_EXIT\"",
                         ""));

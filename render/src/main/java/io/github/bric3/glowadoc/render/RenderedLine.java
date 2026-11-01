@@ -6,13 +6,18 @@ import io.github.bric3.glowadoc.document.Block;
 import io.github.bric3.glowadoc.document.Span;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
-public record RenderedLine(List<Span> spans, int blockIndex, Block asset) {
+public record RenderedLine(List<Span> spans, int blockIndex, Block asset, int disclosure) {
+    public RenderedLine(List<Span> spans, int blockIndex, Block asset) {
+        this(spans, blockIndex, asset, -1);
+    }
+
     public RenderedLine {
         spans = List.copyOf(spans);
     }
 
     public String text() {
-        return spans.stream().map(Span::text).collect(java.util.stream.Collectors.joining());
+        return spans.stream().map(Span::text).collect(Collectors.joining());
     }
 }

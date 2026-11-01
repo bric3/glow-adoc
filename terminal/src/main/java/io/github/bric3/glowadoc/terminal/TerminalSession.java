@@ -6,12 +6,17 @@ import dev.tamboui.backend.aesh.AeshBackend;
 
 import io.github.bric3.glowadoc.document.Appearance;
 
+import org.aesh.terminal.tty.MouseEvent;
 import org.aesh.terminal.tty.TerminalBuilder;
 import org.aesh.terminal.tty.TerminalConnection;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.regex.Pattern;
 
 public final class TerminalSession implements AutoCloseable {
@@ -22,6 +27,17 @@ public final class TerminalSession implements AutoCloseable {
     private volatile Appearance appearance = Appearance.DARK;
     private volatile boolean dirty = true;
     private volatile boolean kitty;
+    private final Queue<Integer> missingImages = new ConcurrentLinkedQueue<>();
+
+    public List<Integer> takeMissingImages() {
+        var result = new ArrayList<Integer>();
+        Integer id;
+        while ((id = missingImages.poll()) != null) {
+            result.add(id);
+        }
+        return result;
+    }
+
     private volatile boolean notifications;
     private boolean enabledNotifications;
     private volatile long lastReply;
@@ -42,6 +58,9 @@ public final class TerminalSession implements AutoCloseable {
         var keys = connection.stdinHandler();
         filter = new ReplyFilter(this::reply, keys);
         connection.setStdinHandler(filter::accept);
+        // Aesh consumes mouse reports before stdin; return them to TamboUI's input decoder.
+        connection.setMouseHandler(
+                event -> keys.accept(mouseSequence(event).codePoints().toArray()));
         connection.setThemeChangeHandler(
                 theme -> {
                     lastReply = System.nanoTime();
@@ -69,6 +88,38 @@ public final class TerminalSession implements AutoCloseable {
 
     public AeshBackend backend() {
         return backend;
+    }
+
+    static String mouseSequence(MouseEvent event) {
+        int button =
+                switch (event.button()) {
+                    case LEFT -> 0;
+                    case MIDDLE -> 1;
+                    case RIGHT -> 2;
+                    case NONE -> 3;
+                    case SCROLL_UP -> 64;
+                    case SCROLL_DOWN -> 65;
+                };
+        if (event.type() == MouseEvent.Type.DRAG || event.type() == MouseEvent.Type.MOVE) {
+            button |= 32;
+        }
+        if (event.shift()) {
+            button |= 4;
+        }
+        if (event.alt()) {
+            button |= 8;
+        }
+        if (event.ctrl()) {
+            button |= 16;
+        }
+        // Aesh retains the protocol's one-based coordinates.
+        return "\u001b[<"
+                + button
+                + ";"
+                + event.x()
+                + ";"
+                + event.y()
+                + (event.type() == MouseEvent.Type.RELEASE ? "m" : "M");
     }
 
     public Appearance appearance() {
@@ -130,6 +181,15 @@ public final class TerminalSession implements AutoCloseable {
     }
 
     private void reply(String value) {
+        var missing = Pattern.compile("i=([0-9]+)(?:,p=[0-9]+)?;ENOENT").matcher(value);
+        if (value.startsWith("\u001b_G") && missing.find()) {
+            try {
+                missingImages.add(Integer.parseInt(missing.group(1)));
+                dirty = true;
+            } catch (NumberFormatException ignored) {
+                /* Ignore IDs outside this client's range. */
+            }
+        }
         var cell = Pattern.compile("\u001b\\[6;([0-9]{1,4});([0-9]{1,4})t").matcher(value);
         if (cell.matches()) {
             cellHeight = Math.max(1, Integer.parseInt(cell.group(1)));

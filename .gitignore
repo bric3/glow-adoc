@@ -5,3 +5,4 @@
 .DS_Store
 *.aot
 *.aotconfig
+.glow-adoc.local.toml

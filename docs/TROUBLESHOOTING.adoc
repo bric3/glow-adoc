@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= Troubleshooting
+
+== Images show descriptions
+
+Check attribute spelling and file location. For a Hugo site:
+
+[source,sh]
+----
+glow-adoc -a image-assets="$PWD/static/assets" content/posts/post.adoc
+----
+
+Use `$HOME` for absolute CLI paths rather than relying on tilde expansion after `=`.
+Relative attribute values remain AsciiDoc values; declare an image root as shown in the README.
+
+Graphics require the pager, `--images=auto`, readable supported files and a Kitty capability reply.
+Direct output and mixed inline images retain descriptions.
+Multiplexers and terminal frontends can block or omit graphics support.
+A libghostty-based parser does not establish that its frontend renders images.
+Images are limited to 20 megapixels. Only allowed directories are read; symlinks cannot escape them.
+
+== SSH
+
+Run the reader where the document and assets exist. Image bytes travel through SSH.
+Check remote Java 27 availability and TERM/terminfo configuration.
+Multiplexer passthrough and graphics settings are terminal-specific.
+
+== Slow startup or scrolling
+
+Run `glow-adoc --timings FILE` and follow link:PERFORMANCE.adoc[the benchmark procedure].
+AOT training is optional. Caches match the application, selected JDK, platform and JVM options.
+Retrain after updates; do not copy caches between incompatible builds.
+
+== Mouse selection
+
+Press `m` to disable capture, or use `--mouse=false`.
+With capture enabled, Shift-drag selects text in terminals that provide that override.
+
+== Colours and glyphs
+
+Press `r` to query colours again. Fix appearance with `--theme=light` or `--theme=dark`.
+Use `--color=never` for plain styling and `--icons=unicode` or `--icons=ascii` when Nerd Font glyphs are absent.
+
+== Diagrams remain source
+
+The embedded MIT PlantUML distribution excludes ditaa.
+For Mermaid, check `merman-cli --version` and PATH, or set `merman` in user/explicit configuration.
+Renderer failures retain source. PlantUML includes/imports/themes are disabled.
+Diagram execution has a 15-second deadline and bounded output.
+
+== Java warnings
+
+The launcher supplies the Unsafe warning policy. For direct invocation:
+
+[source,sh]
+----
+java --sun-misc-unsafe-memory-access=allow -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar FILE
+----

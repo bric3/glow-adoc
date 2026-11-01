@@ -7,4 +7,5 @@ plugins {
 dependencies {
     api(project(":document"))
     implementation(libs.asciidoctor)
+    implementation(libs.jsoup)
 }

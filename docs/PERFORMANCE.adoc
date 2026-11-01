@@ -1,0 +1,166 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= Performance
+
+== Runtime behaviour
+
+The pager paints source text before syntax highlighting completes. Highlighted spans are cached per
+source, language and appearance. Resize reuses them. Direct output waits for complete highlighting.
+
+Images upload on first display. Scrolling updates placement/crop commands and retains the pixels in
+the terminal. PNG files stream without decoding or re-encoding; other formats convert once.
+Unchanged frames emit no graphics commands. Missing terminal images are uploaded again on ENOENT.
+The off-screen residency target is 128 MiB of decoded pixels; visible images remain resident even
+when their working set exceeds that target. All owned image IDs are released on exit.
+This is terminal image residency, not a JVM heap limit.
+
+== Local AOT cache
+
+Train the executable you intend to use:
+
+[source,sh]
+----
+glow-adoc --train-aot fixtures/showcase.adoc
+glow-adoc --timings document.adoc
+----
+
+`./gradlew :cli-jvm:aotTrain` trains the built executable rather than the installed copy.
+The source tree's showcase supplies varied highlighted content. AOT training does not open a pager.
+
+Caches live under `$XDG_CACHE_HOME/glow-adoc/aot`, falling back to `~/.cache/glow-adoc/aot`.
+Identity includes executable bytes and location, selected Java path and full version output,
+OS/architecture and JAVA_OPTS. Train again after any of these change.
+Installation never trains a cache. No cache means normal startup; incompatible/corrupt cache loading
+uses the JVM's auto fallback and may report diagnostics on stderr.
+
+The launcher supplies the same compressed-reference compatibility flags during training and loading.
+Explicit AOT flags, Java agents and flight-recording options in JAVA_OPTS bypass automatic selection.
+Help and version skip cache hashing. Direct `java -jar` invocation does not select these caches automatically.
+Cache hashing requires `sha256sum` or `shasum`; without either, ordinary startup still works.
+Remove obsolete cache files from the cache directory when they are no longer needed.
+
+For direct Java invocation, train and load an explicitly named cache with the same JDK and jar:
+
+[source,sh]
+----
+java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTCacheOutput=glow-adoc.aot -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --no-pager --color=always fixtures/showcase.adoc
+java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=auto -XX:AOTCache=glow-adoc.aot -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc
+----
+
+== Reproduce measurements
+
+Use an installed Java 27 and JBang. Run benchmarks without concurrent builds or other benchmarks:
+
+[source,sh]
+----
+jbang --java 27 tools/Benchmark.java --runs 20 --pty -- glow-adoc document.adoc
+jbang --java 27 tools/Benchmark.java --runs 20 --scroll -- glow-adoc -a image-assets="$PWD/static/assets" content/posts/post.adoc
+jbang --java 27 tools/StartupMatrix.java /path/to/java cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc
+----
+
+`--pty` measures process start to the first status line in an 80 x 24 pseudo-terminal.
+`--scroll` additionally simulates a Kitty reply and measures 20 single-line scrolls, output bytes
+and image uploads. It requires an image in the initial viewport. Frame latency ends at the next
+synchronised text-frame completion; it does not measure physical display latency.
+CSV output reports each fresh JVM launch, median and nearest-rank p95. Polling adds measurement overhead.
+The first launch is retained. Later launches normally have warm filesystem caches.
+
+The matrix compares defaults, JRuby compilation disabled, tier-one compilation, their combination,
+invokedynamic settings, and Serial GC with a bounded heap. Inputs are small, supplied and larger synthetic documents.
+These are experiments, not recommended JAVA_OPTS defaults.
+
+`--timings` reports cumulative milliseconds from command execution: configuration/input, JRuby ready,
+conversion, first pager frame/image, highlighting completion or direct output completion. JVM launch and manager discovery
+precede that timer and are included in the external benchmark.
+
+For a startup recording, pass `-XX:StartFlightRecording=filename=startup.jfr,settings=profile` to Java
+and inspect it with `jfr summary` or a JFR viewer. Keep profiling separate from timed comparisons.
+
+== Local measurements
+
+2026-10-31, macOS ARM64, Corretto 27.0.1+11-FR, 80 x 24 PTY, supplied CompletableFuture post,
+20 fresh JVMs per version.
+The startup measurement ends at readable text, before progressive highlighting finishes.
+
+[cols="3,1,1",options="header"]
+|===
+|Measurement |Before |After
+|Median first frame |3591.9 ms |1500.2 ms
+|p95 first frame |4438.8 ms |1541.8 ms
+|p95 scroll frame, range across runs |69.8-81.8 ms |3.4-3.9 ms
+|Mean bytes for 20 scroll steps |5,584,454 |18,337
+|Image uploads during those steps |20 |0
+|===
+
+Raw samples: link:benchmarks/baseline.csv[before] and link:benchmarks/after.csv[after].
+Scroll latency includes PTY/file polling and frame dispatch, not real-terminal rendering or SSH latency.
+
+An interleaved executable-launcher comparison used ten launches per setting with the manager-selected
+OpenJDK 27+35-2325 and a local cache trained on the showcase:
+
+[cols="3,1,1",options="header"]
+|===
+|Measurement |Uncached |AOT
+|Median first frame |1515.2 ms |1310.3 ms
+|p95 first frame |1852.8 ms |1350.2 ms
+|===
+
+See link:benchmarks/aot-paired.csv[paired samples]. An earlier sequential comparison was variable:
+1542.7 ms uncached median versus 2762.8 ms cached, with cached samples ranging from 1325.0 to 2849.3 ms.
+Both initial datasets are retained: link:benchmarks/aot-initial-uncached.csv[uncached] and
+link:benchmarks/aot-initial-cached.csv[cached]. AOT gains depend on the workload and machine;
+training remains opt-in.
+
+The final installed-launcher smoke test opened the same post with an explicit image-assets directory
+in 2085.8 ms, using OpenJDK 27+35-2325 without training an installed cache. Its 20 scroll steps measured
+3.6 ms p95, 18,338 bytes and zero image uploads. This single run checks the installed path;
+use repeated launches to compare latency distributions.
+
+The runtime matrix used three launches per completed cell. Times below are median seconds for
+direct highlighted output; the larger input repeats the public showcase ten times.
+
+[cols="3,1,1,1",options="header"]
+|===
+|Settings |Small |Supplied post |Larger
+|Defaults |1.304 |3.480 |3.729
+|JRuby compilation off |1.253 |3.474 |3.928
+|TieredStopAtLevel=1 |1.103 |4.120 |4.115
+|Both settings |1.083 |3.994 |4.036
+|Invokedynamic settings off |1.303 |3.519 |3.694
+|Serial GC, 32-512 MiB heap |1.404 |Heap exhausted |Not run
+|===
+
+No candidate improved startup by 30% across the corpus without a material rendering regression.
+The heap-cap failure occurred while Chicory loaded LumisModule. JVM defaults remain unchanged.
+See link:benchmarks/runtime.csv[raw runtime results]. The matrix tool records failed candidates explicitly.
+
+A separate diagnostic/JFR run reached JRuby readiness at 1.26 s, conversion at 1.43 s and completed
+highlighted output at 3.62 s. Samples include class loading, JRuby initialisation and Chicory Wasm parsing.
+This supports deferring highlighting; it does not establish an exact CPU attribution percentage.
+
+== Investigation decisions
+
+[cols="2,4",options="header"]
+|===
+|Candidate |Decision
+|Image decode/encode per frame |Removed; reuse uploaded data and crop in the terminal.
+|Full image retransmission |Removed from scrolling; only placement commands change.
+|Eager syntax highlighting |Deferred until the first readable pager frame.
+|Highlighting during reflow |Cached by source/language/appearance.
+|Launcher subprocesses and repeated probes |Retain manager priority and runtime validation; version-only launch was approximately 0.2 seconds.
+|Java executable discovery cache |Deferred: invalidation adds complexity to a small measured contribution.
+|JRuby compilation and JVM compiler limits |Benchmark separately; flags that help parsing can slow highlighting.
+|Invokedynamic, heap and GC settings |Included in the experiment matrix; no unmeasured default changes.
+|AOT training coverage |Includes highlighted output; training remains opt-in.
+|Persistent JVM |Deferred by design; it adds process lifetime, isolation and memory costs.
+|Parsed-document disk cache |Deferred; includes, attributes and file invalidation need a separate design.
+|Off-screen diagrams |No new scheduler in this change; evaluate with diagram-heavy documents before adding concurrency.
+|Diagram initialisation |Existing renderer work is demand-driven; no dependency changes.
+|Shadow compression/classpath splitting |Retain the executable jar until profiling establishes a material packaging cost.
+|Service scanning |Existing generated Aesh metadata is retained.
+|XML/jsoup pipeline |Retained for HTML/inline correctness; parser replacement is outside this change.
+|JRuby/AsciidoctorJ upgrades |Deferred pending compatibility and performance evidence for a specific version pair.
+|Native Image |Existing JRuby reachability blocker remains; compilation alone does not establish runtime support.
+|===
+
+No daemon, dependency upgrade, parser replacement or unsafe verification flags are required for the implemented changes.

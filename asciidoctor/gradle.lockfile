@@ -27,6 +27,7 @@ org.jruby:jruby-base:9.4.14.0=compileClasspath,runtimeClasspath,testCompileClass
 org.jruby:jruby-stdlib:9.4.14.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.jruby:jruby:9.4.14.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.jruby:jzlib:1.1.5=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.jsoup:jsoup:1.23.2=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.junit.jupiter:junit-jupiter-api:5.14.1=testCompileClasspath,testRuntimeClasspath
 org.junit.jupiter:junit-jupiter-engine:5.14.1=testRuntimeClasspath
 org.junit.jupiter:junit-jupiter-params:5.14.1=testCompileClasspath,testRuntimeClasspath

@@ -49,6 +49,65 @@ flowchart LR
 
 Diacritics: café. Wide text: 日本語. Emoji: 👩‍💻.
 
+== Rich blocks
+
+.Enable GC logging programmatically
+[source,java]
+----
+int enabled = 1; // <1>
+System.out.println(enabled); // <2>
+----
+<1> Enable the setting.
+<2> Print the selected value.
+
+Inline `code` and [line-through]#removed text#.
+
+[quote]
+____
+A quote with enough text to wrap and keep its rail.
+
+[quote]
+______
+A nested quotation with its own rail.
+______
+____
+
+TIP: Portable icons and colours follow the terminal appearance.
+
+WARNING: Important content stays readable with colours disabled.
+
+.An example
+====
+Examples have a thin border and a subtle background.
+====
+
+.A sidebar
+****
+Sidebars can contain paragraphs and nested blocks.
+****
+
+[cols="2,>1",options="header"]
+|===
+|Name |Count
+|A longer table cell that wraps within its column |42
+|日本語 and café |7
+2+|A cell spanning both columns
+|===
+
+.More details
+[%collapsible]
+====
+This content starts folded in the pager and expands in direct output.
+====
+
+{{< notice >}}Hugo wrapper tags are hidden; this text remains.{{< /notice >}}
+
+++++
+<details open><summary>HTML details</summary>
+<p>HTML <strong>emphasis</strong> and <del>deleted text</del>.</p>
+</details>
+++++
+
 == References
 
 See <<_source>>. A footnote footnote:[Footnote content].

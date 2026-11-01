@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= CLI reference
+
+== Invocation
+
+`glow-adoc [OPTIONS] FILE|-` reads one file or stdin. The pager requires a macOS/Linux terminal.
+Direct output also supports Windows. Exit status is zero on success and non-zero on failure.
+
+[cols="2,1,4",options="header"]
+|===
+|Option |Default |Meaning
+|`--no-pager` |off |Write directly to stdout.
+|`--width N` |terminal |Content width, 1-1000 cells. Redirected output defaults to 80.
+|`--center true/false` |false |Centre width-limited content.
+|`--color auto/always/never` |auto |Auto respects NO_COLOR and TERM=dumb.
+|`--theme auto/light/dark` |auto |Follow terminal appearance, or fix the theme.
+|`--images auto/never` |auto |Use graphics when the terminal answers the capability query.
+|`--icons nerd/unicode/ascii` |nerd |Select glyphs. Font support is not detected.
+|`--mouse true/false` |true |Capture clicks and wheel events.
+|`--page-background true/false` |false |Fill ordinary text and margins.
+|`--table-stripes true/false` |true |Alternate cell backgrounds.
+|`--table-frame auto/all/sides/ends/none` |auto |Select outer table borders.
+|`--table-grid auto/all/rows/cols/none` |auto |Select internal table borders.
+|`--table-section-borders thin/heavy` |thin |Style enabled header/footer rules.
+|`--shortcodes hide/show` |hide |Show or hide Hugo shortcode tags.
+|`-a, --attribute NAME=VALUE` |none |Repeatable external attributes; last value wins.
+|`--image-root PATH` |none |Repeatable image directory, relative to the working directory.
+|`--config FILE` |discovery |Read this file over application defaults.
+|`--timings` |off |Write cumulative startup stages to stderr.
+|`--train-aot FILE` |manual |Executable launcher only; must be the first option.
+|`--version`, `--help` | |Print version or usage.
+|===
+
+== Configuration
+
+User settings: `$XDG_CONFIG_HOME/glow-adoc/config.toml`, falling back to
+`~/.config/glow-adoc/config.toml`. Windows uses `%APPDATA%/glow-adoc/config.toml`,
+falling back to `~/AppData/Roaming/glow-adoc/config.toml`. See link:config.toml[the complete example].
+
+Project lookup starts beside the document, or in the working directory for stdin.
+Each directory is checked for `.glow-adoc.local.toml`, then `.glow-adoc.toml`.
+Lookup stops at the first file found. Ignore the local filename in your project's Git configuration.
+
+Precedence: CLI, nearest project file, user configuration, defaults.
+Attribute tables merge by name; image-root arrays replace inherited arrays.
+Explicit `--config` bypasses discovery. Malformed files, invalid values and unknown keys are errors.
+
+The link:config.toml[example] lists all configuration keys. `pager = false` disables paging;
+`width = 0` follows terminal width. Help, version, config selection, timings and AOT training are CLI-only.
+`attributes` is a table of strings; `image-roots` is an array of paths.
+`merman` selects an executable in user or explicit configuration; discovered project files cannot select one.
+
+== Attributes and resources
+
+Values preserve commas and equals signs. A name without `=VALUE` defines an empty attribute.
+Use the name referenced by the document: `image-assets` and `image-asset` are distinct.
+
+Includes stay inside the document directory. Include selectors (`tag`, `tags`, `lines`) are unsupported.
+Images may use that directory, declared roots, or absolute directory values explicitly supplied as CLI attributes.
+Symbolic links are checked against the allowed directories.
+
+Configuration roots are relative to the configuration file. Discovered roots stay inside its directory tree.
+User configuration, explicit files and CLI roots may allow other directories.
+The standard `imagesdir` attribute prefixes relative image targets. Remote images and HTML resources are not fetched.
+
+== Rendering
+
+Text wraps to the content width; the final terminal column is reserved. Code scrolls horizontally.
+Table cells wrap; structures wider than the viewport remain scrollable. Auto borders follow AsciiDoc frame/grid attributes.
+Source titles use italic text inside the top border. Callouts use ❶ through ❿, then parenthesised numbers;
+ASCII mode uses parenthesised numbers throughout.
+
+Hugo `{{< ... >}}` and `{{% ... %}}` tags are hidden while their contents remain.
+Generic `{{ ... }}`, code/literal examples and escaped tags are preserved. Templates are not executed.
+
+HTML passthrough supports text markup, links, lists, tables, quotes, code and details/summary.
+Scripts, styles and executable elements are discarded. Arbitrary CSS is unsupported; line-through is recognised.
+
+Direct output expands disclosures and retains image descriptions. The pager displays block images and standalone
+`image:` macros graphically when supported. Images mixed into running text retain placeholders.
+
+== Environment
+
+`JAVA_OPTS` supplies JVM options to the executable launcher. Its default Unsafe policy is
+`--sun-misc-unsafe-memory-access=allow`; JAVA_OPTS can override it. Direct Java invocation retains JVM defaults.
+`XDG_CACHE_HOME` selects the AOT cache root, falling back to `~/.cache`.
+See link:PERFORMANCE.adoc[performance] and link:TROUBLESHOOTING.adoc[troubleshooting].

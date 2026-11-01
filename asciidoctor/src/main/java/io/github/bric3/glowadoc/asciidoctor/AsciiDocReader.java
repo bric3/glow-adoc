@@ -31,6 +31,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 public final class AsciiDocReader implements AutoCloseable {
     private final Asciidoctor engine = Asciidoctor.Factory.create();
     private Path includeRoot;
+    private boolean showShortcodes;
 
     public AsciiDocReader() {
         engine.javaConverterRegistry().register(TerminalConverter.class);
@@ -68,7 +69,9 @@ public final class AsciiDocReader implements AutoCloseable {
                                                 "Include selectors are not supported yet");
                                     }
                                     reader.pushInclude(
-                                            Files.readString(path),
+                                            showShortcodes
+                                                    ? Files.readString(path)
+                                                    : Shortcodes.hide(Files.readString(path)),
                                             path.toString(),
                                             path.toString(),
                                             1,
@@ -88,20 +91,37 @@ public final class AsciiDocReader implements AutoCloseable {
     }
 
     public Document read(String source, Path baseDirectory) {
+        return read(source, baseDirectory, false);
+    }
+
+    public Document read(String source, Path baseDirectory, boolean showShortcodes) {
+        return read(source, baseDirectory, showShortcodes, Map.of());
+    }
+
+    public Document read(
+            String source,
+            Path baseDirectory,
+            boolean showShortcodes,
+            Map<String, String> attributes) {
         try {
+            this.showShortcodes = showShortcodes;
             includeRoot = baseDirectory.toRealPath();
+            var conversionAttributes = Attributes.builder();
+            attributes.forEach(
+                    (name, value) -> conversionAttributes.attribute(name, Controls.visible(value)));
+            conversionAttributes
+                    .attribute("allow-uri-read", false)
+                    // The terminal highlighter owns source styling.
+                    .attribute("source-highlighter", "none");
             String xml =
                     engine.convert(
-                            Controls.visible(source),
+                            Controls.visible(showShortcodes ? source : Shortcodes.hide(source)),
                             Options.builder()
                                     .backend("glow-terminal")
                                     .safe(SafeMode.SAFE)
                                     .baseDir(baseDirectory.toFile())
                                     .toFile(false)
-                                    .attributes(
-                                            Attributes.builder()
-                                                    .attribute("allow-uri-read", false)
-                                                    .build())
+                                    .attributes(conversionAttributes.build())
                                     .build());
             var factory = DocumentBuilderFactory.newInstance();
             factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
@@ -109,7 +129,7 @@ public final class AsciiDocReader implements AutoCloseable {
             factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
             var root =
                     factory.newDocumentBuilder()
-                            .parse(new InputSource(new StringReader(xml)))
+                            .parse(new InputSource(new StringReader(HtmlContent.normalise(xml))))
                             .getDocumentElement();
             return new Document(blocks(root), baseDirectory);
         } catch (Exception e) {
@@ -120,7 +140,9 @@ public final class AsciiDocReader implements AutoCloseable {
     private static List<Block> blocks(Element parent) {
         var blocks = new ArrayList<Block>();
         for (Node node = parent.getFirstChild(); node != null; node = node.getNextSibling()) {
-            if (node instanceof Element element && !inline(element)) {
+            if (node instanceof Element element
+                    && !inline(element)
+                    && !element.getTagName().equals("title")) {
                 blocks.add(block(element));
             }
         }
@@ -138,6 +160,11 @@ public final class AsciiDocReader implements AutoCloseable {
                     case "row" -> Block.Kind.ROW;
                     case "cell" -> Block.Kind.CELL;
                     case "quote" -> Block.Kind.QUOTE;
+                    case "verse" -> Block.Kind.VERSE;
+                    case "example" -> Block.Kind.EXAMPLE;
+                    case "sidebar" -> Block.Kind.SIDEBAR;
+                    case "open" -> Block.Kind.OPEN;
+                    case "details" -> Block.Kind.DETAILS;
                     case "admonition" -> Block.Kind.ADMONITION;
                     case "image" -> Block.Kind.IMAGE;
                     case "diagram" -> Block.Kind.DIAGRAM;
@@ -145,27 +172,70 @@ public final class AsciiDocReader implements AutoCloseable {
                 };
         var spans = new ArrayList<Span>();
         inlines(element, Style.PLAIN, spans);
+        var titleSpans = new ArrayList<Span>();
+        for (Node child = element.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (child instanceof Element title && title.getTagName().equals("title")) {
+                inlines(title, Style.PLAIN, titleSpans);
+            }
+        }
+        if (titleSpans.isEmpty() && !element.getAttribute("title").isEmpty()) {
+            titleSpans.add(new Span(Controls.visible(element.getAttribute("title"))));
+        }
+        if (kind != Block.Kind.CODE
+                && kind != Block.Kind.DIAGRAM
+                && kind != Block.Kind.VERSE
+                && spans.stream().allMatch(span -> span.text().isBlank())) {
+            spans.clear();
+        }
         return new Block(
                 kind,
                 element.getAttribute("id"),
                 spans,
                 blocks(element),
                 element.getAttribute("language"),
-                element.getAttribute("target"));
+                element.getAttribute("target"),
+                new Block.Format(
+                        titleSpans,
+                        element.getAttribute("variant"),
+                        element.getAttribute("alignment"),
+                        number(element, "colspan", 1),
+                        number(element, "rowspan", 1),
+                        number(element, "weight", 0),
+                        element.getAttribute("open").equals("true"),
+                        attribute(element, "frame", "all"),
+                        attribute(element, "grid", "all")));
+    }
+
+    private static String attribute(Element element, String name, String fallback) {
+        return element.getAttribute(name).isEmpty() ? fallback : element.getAttribute(name);
+    }
+
+    private static int number(Element element, String name, int fallback) {
+        try {
+            return Math.clamp(Integer.parseInt(element.getAttribute(name)), 1, 1000);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     private static boolean inline(Element element) {
-        return List.of("strong", "em", "code", "link", "span").contains(element.getTagName());
+        return List.of("strong", "em", "code", "link", "span", "strike", "callout")
+                .contains(element.getTagName());
     }
 
     private static void inlines(Element element, Style style, List<Span> spans) {
         for (Node node = element.getFirstChild(); node != null; node = node.getNextSibling()) {
             if (node instanceof Element child && inline(child)) {
+                if (child.getTagName().equals("callout")) {
+                    spans.add(Span.callout(child.getAttribute("number")));
+                    continue;
+                }
                 Style next =
                         switch (child.getTagName()) {
                             case "strong" -> style.bolded();
                             case "em" -> style.italicised();
                             case "code" -> style.coded();
+                            case "strike" -> style.struck();
                             case "link" -> style.linked(child.getAttribute("target"));
                             default -> style;
                         };

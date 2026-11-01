@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= Logging renderer regression
+
+:table-frame: none
+:table-grid: rows
+
+.`java` command
+[source,shell]
+----
+java -Xlog:help
+----
+
+.JFR tag sets
+[%collapsible]
+====
+.A link in a source caption: https://example.org[jfrLogTagSets.hpp]
+[source,c++]
+----
+#define JFR_LOG_TAG_SET_LIST \
+  JFR_LOG_TAG(jfr) \
+  JFR_LOG_TAG(jfr, system)
+----
+====
+
+[options="header,footer"]
+|===
+|Tag |Meaning
+|jfr |Flight Recorder
+|Total |1
+|===
+

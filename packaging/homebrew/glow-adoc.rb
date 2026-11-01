@@ -14,9 +14,11 @@ class GlowAdoc < Formula
 
   def install
     libexec.install "glow-adoc-#{version}-app.jar" => "glow-adoc.jar"
+    (libexec/"glow-adoc.jar").chmod 0755
     (bin/"glow-adoc").write <<~SH
       #!/bin/sh
-      exec "#{Formula["openjdk@27"].opt_bin}/java" -jar "#{libexec}/glow-adoc.jar" "$@"
+      export JAVA_HOME="#{Formula["openjdk@27"].opt_prefix}"
+      exec "#{libexec}/glow-adoc.jar" "$@"
     SH
   end
 

@@ -12,6 +12,8 @@ import org.asciidoctor.ast.Table;
 import org.asciidoctor.converter.ConverterFor;
 import org.asciidoctor.converter.StringConverter;
 
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /** A private XML vocabulary preserves inline boundaries during Asciidoctor substitutions. */
@@ -27,15 +29,18 @@ public final class TerminalConverter extends StringConverter {
         if (node instanceof PhraseNode phrase) {
             String text = phrase.getText() == null ? "" : phrase.getText();
             return switch (name) {
-                case "inline_quoted" ->
-                        tag(
-                                switch (phrase.getType()) {
-                                    case "strong" -> "strong";
-                                    case "emphasis" -> "em";
-                                    case "monospaced" -> "code";
-                                    default -> "span";
-                                },
-                                text);
+                case "inline_quoted" -> {
+                    String quoted =
+                            tag(
+                                    switch (phrase.getType()) {
+                                        case "strong" -> "strong";
+                                        case "emphasis" -> "em";
+                                        case "monospaced" -> "code";
+                                        default -> "span";
+                                    },
+                                    text);
+                    yield phrase.hasRole("line-through") ? tag("strike", quoted) : quoted;
+                }
                 case "inline_anchor" -> {
                     if (text.isEmpty() && "xref".equals(phrase.getType())) {
                         String id =
@@ -54,9 +59,14 @@ public final class TerminalConverter extends StringConverter {
                             + (text == null || text.isEmpty() ? escape(phrase.getTarget()) : text)
                             + "</link>";
                 }
-                case "inline_image" -> escape("[image: " + node.getAttribute("alt", "image") + "]");
+                case "inline_image" ->
+                        "<inline-image target=\""
+                                + escape(imageTarget(node, phrase.getTarget()))
+                                + "\">"
+                                + escape(String.valueOf(node.getAttribute("alt", "image")))
+                                + "</inline-image>";
                 case "inline_break" -> text + "\n";
-                case "inline_callout" -> escape("(" + text + ")");
+                case "inline_callout" -> "<callout number=\"" + escape(text) + "\"/>";
                 case "inline_footnote" -> "[" + text + "]";
                 default -> text;
             };
@@ -79,8 +89,14 @@ public final class TerminalConverter extends StringConverter {
             var out = new StringBuilder("<list>");
             int index = 1;
             for (var item : list.getItems()) {
+                String prefix;
+                if (name.equals("colist")) {
+                    prefix = "<callout number=\"" + index++ + "\"/> ";
+                } else {
+                    prefix = name.equals("olist") ? index++ + ". " : "- ";
+                }
                 out.append("<item>")
-                        .append(name.equals("olist") ? index++ + ". " : "- ")
+                        .append(prefix)
                         .append(((ListItem) item).getText())
                         .append(item.getContent())
                         .append("</item>");
@@ -104,13 +120,51 @@ public final class TerminalConverter extends StringConverter {
             return out.append("</list>").toString();
         }
         if (node instanceof Table table) {
-            var out = new StringBuilder("<table>");
-            for (var rows :
-                    java.util.List.of(table.getHeader(), table.getBody(), table.getFooter())) {
+            var out =
+                    new StringBuilder(
+                            "<table frame=\""
+                                    + escape(
+                                            String.valueOf(
+                                                    table.getAttribute(
+                                                            "frame",
+                                                            table.getDocument()
+                                                                    .getAttribute(
+                                                                            "table-frame", "all"),
+                                                            false)))
+                                    + "\" grid=\""
+                                    + escape(
+                                            String.valueOf(
+                                                    table.getAttribute(
+                                                            "grid",
+                                                            table.getDocument()
+                                                                    .getAttribute(
+                                                                            "table-grid", "all"),
+                                                            false)))
+                                    + "\">"
+                                    + title(table));
+            var header = table.getHeader();
+            var footer = table.getFooter();
+            for (var rows : List.of(header, table.getBody(), footer)) {
                 for (var row : rows) {
-                    out.append("<row>");
+                    out.append(
+                            rows == header
+                                    ? "<row variant=\"header\">"
+                                    : rows == footer ? "<row variant=\"footer\">" : "<row>");
                     for (var cell : row.getCells()) {
-                        out.append(tag("cell", cell.getText()));
+                        out.append("<cell colspan=\"")
+                                .append(Math.max(1, cell.getColspan()))
+                                .append("\" rowspan=\"")
+                                .append(Math.max(1, cell.getRowspan()))
+                                .append("\" alignment=\"")
+                                .append(cell.getHorizontalAlignment().toString().toLowerCase())
+                                .append("\" weight=\"")
+                                .append(cell.getColumn().getWidth())
+                                .append("\">")
+                                .append(
+                                        cell.getInnerDocument() == null
+                                                ? cell.getText()
+                                                : cell.getInnerDocument().getContent())
+                                .append("</cell>");
                     }
                     out.append("</row>");
                 }
@@ -120,7 +174,7 @@ public final class TerminalConverter extends StringConverter {
         if (node instanceof StructuralNode block) {
             if (name.equals("image")) {
                 return "<image target=\""
-                        + escape(String.valueOf(node.getAttribute("target", "")))
+                        + escape(imageTarget(node, String.valueOf(node.getAttribute("target", ""))))
                         + "\">"
                         + escape(String.valueOf(node.getAttribute("alt", "image")))
                         + "</image>";
@@ -134,10 +188,8 @@ public final class TerminalConverter extends StringConverter {
                         + " language=\""
                         + escape(diagram ? style : language)
                         + "\">"
-                        + escape(
-                                block instanceof org.asciidoctor.ast.Block source
-                                        ? source.getSource()
-                                        : String.valueOf(block.getContent()))
+                        + title(block)
+                        + sourceContent(block, diagram)
                         + "</"
                         + (diagram ? "diagram" : "source")
                         + ">";
@@ -145,21 +197,71 @@ public final class TerminalConverter extends StringConverter {
             String content = String.valueOf(block.getContent());
             return switch (name) {
                 case "paragraph" -> tag("paragraph", content);
-                case "admonition" ->
-                        tag(
-                                "admonition",
-                                tag("strong", escape(block.getStyle().toUpperCase()) + ": ")
-                                        + content);
-                case "quote", "verse" -> tag("quote", content);
-                case "pass" -> tag("source", escape(content));
+                case "admonition", "quote", "verse", "example", "sidebar", "open" -> {
+                    String kind = block.isOption("collapsible") ? "details" : name;
+                    yield "<"
+                            + kind
+                            + " variant=\""
+                            + escape(
+                                    name.equals("admonition")
+                                            ? String.valueOf(node.getAttribute("name", "note"))
+                                                    .toLowerCase(Locale.ROOT)
+                                            : block.getStyle())
+                            + "\" open=\""
+                            + block.isOption("open")
+                            + "\">"
+                            + title(block)
+                            + content
+                            + "</"
+                            + kind
+                            + ">";
+                }
+                case "pass" -> HtmlContent.convert(content);
                 default -> content;
             };
         }
         return "";
     }
 
+    private static String imageTarget(ContentNode node, String target) {
+        String directory = String.valueOf(node.getAttribute("imagesdir", ""));
+        if (directory.isEmpty()
+                || target.startsWith("/")
+                || target.startsWith("\\")
+                || target.matches("[A-Za-z][A-Za-z0-9+.-]*:.*")) {
+            return target;
+        }
+        // Keep resolution local; imageUri may embed files when a document enables data-uri.
+        return directory.replaceFirst("/+$", "") + "/" + target;
+    }
+
     private static String tag(String name, String content) {
         return "<" + name + ">" + content + "</" + name + ">";
+    }
+
+    private static String title(StructuralNode block) {
+        return block.getTitle() == null ? "" : tag("title", block.getTitle());
+    }
+
+    private static String sourceContent(StructuralNode block, boolean diagram) {
+        if (!diagram && block.isSubstitutionEnabled("callouts")) {
+            // Escape code for the private XML vocabulary before substituting callout elements.
+            boolean addEscaping = !block.isSubstitutionEnabled("specialcharacters");
+            if (addEscaping) {
+                block.prependSubstitution("specialcharacters");
+            }
+            try {
+                return String.valueOf(block.getContent());
+            } finally {
+                if (addEscaping) {
+                    block.removeSubstitution("specialcharacters");
+                }
+            }
+        }
+        return escape(
+                block instanceof org.asciidoctor.ast.Block source
+                        ? source.getSource()
+                        : String.valueOf(block.getContent()));
     }
 
     private static String escape(String text) {

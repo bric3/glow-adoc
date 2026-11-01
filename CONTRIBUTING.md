@@ -2,58 +2,60 @@
 
 # Contributing
 
-Use Java 27 and the checked-in Gradle wrapper. Application sources target Java 25; the compatibility bootstrap targets Java 8. `mise.toml` selects the development JDK.
+Use Java 27 and the Gradle wrapper. Application bytecode targets Java 25; the bootstrap targets Java 8.
+Read [Architecture](ARCHITECTURE.md) before changing module boundaries.
 
-## Build and check
+## Build and verify
 
 ```sh
 ./gradlew checkAll
 ./gradlew :cli-jvm:shadowJar :cli-jvm:executableJar
-java -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar fixtures/showcase.adoc
+./gradlew :cli-jvm:install
 ```
 
-Use focused checks while iterating, for example `./gradlew :asciidoctor:test` or `./gradlew :terminal:test`. Packaged-CLI tests exercise stdin, configuration overrides, paths containing spaces, pager input, theme notifications and Kitty protocol output through a pseudo-terminal.
+Run focused module tests while iterating. Enable the optional Mermaid integration with
+`GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :diagrams:test`. Builds must not install Merman.
 
-To check Mermaid rendering, install a reviewed Merman release separately and run:
+PTY tests verify events and protocol output. Check appearance, fonts, graphics, cancellation and
+restoration separately in a real terminal. Include SSH checks when changing transport behaviour.
+Use [the performance procedure](docs/PERFORMANCE.adoc) for startup and scrolling changes.
 
-```sh
-GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :diagrams:test
-```
+## Code
 
-The Merman test is skipped when that variable is absent. Do not add downloads or tool installation to ordinary Gradle builds.
+Use four-space Java/Kotlin indentation, Google Java Format AOSP style and ktlint IntelliJ style.
+Expand control-flow blocks and separate methods and logical groups. Honour `.editorconfig`.
 
-## Formatting and design
+Keep parser nodes, highlighter implementations and terminal types inside their adapters.
+Preserve source text, graphemes, folding state, resource boundaries and readable fallbacks.
+Test observable behaviour. Keep changes focused and preserve unrelated work.
 
-Follow `.editorconfig`: four spaces for Java and Kotlin, two for YAML and Ruby, UTF-8 and LF line endings. Format Java with Google Java Format's AOSP style and Kotlin with ktlint's IntelliJ IDEA style. Keep one statement per line, expand control-flow blocks, and separate methods and logical groups with blank lines.
+New owned files need the MPL SPDX header. Preserve upstream notices.
+Use Conventional Commits. Commit, push and publication require explicit authorisation.
 
-Keep changes small and read the connected code. [ARCHITECTURE.md](ARCHITECTURE.md) describes module ownership. Parser, highlighting and UI implementations belong in their adapters. Tests should check observable behaviour, especially source preservation, capability fallbacks, resource restrictions and cleanup.
+## Packaging
 
-Add the MPL SPDX header to new owned source files. Preserve upstream copyright and licence notices when reusing code. Use concise Conventional Commit messages such as `fix: preserve source indentation`.
-
-## Packaging and dependencies
-
-Check dependency licences before introducing or changing a distributed dependency. Keep `plantuml-mit`; the default `plantuml` artifact has different licensing and features. The project licence does not replace dependency licences. See [THIRD-PARTY.md](THIRD-PARTY.md).
-
-After an intentional dependency update, regenerate locks and verification metadata, inspect the resulting changes, and run checks:
-
-```sh
-./gradlew checkAll --write-locks --write-verification-metadata sha256
-./gradlew checkAll
-```
-
-Review checksums against trusted publications when adding artifacts. Automatic checksum generation records what was downloaded; it does not independently authenticate a new publication.
-
-Verify install changes using a temporary home:
+Verify both jars. Test installation with a temporary home:
 
 ```sh
 ./gradlew -Duser.home="$PWD/cli-jvm/build/install-check" :cli-jvm:install
 ./cli-jvm/build/install-check/.local/bin/glow-adoc --version
 ```
 
-Train AOT with `./gradlew :cli-jvm:aotTrain`. Load the resulting cache with the same JDK build that ran Gradle. Native Image is experimental; successful compilation requires a separate runtime smoke test.
+AOT training uses the executable launcher's selected JDK: `./gradlew :cli-jvm:aotTrain`.
+Installation does not train a cache. Native Image requires a separate runtime smoke test.
 
-## Before sending a change
+Dependency changes require licence review, updated locks and verified checksums:
 
-Run the relevant checks and review the final diff for unrelated changes. State any failed, skipped or unavailable verification. Changes to terminal rendering need manual checks in Ghostty/Kitty, an unsupported terminal and SSH when those behaviours are affected. PTY tests establish protocol behaviour, not visual appearance.
+```sh
+./gradlew checkAll --write-locks --write-verification-metadata sha256
+./gradlew checkAll
+```
 
-GitHub CI runs Linux/macOS checks, AOT and a pinned Merman integration. Native Image has a manual feasibility workflow. Tag pushes prepare a draft release; publication remains manual. Update the Homebrew template's release fields only after real artifacts and checksums exist.
+Checksum generation records downloaded bytes; verify new publications independently.
+Keep `plantuml-mit` and the [packaged dependency notices](THIRD-PARTY.md).
+
+## Release
+
+CI covers Linux/macOS, configuration-cache reuse, AOT and pinned Merman integration.
+Native Image has a manual feasibility workflow. Tag pushes prepare draft releases;
+publication remains manual. Complete the Homebrew template's release fields before distribution.

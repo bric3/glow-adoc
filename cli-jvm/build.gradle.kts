@@ -121,8 +121,6 @@ tasks.test {
 val aotTrain = tasks.register<AotTrain>("aotTrain") {
     group = "distribution"
     description = "Train a Java 27 AOT cache against the packaged application."
-    jar = tasks.shadowJar.flatMap { it.archiveFile }
+    jar = executableJar.flatMap { it.outputJar }
     document = rootProject.layout.projectDirectory.file("fixtures/showcase.adoc")
-    javaExecutable = providers.systemProperty("java.home").map { "$it/bin/java" }
-    cache = layout.buildDirectory.file("aot/glow-adoc.aot")
 }

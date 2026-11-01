@@ -186,16 +186,18 @@ public final class DiagramRenderer implements AutoCloseable {
     }
 
     public static Optional<Path> localImage(Document document, String target) {
-        try {
-            Path path = document.baseDirectory().resolve(target).normalize().toRealPath();
-            if (!path.startsWith(document.baseDirectory().toRealPath())
-                    || !Files.isRegularFile(path)) {
-                return Optional.empty();
+        for (Path root : document.imageRoots()) {
+            try {
+                Path directory = root.toRealPath();
+                Path path = directory.resolve(target).normalize().toRealPath();
+                if (path.startsWith(directory) && Files.isRegularFile(path)) {
+                    return Optional.of(path);
+                }
+            } catch (IOException | InvalidPathException e) {
+                // Try the next allowed image directory.
             }
-            return Optional.of(path);
-        } catch (IOException | InvalidPathException e) {
-            return Optional.empty();
         }
+        return Optional.empty();
     }
 
     @Override

@@ -10,6 +10,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -17,10 +20,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import javax.imageio.ImageIO;
 
@@ -114,6 +120,122 @@ class PackagedCliTest {
     }
 
     @Test
+    void discoversDocumentConfigurationAndAcceptsRepeatedLiteralAttributes() throws Exception {
+        Path site = Files.createDirectory(directory.resolve("attribute-site"));
+        Path posts = Files.createDirectories(site.resolve("content/posts"));
+        Path document = posts.resolve("post.adoc");
+        Files.writeString(
+                document, "= Attributes\n:name: document\n\n{name} / {other} / {literal}\n");
+        Files.writeString(
+                site.resolve(".glow-adoc.toml"),
+                "[attributes]\nname = 'project'\nother = 'normal'\n");
+        Files.writeString(
+                site.resolve(".glow-adoc.local.toml"),
+                "[attributes]\nname = 'local'\nother = 'kept'\n");
+        var builder =
+                new ProcessBuilder(
+                                java,
+                                "-jar",
+                                System.getProperty("glow.jar"),
+                                "--no-pager",
+                                "--color=never",
+                                "-a",
+                                "name=first",
+                                "--attribute",
+                                "name=cli",
+                                "--attribute=literal=a,b=c",
+                                document.toString())
+                        .directory(directory.toFile())
+                        .redirectErrorStream(true);
+        builder.environment()
+                .put("XDG_CONFIG_HOME", directory.resolve("no-user-config").toString());
+        var process = builder.start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+        assertEquals(0, process.exitValue(), output);
+        assertTrue(output.contains("cli / kept / a,b=c"), output);
+        var stdinBuilder =
+                new ProcessBuilder(
+                                java,
+                                "-jar",
+                                System.getProperty("glow.jar"),
+                                "--no-pager",
+                                "--color=never",
+                                "-")
+                        .directory(site.toFile())
+                        .redirectErrorStream(true);
+        stdinBuilder
+                .environment()
+                .put("XDG_CONFIG_HOME", directory.resolve("no-user-config").toString());
+        var stdin = stdinBuilder.start();
+        stdin.getOutputStream().write("{name} / {other}".getBytes(StandardCharsets.UTF_8));
+        stdin.getOutputStream().close();
+        String stdinOutput =
+                new String(stdin.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(stdin.waitFor(30, TimeUnit.SECONDS));
+        assertEquals(0, stdin.exitValue(), stdinOutput);
+        assertTrue(stdinOutput.contains("local / kept"), stdinOutput);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true, false", "false, false", "false, true"})
+    void standaloneInlineImagesUseAttributesAndConfiguredRootsInThePager(
+            boolean projectConfig, boolean absoluteAttribute) throws Exception {
+        Path site = Files.createDirectory(directory.resolve("image-site"));
+        Path posts = Files.createDirectories(site.resolve("content/posts"));
+        Path assets = Files.createDirectories(site.resolve("static/assets"));
+        ImageIO.write(
+                new BufferedImage(80, 32, BufferedImage.TYPE_INT_RGB),
+                "png",
+                assets.resolve("graph.png").toFile());
+        if (projectConfig) {
+            Files.writeString(
+                    site.resolve(".glow-adoc.toml"),
+                    "image-roots = ['static']\n[attributes]\nimage-assets = 'assets'\n");
+        }
+        Path document = posts.resolve("post.adoc");
+        Files.writeString(document, "image:{image-assets}/graph.png[Configured flamegraph]\n");
+        Path transcript = directory.resolve("inline-image-transcript");
+        var process =
+                startPty(
+                        document.toString(),
+                        transcript,
+                        true,
+                        projectConfig
+                                ? new String[0]
+                                : absoluteAttribute
+                                        ? new String[] {"-a", "image-assets=" + assets}
+                                        : new String[] {
+                                            "--attribute=image-assets=assets",
+                                            "--image-root=" + assets.getParent()
+                                        });
+        try {
+            await(process, transcript, "Configured flamegraph");
+            process.getOutputStream().write("\u001b_Gi=2147483000;OK\u001b\\".getBytes());
+            process.getOutputStream().flush();
+            await(process, transcript, "a=p,i=");
+            var upload =
+                    Pattern.compile("a=t,t=d,f=100,q=2,i=([0-9]+)")
+                            .matcher(Files.readString(transcript));
+            assertTrue(upload.find());
+            process.getOutputStream()
+                    .write(("\u001b_Gi=" + upload.group(1) + ";ENOENT:evicted\u001b\\").getBytes());
+            process.getOutputStream().flush();
+            await(process, transcript, "a=t,t=d,f=100", 2);
+            assertFalse(
+                    screen(Files.readString(transcript)).contains("Configured flamegraph"),
+                    "Image placement must replace its fallback description");
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
+    @Test
     void pagerAcceptsSearchAndQuitInPseudoTerminal() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeTrue(
                 Files.isExecutable(Path.of("/usr/bin/script")));
@@ -140,6 +262,129 @@ class PackagedCliTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void searchRepaintsEveryMatchWhileTypingBeforeEnter(boolean colour) throws Exception {
+        Path document = directory.resolve("live-search.adoc");
+        Files.writeString(
+                document,
+                "First NEEDLE, another NEEDLE.\n\nThird NEEDLE.\n\n"
+                        + "[source,text]\n----\n"
+                        + "x".repeat(100)
+                        + " HIDDEN_MATCH\n----\n");
+        Path transcript = directory.resolve("live-search-transcript");
+        var process =
+                startPty(
+                        document.toString(),
+                        transcript,
+                        false,
+                        "--color=" + (colour ? "always" : "never"),
+                        "--theme=dark");
+        try {
+            await(process, transcript, "quit");
+            assertFalse(screen(Files.readString(transcript)).contains("HIDDEN_MATCH"));
+            int before = Files.readString(transcript).length();
+            process.getOutputStream().write("/needle".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "/needle  1/3 matches");
+            String redraw = Files.readString(transcript).substring(before);
+            // Incremental frames repaint one newly matched character at a time.
+            assertTrue(
+                    Pattern.compile("N").matcher(redraw).results().count() >= 3,
+                    "Every matching occurrence must be repainted without Enter: " + redraw);
+            if (colour) {
+                assertTrue(redraw.contains("48;2;121;192;255"), "Active match background");
+                assertTrue(redraw.contains("48;2;45;51;59"), "Other match backgrounds");
+            } else {
+                assertTrue(
+                        Pattern.compile("\u001b\\[[0-9;]*7[;m]").matcher(redraw).find(),
+                        "Monochrome matches use reverse video");
+            }
+            process.getOutputStream().write("\rnn".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "3/3 matches");
+            process.getOutputStream().write('n');
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "1/3 matches");
+            process.getOutputStream().write("/hidden_match".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "/hidden_match  1/1 matches");
+            assertTrue(
+                    screen(Files.readString(transcript)).contains("HIDDEN_MATCH"),
+                    "Search must reveal matches beyond the horizontal viewport");
+            process.getOutputStream().write("\u007f".repeat(12).getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "First NEEDLE, another NEEDLE.");
+            assertFalse(
+                    screen(Files.readString(transcript)).contains("HIDDEN_MATCH"),
+                    "Deleting the query restores the horizontal viewport");
+            process.getOutputStream().write(27);
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "q quit");
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
+    @Test
+    void liveSearchUsesTheOriginalPositionAndPrefersTheMatchAbove() throws Exception {
+        Path document = directory.resolve("nearest-search.adoc");
+        Files.writeString(
+                document,
+                "Start\n\nNEEDLE above\n\nOrigin\n\nNEEDLE below\n\n"
+                        + IntStream.range(0, 40)
+                                .mapToObj(i -> "Tail " + i + "\n\n")
+                                .collect(Collectors.joining()));
+        Path transcript = directory.resolve("nearest-search-transcript");
+        var process = startPty(document.toString(), transcript, false);
+        try {
+            await(process, transcript, "quit");
+            process.getOutputStream().write("jjjj".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " 5/");
+            process.getOutputStream().write("/needle".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "/needle  1/2 matches");
+            assertTrue(screen(Files.readString(transcript)).contains(" 3/"));
+            process.getOutputStream().write(27);
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "q quit");
+            assertTrue(
+                    screen(Files.readString(transcript)).contains(" 5/"),
+                    "Escape restores the reading position");
+            process.getOutputStream().write("/needle\r".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "1/2 matches");
+            assertTrue(
+                    screen(Files.readString(transcript)).contains(" 3/"),
+                    "Enter retains the live match");
+            process.getOutputStream().write('n');
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " 7/");
+            process.getOutputStream().write('N');
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " 3/");
+            process.getOutputStream().write("/absent".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "No match");
+            process.getOutputStream().write(27);
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "q quit");
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
     @Test
     void handlesThemeNotificationsAndKittyImages() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeTrue(
@@ -149,7 +394,7 @@ class PackagedCliTest {
         Path document = directory.resolve("image.adoc");
         Files.writeString(document, "= Image\n\nimage::picture.png[]\n");
         Path transcript = directory.resolve("graphics-transcript");
-        var process = startPty(document.toString(), transcript, true);
+        var process = startPty(document.toString(), transcript, true, "--page-background=true");
         try {
             assertTimeoutPreemptively(
                     Duration.ofSeconds(30),
@@ -161,7 +406,7 @@ class PackagedCliTest {
                                              + "\u001b_Gi=2147483000;OK\u001b\\")
                                                 .getBytes());
                         process.getOutputStream().flush();
-                        await(process, transcript, "a=T,t=d,f=100");
+                        await(process, transcript, "a=p,i=");
                         process.getOutputStream()
                                 .write(
                                         "\u001b[?997;2n\u001b]11;rgb:ffff/ffff/ffff\u001b\\"
@@ -185,43 +430,131 @@ class PackagedCliTest {
         }
     }
 
-    private Process startPty(String document, Path transcript, boolean images) throws IOException {
-        List<String> command = new ArrayList<>(List.of("/usr/bin/script", "-q"));
-        if (System.getProperty("os.name").startsWith("Mac")) {
-            command.addAll(
-                    List.of(
-                            "/dev/null",
-                            java,
-                            "-jar",
-                            System.getProperty("glow.jar"),
-                            "--images=" + (images ? "auto" : "never"),
-                            document));
-        } else {
-            command.addAll(
-                    List.of(
-                            "-e",
-                            "-c",
-                            quote(java)
-                                    + " -jar "
-                                    + quote(System.getProperty("glow.jar"))
-                                    + " --images="
-                                    + (images ? "auto" : "never")
-                                    + " "
-                                    + quote(document),
-                            "/dev/null"));
-        }
+    private Process startPty(String document, Path transcript, boolean images, String... options)
+            throws IOException {
+        String invocation =
+                "stty cols 80 rows 24 && exec "
+                        + quote(java)
+                        + " -jar "
+                        + quote(System.getProperty("glow.jar"))
+                        + " --images="
+                        + (images ? "auto" : "never")
+                        + " "
+                        + Arrays.stream(options)
+                                .map(PackagedCliTest::quote)
+                                .collect(Collectors.joining(" "))
+                        + " "
+                        + quote(document);
+        List<String> command =
+                System.getProperty("os.name").startsWith("Mac")
+                        ? List.of("/usr/bin/script", "-q", "/dev/null", "/bin/sh", "-c", invocation)
+                        : List.of("/usr/bin/script", "-q", "-e", "-c", invocation, "/dev/null");
         var builder =
                 new ProcessBuilder(command)
                         .redirectOutput(transcript.toFile())
                         .redirectErrorStream(true);
         builder.environment().put("TERM", "xterm-256color");
+        builder.environment().put("COLORTERM", "truecolor");
         builder.environment().remove("NO_COLOR");
         return builder.start();
     }
 
+    @Test
+    void directTtyOutputDetectsWidthAndHonoursCentering() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                Files.isExecutable(Path.of("/usr/bin/script")));
+        Path document = directory.resolve("direct.adoc");
+        Files.writeString(document, "DIRECT_TTY_CONTENT\n");
+        Path transcript = directory.resolve("direct-transcript");
+        var process =
+                startPty(
+                        document.toString(),
+                        transcript,
+                        false,
+                        "--no-pager",
+                        "--width=30",
+                        "--center=true",
+                        "--color=never");
+        try {
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+            assertTrue(Files.readString(transcript).contains("DIRECT_TTY_CONTENT"));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
+    @Test
+    void foldsDetailsAndPaintsStatusInPseudoTerminal() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                Files.isExecutable(Path.of("/usr/bin/script")));
+        Path document = directory.resolve("details.adoc");
+        Files.writeString(document, ".More\n[%collapsible]\n====\nFOLDED_CONTENT\n====\n");
+        Path transcript = directory.resolve("fold-transcript");
+        var process = startPty(document.toString(), transcript, false);
+        try {
+            await(process, transcript, "quit");
+            assertFalse(Files.readString(transcript).contains("FOLDED_CONTENT"));
+            process.getOutputStream().write("\t\r".getBytes());
+            process.getOutputStream().flush();
+            await(process, transcript, "FOLDED_CONTENT");
+            assertTrue(
+                    Files.readString(transcript).contains("48;"),
+                    "Status row must have a background");
+            process.getOutputStream().write("q".getBytes());
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue());
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
+    @Test
+    void installedLauncherIsQuietAndRichOptionsOverrideConfiguration() throws Exception {
+        Path config = directory.resolve("rich.toml");
+        Files.writeString(config, "shortcodes = 'hide'\nicons = 'unicode'\ncenter = true\n");
+        Path errors = directory.resolve("launcher-errors");
+        var builder =
+                new ProcessBuilder(
+                        System.getProperty("glow.executable"),
+                        "--no-pager",
+                        "--color=never",
+                        "--config=" + config,
+                        "--shortcodes=show",
+                        "--icons=ascii",
+                        "--center=false",
+                        "--table-stripes=false",
+                        "-");
+        builder.environment().put("JAVA_HOME", System.getProperty("java.home"));
+        var process = builder.redirectError(errors.toFile()).start();
+        process.getOutputStream()
+                .write("{{< tag >}} visible\n\n[%collapsible]\n====\nExpanded\n====\n".getBytes());
+        process.getOutputStream().close();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+        assertEquals(0, process.exitValue(), Files.readString(errors));
+        assertTrue(output.contains("{{< tag >}} visible"), output);
+        assertTrue(output.contains("Expanded"), output);
+        assertFalse(Files.readString(errors).contains("sun.misc.Unsafe"), Files.readString(errors));
+    }
+
     private static void await(Process process, Path transcript, String text) throws Exception {
+        await(process, transcript, text, 1);
+    }
+
+    private static void await(Process process, Path transcript, String text, int occurrences)
+            throws Exception {
         for (int i = 0; i < 200; i++) {
-            if (Files.exists(transcript) && Files.readString(transcript).contains(text)) {
+            if (Files.exists(transcript)
+                    && Pattern.compile(Pattern.quote(text))
+                                    .matcher(Files.readString(transcript))
+                                    .results()
+                                    .limit(occurrences)
+                                    .count()
+                            >= occurrences) {
                 return;
             }
             if (!process.isAlive()) {
@@ -232,7 +565,317 @@ class PackagedCliTest {
         fail("Missing " + text + ": " + Files.readString(transcript));
     }
 
+    @Test
+    void mouseClicksWrappedCenteredHeadersAndWheelScrolls() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                Files.isExecutable(Path.of("/usr/bin/script")));
+        Path document = directory.resolve("mouse.adoc");
+        String title = "A long disclosure title that wraps";
+        Files.writeString(
+                document,
+                "."
+                        + title
+                        + "\n[%collapsible]\n====\nOPEN_CLICK\n====\n\n"
+                        + IntStream.range(0, 60)
+                                .mapToObj(i -> "ROW_" + i + "\n\n")
+                                .collect(Collectors.joining()));
+        Path transcript = directory.resolve("mouse-transcript");
+        var process =
+                startPty(
+                        document.toString(),
+                        transcript,
+                        false,
+                        "--width=20",
+                        "--center=true",
+                        "--icons=ascii");
+        try {
+            await(process, transcript, "quit");
+            assertFalse(Files.readString(transcript).contains("OPEN_CLICK"));
+            var closedPosition =
+                    Pattern.compile(" 1/(\\d+) ").matcher(screen(Files.readString(transcript)));
+            assertTrue(closedPosition.find());
+            String closedTotal = closedPosition.group(1);
+            // Click the second wrapped header row, then release at the same position.
+            process.getOutputStream().write("\u001b[<0;40;2M\u001b[<0;40;2m".getBytes());
+            process.getOutputStream().flush();
+            await(process, transcript, "OPEN_CLICK");
+            process.getOutputStream().write("\u001b[<65;40;10M".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " 4/");
+            process.getOutputStream().write("\u001b[<64;40;10M".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " 1/");
+            assertTrue(
+                    screen(Files.readString(transcript)).contains("OPEN_CLICK"),
+                    "Release must not close the block");
+            process.getOutputStream().write("\u001b[?997;2n".getBytes());
+            process.getOutputStream().flush();
+            await(process, transcript, "36;41;47");
+            assertTrue(
+                    screen(Files.readString(transcript)).contains("OPEN_CLICK"),
+                    "Theme changes must retain folding state");
+            process.getOutputStream().write('j');
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " 2/");
+            process.getOutputStream().write("\u001b[<0;40;1M\u001b[<0;40;1m".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " 2/" + closedTotal + " ");
+            assertTrue(
+                    screen(Files.readString(transcript)).contains(" 2/"),
+                    "The wrapped title must not move on folding");
+            assertFalse(screen(Files.readString(transcript)).contains("OPEN_CLICK"));
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+            String output = Files.readString(transcript);
+            assertTrue(output.contains("\u001b[?1006h"), output);
+            assertTrue(output.contains("\u001b[?1006l"), output);
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
+    @Test
+    void mouseCanBeDisabledWithoutDisablingKeyboardFolding() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                Files.isExecutable(Path.of("/usr/bin/script")));
+        Path document = directory.resolve("no-mouse.adoc");
+        Files.writeString(document, ".More\n[%collapsible]\n====\nKEYBOARD_OPEN_MARKER\n====\n");
+        Path transcript = directory.resolve("no-mouse-transcript");
+        var process = startPty(document.toString(), transcript, false, "--mouse=false");
+        try {
+            await(process, transcript, "quit");
+            assertFalse(Files.readString(transcript).contains("\u001b[?1006h"));
+            process.getOutputStream().write("\t\r".getBytes());
+            process.getOutputStream().flush();
+            await(process, transcript, "KEYBOARD_OPEN_MARKER");
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue());
+            assertTrue(Files.readString(transcript).contains("KEYBOARD_OPEN_MARKER"));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
     private static String quote(String text) {
         return "'" + text.replace("'", "'\"'\"'") + "'";
+    }
+
+    @Test
+    void foldingNearDocumentEndKeepsTheTitleAtTheSameScreenRow() throws Exception {
+        Path document = directory.resolve("stable-title.adoc");
+        Files.writeString(
+                document,
+                IntStream.range(0, 5)
+                                .mapToObj(i -> "Preface " + i + "\n\n")
+                                .collect(Collectors.joining())
+                        + ".Stable title\n[%collapsible%open]\n====\n"
+                        + IntStream.range(0, 40)
+                                .mapToObj(i -> "Body " + i + "\n\n")
+                                .collect(Collectors.joining())
+                        + "====\n");
+        Path transcript = directory.resolve("stable-title-transcript");
+        var process = startPty(document.toString(), transcript, false, "--icons=ascii");
+        try {
+            await(process, transcript, "quit");
+            process.getOutputStream().write("jjj\t".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " 4/");
+            String[] beforeRows = screen(Files.readString(transcript)).split("\n");
+            int titleRow =
+                    IntStream.range(0, beforeRows.length)
+                            .filter(row -> beforeRows[row].contains("Stable title"))
+                            .findFirst()
+                            .orElseThrow();
+            process.getOutputStream().write('\r');
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "[+] Stable title");
+            assertTrue(
+                    screen(Files.readString(transcript))
+                            .split("\n")[titleRow]
+                            .contains("Stable title"));
+            assertTrue(screen(Files.readString(transcript)).contains(" 4/"));
+            process.getOutputStream().write('\r');
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "[-] Stable title");
+            assertTrue(
+                    screen(Files.readString(transcript))
+                            .split("\n")[titleRow]
+                            .contains("Stable title"));
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue());
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
+    @Test
+    void switchesBetweenMouseControlsAndNativeSelectionWithoutRestarting() throws Exception {
+        Path document = directory.resolve("mouse-switch.adoc");
+        Files.writeString(document, ".More\n[%collapsible]\n====\nSELECT_MODE\n====\n");
+        Path transcript = directory.resolve("mouse-switch-transcript");
+        var process = startPty(document.toString(), transcript, false, "--mouse=false");
+        try {
+            await(process, transcript, "m mouse");
+            assertFalse(Files.readString(transcript).contains("\u001b[?1006h"));
+            process.getOutputStream().write('m');
+            process.getOutputStream().flush();
+            await(process, transcript, "\u001b[?1006h");
+            awaitScreen(process, transcript, "m select");
+            process.getOutputStream().write("\u001b[<0;8;1M\u001b[<0;8;1m".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "SELECT_MODE");
+            process.getOutputStream().write('m');
+            process.getOutputStream().flush();
+            await(process, transcript, "\u001b[?1006l");
+            awaitScreen(process, transcript, "m mouse");
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue());
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
+    @Test
+    void presentationArgumentsOverrideConfiguration() throws Exception {
+        Path config = directory.resolve("presentation.toml");
+        Files.writeString(
+                config,
+                "page-background = true\n"
+                        + "mouse = true\n"
+                        + "table-frame = 'all'\n"
+                        + "table-grid = 'all'\n"
+                        + "table-section-borders = 'heavy'\n");
+        var process =
+                new ProcessBuilder(
+                                java,
+                                "-jar",
+                                System.getProperty("glow.jar"),
+                                "--no-pager",
+                                "--color=always",
+                                "--config=" + config,
+                                "--page-background=false",
+                                "--mouse=false",
+                                "--table-frame=none",
+                                "--table-grid=none",
+                                "--table-section-borders=thin",
+                                "--icons=ascii",
+                                "-")
+                        .redirectError(directory.resolve("presentation-errors").toFile())
+                        .start();
+        process.getOutputStream().write("ordinary\n\n|===\n|a |b\n|c |d\n|===\n".getBytes());
+        process.getOutputStream().close();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+        assertEquals(0, process.exitValue());
+        assertTrue(output.contains("\u001b[0mordinary\u001b[0m"), output);
+        String plain = output.replaceAll("\u001b\\[[0-9;]*m", "");
+        assertFalse(plain.contains("|") || plain.contains("+") || plain.contains("="), plain);
+    }
+
+    private static void awaitScreen(Process process, Path transcript, String text)
+            throws Exception {
+        for (int i = 0; i < 200; i++) {
+            if (Files.exists(transcript) && screen(Files.readString(transcript)).contains(text)) {
+                return;
+            }
+            if (!process.isAlive()) {
+                break;
+            }
+            Thread.sleep(50);
+        }
+        fail(
+                "Missing screen text "
+                        + text
+                        + ": "
+                        + screen(Files.readString(transcript))
+                        + "\nTranscript: "
+                        + Files.readString(transcript));
+    }
+
+    // Reconstruct ASCII fixtures because a terminal redraw can update just one digit.
+    private static String screen(String output) {
+        char[][] cells = new char[24][80];
+        for (char[] row : cells) {
+            Arrays.fill(row, ' ');
+        }
+        int x = 0, y = 0;
+        for (int i = 0; i < output.length(); ) {
+            char ch = output.charAt(i++);
+            if (ch == 27 && i < output.length()) {
+                char next = output.charAt(i++);
+                if (next == '[') {
+                    int start = i;
+                    while (i < output.length()
+                            && !(output.charAt(i) >= '@' && output.charAt(i) <= '~')) {
+                        i++;
+                    }
+                    if (i == output.length()) {
+                        break;
+                    }
+                    String parameters = output.substring(start, i);
+                    char command = output.charAt(i++);
+                    if (command == 'H' || command == 'f') {
+                        String[] position = parameters.split(";", -1);
+                        y =
+                                Math.clamp(
+                                        position.length > 0 && !position[0].isEmpty()
+                                                ? Integer.parseInt(position[0]) - 1
+                                                : 0,
+                                        0,
+                                        23);
+                        x =
+                                Math.clamp(
+                                        position.length > 1 && !position[1].isEmpty()
+                                                ? Integer.parseInt(position[1]) - 1
+                                                : 0,
+                                        0,
+                                        79);
+                    } else if (command == 'J' && parameters.equals("2")
+                            || command == 'h' && parameters.equals("?1049")) {
+                        for (char[] row : cells) {
+                            Arrays.fill(row, ' ');
+                        }
+                        if (command == 'h') {
+                            x = 0;
+                            y = 0;
+                        }
+                    } else if (command == 'K') {
+                        Arrays.fill(cells[y], x, 80, ' ');
+                    }
+                } else if (next == ']' || next == '_') {
+                    while (i < output.length()) {
+                        char value = output.charAt(i++);
+                        if (value == 7) {
+                            break;
+                        }
+                        if (value == 27 && i < output.length() && output.charAt(i) == '\\') {
+                            i++;
+                            break;
+                        }
+                    }
+                }
+                continue;
+            }
+            if (ch == '\r') {
+                x = 0;
+            } else if (ch == '\n') {
+                y = Math.min(23, y + 1);
+            } else if (ch >= ' ' && x < 80) {
+                cells[y][x++] = ch;
+            }
+        }
+        return Arrays.stream(cells).map(String::new).collect(Collectors.joining("\n"));
     }
 }

@@ -2,65 +2,67 @@
 
 # Architecture
 
-glow-adoc converts AsciiDoc into a terminal-independent document model, lays that model out for a terminal width, and displays it through an embedded pager or direct output.
+The CLI loads configuration and source, AsciidoctorJ produces a document model, layout produces
+terminal rows, and direct output or the pager displays them.
 
-## Data flow
+## Ownership
 
-```mermaid
-flowchart LR
-    Input[File or stdin] --> CLI[Aesh command and configuration]
-    CLI --> Parser[AsciidoctorJ converter]
-    Parser --> Model[Document blocks and styled spans]
-    Model --> Layout[Layout and highlighting]
-    Layout --> Output[Direct output]
-    Layout --> Pager[TamboUI pager]
-    Pager --> Terminal[Aesh terminal session]
-    Pager --> Diagrams[PlantUML or Merman]
-    Diagrams --> Terminal
-```
+| Module            | Responsibility                                                          |
+| ----------------- | ----------------------------------------------------------------------- |
+| document          | Immutable blocks, spans, styles, appearance and safe text/link handling |
+| asciidoctor       | AsciidoctorJ, includes, shortcodes and conversion                       |
+| highlight         | Highlighter contract and deferred, cached highlighting                  |
+| highlight-lumis4j | Lumis4J and ANSI style decoding                                         |
+| render            | Wrapping, tables, decoration and stable block positions                 |
+| terminal          | Aesh connection, replies, colours, ANSI and Kitty graphics              |
+| pager             | TamboUI events, viewport, folding, search and placements                |
+| diagrams          | Embedded MIT PlantUML and bounded Merman processes                      |
+| cli               | Arguments, configuration and assembly                                   |
+| cli-jvm           | Bootstrap, jars, launcher, install and AOT                              |
+| cli-native        | Experimental complete-application Native Image                          |
 
-## Module boundaries
+The model has no parser, terminal or UI dependency. Concrete implementation types stay inside adapters.
 
-| Module                | Owns                                                           |
-| --------------------- | -------------------------------------------------------------- |
-| `document`            | Blocks, spans, styles, appearance and safe text/link handling  |
-| `asciidoctor`         | AsciidoctorJ lifecycle, local includes and custom conversion   |
-| `highlight`           | The `Highlighter` contract returning document spans            |
-| `highlight-lumis4j`   | Lumis4J lifecycle, language/theme selection and SGR decoding   |
-| `render`              | Width-aware layout and rendered lines with block positions     |
-| `terminal`            | Aesh connection, reply filtering, colours, ANSI and Kitty      |
-| `pager`               | TamboUI event loop, scrolling, search and image placements     |
-| `diagrams`            | PlantUML, bounded Merman processes and temporary assets        |
-| `cli`                 | Arguments, TOML configuration and application assembly         |
-| `cli-jvm`             | Compatibility bootstrap, Shadow packaging, install and AOT     |
-| `cli-native`          | Experimental complete-application Native Image build           |
+## Conversion and layout
 
-`document` has no parser, terminal or UI dependency. The parser owns AsciidoctorJ nodes; callers receive immutable document records. `render` consumes the common highlighter contract, while the CLI selects the Lumis4J implementation explicitly. There is no runtime plugin registry.
+The converter emits private XML to preserve inline boundaries through Asciidoctor substitutions.
+jsoup normalises supported HTML; XML parsing disables external entities. Scripts/styles are discarded.
+Titles, table geometry, callouts and disclosure metadata survive conversion.
 
-Asciidoctor's converter callbacks produce a private XML vocabulary so inline substitutions retain their styling boundaries. `AsciiDocReader` parses that vocabulary into blocks and spans using an XML parser with external entities disabled. This intermediate representation is internal to the adapter; it is not HTML or a public interchange format.
+Layout assigns stable positions before folding. Text wraps by terminal cells; code scrolls horizontally.
+Table ownership determines span-aware separators. Direct output expands disclosures.
+The pager retains folding and viewport state during reflow.
 
-## Reading and terminal lifecycle
+The first pager frame uses source text. A serial background worker highlights requested blocks,
+caches results by source/language/appearance and requests reflow. Closing cancels queued work;
+an active task releases its highlighter when it finishes.
 
-The command resolves CLI arguments over user configuration and defaults, loads one document, and selects direct output or paging. Keyboard input uses a terminal connection independently of document stdin. Direct output does not query the terminal or transmit graphics.
+## Terminal lifecycle
 
-The pager uses TamboUI's Aesh backend. One connection carries keyboard input and terminal replies. Reply filtering prevents OSC and graphics responses from becoming pager commands. The session queries foreground/background colours and selected palette entries, supports mode 2031 notifications, and falls back to bounded polling and manual refresh. Explicit themes override automatic appearance.
+One Aesh connection carries keys, mouse reports and replies through TamboUI.
+Reply filtering prevents protocol responses from becoming commands.
+Colour detection uses OSC queries, theme notifications, bounded polling and manual refresh.
 
-Layout retains block positions for resize recovery. Code and tables remain horizontally scrollable. Image placements use queried cell dimensions when available, with an approximate fallback. Kitty image IDs belong to the session and are removed when placements change or the reader exits. Terminal modes and cursor state are restored through resource cleanup.
+Image metadata reserves rows. Visible assets upload once per session; stable placement IDs update
+position and crop without retransmitting pixels. PNG bytes stream directly; other formats convert once.
+Off-screen placements are removed while image data remains available.
+Least-recently-used off-screen images are evicted above the 128 MiB residency target;
+the visible working set remains resident. Exit deletes all owned images.
 
-## Assets and failure handling
+## Resources and distribution
 
-PlantUML's MIT artifact provides embedded PNG rendering with Smetana. Merman runs as an optional external executable, discovered through configuration or PATH. A missing or failed diagram renderer leaves the diagram source available to the highlighter. Unsupported image formats retain their description and path.
+Includes stay within the document directory. Images also use configured roots and absolute directories
+explicitly supplied through CLI attributes. Resolved symlinks must remain within a root.
+Project roots stay within the configuration directory's tree; discovery cannot select an executable.
 
-Includes and image paths are checked against the document directory, including resolved symbolic links. PlantUML uses its sandbox profile and rejects include/import/theme directives. Merman execution has a deadline and bounded output; active child processes are cancelled on cleanup. These controls do not provide an operating-system sandbox.
+PlantUML uses its sandbox profile and rejects include/import/theme directives.
+Merman has time/output limits and cancellation. These controls are not an OS sandbox.
+Unsupported capabilities and failed renderers retain readable text.
 
-## Build and distribution
+The Gradle daemon uses Java 27; application bytecode targets 25 and the bootstrap targets 8.
+Shadow preserves service registrations, JRuby resources and multi-release metadata.
+The executable jar prepends a POSIX launcher with Java-manager selection.
 
-The included `build-logic` build owns Java conventions and small packaging tasks. The Gradle daemon runs on Java 27; application bytecode targets Java 25. A Java 8 bootstrap reports incompatible runtimes before loading the application.
-
-Shadow produces an executable JVM jar with service registrations and JRuby resources. A separate task prepends a POSIX launcher to a copy. At launch time the script selects a compatible installed JVM through mise, SDKMAN!, asdf-vm, jenv, jabba, `JAVA_HOME`, then PATH. It performs no JDK installation. The install task copies that artifact to `~/.local/bin/glow-adoc`. AOT training uses the final jar and the daemon's exact JDK; caches are specific to that application, JDK build and platform.
-
-Project source uses MPL 2.0. Dependencies retain their licences and notices. The jars include project licence documents and collected upstream notices; see [THIRD-PARTY.md](THIRD-PARTY.md).
-
-## Current limits
-
-The supported interactive targets are macOS and Linux. Native Image compilation has succeeded locally, but JRuby startup remains blocked by missing runtime metadata. Real-terminal graphics, SSH and visual correctness require manual verification. A future document browser can reuse the existing document, layout and pager foundations without changing the parser contract.
+AOT training is explicit. Cache identity includes executable bytes and location, Java path and version output,
+OS/architecture and JAVA_OPTS. A missing cache selects ordinary startup.
+Source uses MPL 2.0; dependencies retain their own licences and notices.

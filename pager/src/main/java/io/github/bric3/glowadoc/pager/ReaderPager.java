@@ -10,12 +10,18 @@ import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.tui.TuiRunner;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
+import dev.tamboui.tui.event.MouseEvent;
+import dev.tamboui.tui.event.MouseEventKind;
 
 import io.github.bric3.glowadoc.diagrams.DiagramRenderer;
 import io.github.bric3.glowadoc.document.Appearance;
 import io.github.bric3.glowadoc.document.Block;
 import io.github.bric3.glowadoc.document.Document;
+import io.github.bric3.glowadoc.document.Style;
+import io.github.bric3.glowadoc.highlight.DeferredHighlighter;
+import io.github.bric3.glowadoc.render.ContentArea;
 import io.github.bric3.glowadoc.render.Layout;
+import io.github.bric3.glowadoc.render.Palette;
 import io.github.bric3.glowadoc.render.RenderedLine;
 import io.github.bric3.glowadoc.terminal.Ansi;
 import io.github.bric3.glowadoc.terminal.KittyImages;
@@ -25,10 +31,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Consumer;
 
 public final class ReaderPager {
     private final Document document;
@@ -38,6 +46,13 @@ public final class ReaderPager {
     private final boolean truecolour;
     private final boolean images;
     private final int requestedWidth;
+    private final boolean center;
+    private final boolean pageBackground;
+    private boolean mouse;
+    private int contentMargin;
+    private final Set<Integer> toggled = new HashSet<>();
+    private int focused = -1;
+    private boolean layoutDirty;
     private List<RenderedLine> lines = List.of();
 
     private record ImageAsset(Path path, KittyImages.Size size) {}
@@ -47,11 +62,19 @@ public final class ReaderPager {
     private int left;
     private int width;
     private int height;
+    private int retainedTop;
     private Appearance appearance;
     private boolean searching;
-    private String search = "";
+    private final Search search = new Search();
+    private int searchOriginTop;
+    private int searchOriginLeft;
     private String message = "";
     private TuiRunner activeRunner;
+    private final DeferredHighlighter highlighter;
+    private final Consumer<String> milestone;
+    private boolean firstFrame = true;
+    private boolean firstImage = true;
+    private boolean highlightingReported;
 
     public ReaderPager(
             Document document,
@@ -60,7 +83,12 @@ public final class ReaderPager {
             boolean colour,
             boolean truecolour,
             boolean images,
-            int requestedWidth) {
+            int requestedWidth,
+            boolean center,
+            boolean pageBackground,
+            boolean mouse,
+            DeferredHighlighter highlighter,
+            Consumer<String> milestone) {
         this.document = document;
         this.layout = layout;
         this.diagrams = diagrams;
@@ -68,6 +96,11 @@ public final class ReaderPager {
         this.truecolour = truecolour;
         this.images = images;
         this.requestedWidth = requestedWidth;
+        this.center = center;
+        this.pageBackground = pageBackground;
+        this.mouse = mouse;
+        this.highlighter = highlighter;
+        this.milestone = milestone;
     }
 
     public void run(boolean automatic, Appearance fallback) throws Exception {
@@ -76,7 +109,7 @@ public final class ReaderPager {
                     TuiConfig.builder()
                             .backend(session.backend())
                             .tickRate(Duration.ofMillis(100))
-                            .mouseCapture(false)
+                            .mouseCapture(mouse)
                             .build();
             try (var runner = TuiRunner.create(config);
                     var kitty = new KittyImages(session.backend())) {
@@ -86,6 +119,17 @@ public final class ReaderPager {
                         (event, tui) -> {
                             session.tick();
                             boolean redraw = session.takeDirty();
+                            for (int id : session.takeMissingImages()) {
+                                kitty.invalidate(id);
+                            }
+                            if (highlighter != null && highlighter.takeDirty()) {
+                                layoutDirty = true;
+                                redraw = true;
+                                if (!highlightingReported && highlighter.isIdle()) {
+                                    highlightingReported = true;
+                                    milestone.accept("highlighting-ready");
+                                }
+                            }
                             if (event instanceof KeyEvent key) {
                                 if (key.isCtrlC() || (!searching && key.isChar('q'))) {
                                     tui.quit();
@@ -94,18 +138,24 @@ public final class ReaderPager {
                                 if (searching) {
                                     if (key.isKey(KeyCode.ENTER)) {
                                         searching = false;
-                                        find(1);
                                     } else if (key.isKey(KeyCode.ESCAPE)) {
                                         searching = false;
-                                    } else if (key.isKey(KeyCode.BACKSPACE) && !search.isEmpty()) {
-                                        search =
-                                                search.substring(
+                                        updateSearch("");
+                                    } else if (key.isKey(KeyCode.BACKSPACE)
+                                            && !search.query().isEmpty()) {
+                                        String query = search.query();
+                                        updateSearch(
+                                                query.substring(
                                                         0,
-                                                        search.offsetByCodePoints(
-                                                                search.length(), -1));
+                                                        query.offsetByCodePoints(
+                                                                query.length(), -1)));
                                     } else if (key.code() == KeyCode.CHAR && !key.hasCtrl()) {
-                                        search += key.string();
+                                        updateSearch(search.query() + key.string());
                                     }
+                                } else if (key.isFocusNext() || key.isFocusPrevious()) {
+                                    focus(key.isFocusPrevious() ? -1 : 1);
+                                } else if (key.isKey(KeyCode.ENTER) && focused >= 0) {
+                                    toggle(focused);
                                 } else if (key.isUp() || key.isChar('k')) {
                                     top--;
                                 } else if (key.isDown() || key.isChar('j')) {
@@ -124,17 +174,51 @@ public final class ReaderPager {
                                     left += 4;
                                 } else if (key.isChar('/')) {
                                     searching = true;
-                                    search = "";
+                                    searchOriginTop = top;
+                                    searchOriginLeft = left;
+                                    updateSearch("");
                                 } else if (key.isChar('n')) {
                                     find(1);
                                 } else if (key.isChar('N')) {
                                     find(-1);
                                 } else if (key.isChar('r')) {
                                     session.refresh();
+                                } else if (key.isChar('m')) {
+                                    try {
+                                        if (mouse) {
+                                            session.backend().disableMouseCapture();
+                                        } else {
+                                            session.backend().enableMouseCapture();
+                                        }
+                                        mouse = !mouse;
+                                    } catch (java.io.IOException e) {
+                                        message = "Mouse capture unavailable";
+                                    }
                                 }
                                 redraw = true;
+                            } else if (mouse && event instanceof MouseEvent pointer) {
+                                if (pointer.kind() == MouseEventKind.SCROLL_UP) {
+                                    top -= 3;
+                                    redraw = true;
+                                } else if (pointer.kind() == MouseEventKind.SCROLL_DOWN) {
+                                    top += 3;
+                                    redraw = true;
+                                } else if (pointer.isPress()
+                                        && pointer.isLeftButton()
+                                        && pointer.y() >= 0
+                                        && pointer.y() < height
+                                        && pointer.x() >= contentMargin
+                                        && pointer.x() < contentMargin + width
+                                        && top + pointer.y() < lines.size()) {
+                                    int disclosure = lines.get(top + pointer.y()).disclosure();
+                                    if (disclosure >= 0) {
+                                        focused = disclosure;
+                                        toggle(disclosure);
+                                        redraw = true;
+                                    }
+                                }
                             }
-                            top = Math.clamp(top, 0, Math.max(0, lines.size() - height));
+                            top = clampTop(top);
                             return redraw;
                         },
                         frame -> draw(frame, session, kitty));
@@ -143,16 +227,30 @@ public final class ReaderPager {
     }
 
     private void draw(Frame frame, TerminalSession session, KittyImages kitty) {
-        int available = Math.max(1, frame.width());
-        int nextWidth = requestedWidth > 0 ? Math.min(requestedWidth, available) : available;
+        int available = Math.max(1, frame.width() - 1);
+        var area = ContentArea.within(frame.width(), requestedWidth, center);
+        int nextWidth = area.width();
+        if (height != Math.max(1, frame.height() - 1)) {
+            kitty.refreshPlacements();
+        }
         height = Math.max(1, frame.height() - 1);
-        if (width != nextWidth || appearance != session.appearance() || lines.isEmpty()) {
+        boolean rebuilt = false;
+        if (layoutDirty
+                || width != nextWidth
+                || appearance != session.appearance()
+                || lines.isEmpty()) {
+            boolean preserveViewport = layoutDirty || width == nextWidth;
+            int previousTop = top;
+            layoutDirty = false;
             int anchor =
                     lines.isEmpty() ? 0 : lines.get(Math.min(top, lines.size() - 1)).blockIndex();
             width = nextWidth;
             appearance = session.appearance();
             assets.clear();
-            lines = new ArrayList<>(layout.render(document, width, appearance));
+            lines = new ArrayList<>(layout.render(document, width, appearance, toggled, true));
+            if (lines.stream().noneMatch(line -> line.disclosure() == focused)) {
+                focused = -1;
+            }
             if (images && session.kitty()) {
                 prepareImages(session);
             }
@@ -160,10 +258,25 @@ public final class ReaderPager {
             while (top < lines.size() && lines.get(top).blockIndex() < anchor) {
                 top++;
             }
+            // Leave blank space below a folded block rather than moving its title.
+            retainedTop = preserveViewport ? previousTop : 0;
+            if (preserveViewport) {
+                top = previousTop;
+            }
+            rebuilt = true;
         } else if (images && session.kitty() && assets.isEmpty()) {
-            prepareImages(session);
+            rebuilt = prepareImages(session);
         }
-        top = Math.clamp(top, 0, Math.max(0, lines.size() - height));
+        top = clampTop(top);
+        if (rebuilt) {
+            kitty.refreshPlacements();
+            search.update(search.query(), lines, top, left);
+            if (searching) {
+                searchOriginTop = top;
+                searchOriginLeft = left;
+            }
+        }
+        var palette = Palette.forAppearance(appearance);
         var base = dev.tamboui.style.Style.EMPTY;
         if (colour) {
             base =
@@ -174,16 +287,24 @@ public final class ReaderPager {
                                                     ? "#eeeeee"
                                                     : "#202020")
                                             : session.foreground()));
-            if (!session.background().isEmpty()) {
-                base = base.bg(Color.hex(session.background()));
+            if (pageBackground) {
+                base =
+                        base.bg(
+                                Color.hex(
+                                        session.background().isEmpty()
+                                                ? Palette.forAppearance(appearance).canvas()
+                                                : session.background()));
             }
         }
         frame.buffer().setStyle(frame.area(), base);
+        int margin = area.margin();
+        contentMargin = margin;
         for (int y = 0; y < height && top + y < lines.size(); y++) {
             var row = lines.get(top + y);
             var spans = new ArrayList<dev.tamboui.text.Span>();
             int skipped = 0;
-            for (var span : row.spans()) {
+            for (var part : search.parts(top + y, row.spans())) {
+                var span = part.span();
                 String text = span.text();
                 int cells = CharWidth.of(text);
                 if (skipped + cells <= left) {
@@ -199,25 +320,77 @@ public final class ReaderPager {
                     }
                     text = text.substring(offset);
                 }
-                spans.add(
-                        dev.tamboui.text.Span.styled(
-                                text, base.patch(Ansi.style(span.style(), colour, truecolour))));
+                var style = base.patch(Ansi.style(span.style(), colour, truecolour));
+                if (row.disclosure() == focused && focused >= 0) {
+                    style = style.reversed();
+                }
+                if (part.matched()) {
+                    style =
+                            colour
+                                    ? style.patch(
+                                            Ansi.style(
+                                                    Style.PLAIN.colours(
+                                                            part.active()
+                                                                    ? palette.canvas()
+                                                                    : palette.accent(),
+                                                            part.active()
+                                                                    ? palette.accent()
+                                                                    : palette.stripe()),
+                                                    true,
+                                                    truecolour))
+                                    : style.reversed();
+                    if (part.active()) {
+                        style = style.bold().underlined();
+                    }
+                }
+                spans.add(dev.tamboui.text.Span.styled(text, style));
             }
-            frame.buffer().setLine(0, y, Line.from(spans), available);
+            frame.buffer().setLine(margin, y, Line.from(spans), available - margin);
         }
+        String matches =
+                search.query().isEmpty()
+                        ? ""
+                        : search.count() == 0
+                                ? "  No match"
+                                : "  " + search.ordinal() + "/" + search.count() + " matches";
         String status =
                 searching
-                        ? "/" + search
-                        : "q quit  / search  n/N next  r refresh  "
-                                + (top + 1)
-                                + "/"
-                                + lines.size()
+                        ? "/" + search.query() + matches
+                        : "q quit  / search  Tab/Enter fold  "
+                                + (mouse ? "m select  " : "m mouse  ")
+                                + matches
                                 + (message.isEmpty() ? "" : "  " + message);
-        frame.buffer().setLine(0, frame.height() - 1, Line.from(status), available);
+        var statusStyle =
+                colour ? Ansi.style(palette.statusStyle(), true, truecolour) : base.reversed();
+        String positionText = " " + (top + 1) + "/" + lines.size() + " ";
+        int positionWidth = Math.min(available, CharWidth.of(positionText));
+        String controls = clip(status, available - positionWidth);
+        var positionStyle =
+                colour
+                        ? Ansi.style(
+                                Style.PLAIN.colours(palette.surface(), palette.accent()),
+                                true,
+                                truecolour)
+                        : statusStyle.bold();
+        var statusSpans =
+                List.of(
+                        dev.tamboui.text.Span.styled(
+                                controls
+                                        + " "
+                                                .repeat(
+                                                        Math.max(
+                                                                0,
+                                                                available
+                                                                        - positionWidth
+                                                                        - CharWidth.of(controls))),
+                                statusStyle),
+                        dev.tamboui.text.Span.styled(
+                                clip(positionText, positionWidth), positionStyle));
+        frame.buffer().setLine(0, frame.height() - 1, Line.from(statusSpans), available);
         // Graphics are emitted after TamboUI has flushed its text frame.
         pendingImages =
                 () -> {
-                    kitty.clear();
+                    var placements = new ArrayList<KittyImages.Placement>();
                     for (var entry : assets.entrySet()) {
                         int first = entry.getKey();
                         var asset = entry.getValue();
@@ -225,30 +398,42 @@ public final class ReaderPager {
                         int start = Math.max(top, first);
                         int end = Math.min(top + height, first + count);
                         if (start < end) {
-                            try {
-                                kitty.show(
-                                        asset.path(),
-                                        start - top,
-                                        asset.size().columns(),
-                                        end - start,
-                                        start - first,
-                                        count);
-                            } catch (java.io.IOException e) {
-                                message = "Image unavailable";
-                            }
+                            placements.add(
+                                    new KittyImages.Placement(
+                                            first + 1,
+                                            asset.path(),
+                                            start - top,
+                                            margin,
+                                            asset.size().columns(),
+                                            end - start,
+                                            start - first,
+                                            count));
                         }
                     }
+                    kitty.render(placements);
+                    if (firstImage && !placements.isEmpty()) {
+                        firstImage = false;
+                        milestone.accept("first-image");
+                    }
                 };
-        if (images && session.kitty()) {
-            activeRunner.runLater(
-                    () -> {
-                        try {
-                            pendingImages.draw();
-                        } catch (java.io.IOException e) {
-                            message = "Image unavailable";
+        activeRunner.runLater(
+                () -> {
+                    if (firstFrame) {
+                        firstFrame = false;
+                        milestone.accept("first-frame");
+                        if (highlighter != null) {
+                            highlighter.start();
                         }
-                    });
-        }
+                    }
+                    if (!images || !session.kitty()) {
+                        return;
+                    }
+                    try {
+                        pendingImages.draw();
+                    } catch (java.io.IOException e) {
+                        message = "Image unavailable";
+                    }
+                });
     }
 
     @FunctionalInterface
@@ -258,7 +443,8 @@ public final class ReaderPager {
 
     private ImageDraw pendingImages = () -> {};
 
-    private void prepareImages(TerminalSession session) {
+    private boolean prepareImages(TerminalSession session) {
+        boolean changed = false;
         for (int i = 0; i < lines.size(); i++) {
             var row = lines.get(i);
             if (row.asset() == null) {
@@ -282,11 +468,10 @@ public final class ReaderPager {
                 continue;
             }
             assets.put(i, new ImageAsset(path.get(), size));
+            changed = true;
             int end = i + 1;
-            if (block.kind() == Block.Kind.DIAGRAM) {
-                while (end < lines.size() && lines.get(end).blockIndex() == row.blockIndex()) {
-                    end++;
-                }
+            while (end < lines.size() && lines.get(end).blockIndex() == row.blockIndex()) {
+                end++;
             }
             lines.subList(i, end).clear();
             for (int j = 0; j < size.rows(); j++) {
@@ -294,22 +479,81 @@ public final class ReaderPager {
             }
             i += size.rows() - 1;
         }
+        return changed;
+    }
+
+    private void updateSearch(String query) {
+        search.update(query, lines, searchOriginTop, searchOriginLeft);
+        top = searchOriginTop;
+        left = searchOriginLeft;
+        revealMatch();
     }
 
     private void find(int direction) {
-        if (search.isEmpty() || lines.isEmpty()) {
+        search.next(direction);
+        revealMatch();
+    }
+
+    private void revealMatch() {
+        var match = search.active();
+        if (match == null) {
             return;
         }
-        for (int step = 1; step <= lines.size(); step++) {
-            int index = Math.floorMod(top + direction * step, lines.size());
-            if (lines.get(index)
-                    .text()
-                    .toLowerCase(Locale.ROOT)
-                    .contains(search.toLowerCase(Locale.ROOT))) {
-                top = index;
-                return;
+        top = match.line();
+        if (match.column() < left) {
+            left = match.column();
+        } else if (match.endColumn() > left + width) {
+            left = Math.max(0, Math.min(match.column(), match.endColumn() - width));
+        }
+    }
+
+    private void focus(int direction) {
+        var headers =
+                lines.stream()
+                        .filter(line -> line.disclosure() >= 0)
+                        .map(RenderedLine::disclosure)
+                        .distinct()
+                        .toList();
+        if (headers.isEmpty()) {
+            return;
+        }
+        int current = headers.indexOf(focused);
+        focused =
+                headers.get(
+                        Math.floorMod(
+                                current < 0
+                                        ? (direction > 0 ? 0 : headers.size() - 1)
+                                        : current + direction,
+                                headers.size()));
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).disclosure() == focused) {
+                if (i < top || i >= top + height) {
+                    top = i;
+                }
+                break;
             }
         }
-        message = "No match";
+    }
+
+    private void toggle(int disclosure) {
+        if (!toggled.add(disclosure)) {
+            toggled.remove(disclosure);
+        }
+        layoutDirty = true;
+    }
+
+    private int clampTop(int requested) {
+        return Math.clamp(requested, 0, Math.max(retainedTop, Math.max(0, lines.size() - height)));
+    }
+
+    private static String clip(String text, int width) {
+        var out = new StringBuilder();
+        for (int cp : text.codePoints().toArray()) {
+            if (CharWidth.of(out.toString()) + CharWidth.of(cp) > width) {
+                break;
+            }
+            out.appendCodePoint(cp);
+        }
+        return out.toString();
     }
 }

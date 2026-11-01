@@ -24,8 +24,11 @@ public final class Ansi {
         if (span.italic()) {
             result = result.italic();
         }
-        if (span.underline() || span.code()) {
+        if (span.underline()) {
             result = result.underlined();
+        }
+        if (span.strike()) {
+            result = result.crossedOut();
         }
         if (!span.foreground().isBlank()) {
             result = result.fg(color(span.foreground(), truecolour));
@@ -63,11 +66,24 @@ public final class Ansi {
                 if (span.style().italic()) {
                     out.append("\u001b[3m");
                 }
-                if (span.style().code() || span.style().underline()) {
+                if (span.style().underline()) {
                     out.append("\u001b[4m");
                 }
-                style.fg().ifPresent(c -> out.append(c.toAnsiForeground()));
-                style.bg().ifPresent(c -> out.append(c.toAnsiBackground()));
+                if (span.style().strike()) {
+                    out.append("\u001b[9m");
+                }
+                style.fg()
+                        .ifPresent(
+                                c ->
+                                        out.append("\u001b[")
+                                                .append(c.toAnsiForeground())
+                                                .append('m'));
+                style.bg()
+                        .ifPresent(
+                                c ->
+                                        out.append("\u001b[")
+                                                .append(c.toAnsiBackground())
+                                                .append('m'));
                 if (Controls.safeLink(span.style().link())) {
                     out.append("\u001b]8;;").append(span.style().link()).append("\u001b\\");
                 }

@@ -12,6 +12,7 @@ tasks.register("checkAll") {
         ":cli:test",
         ":asciidoctor:test",
         ":highlight-lumis4j:test",
+        ":highlight:test",
         ":render:test",
         ":terminal:test",
         ":pager:test",

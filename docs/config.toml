@@ -1,9 +1,23 @@
 # SPDX-License-Identifier: MPL-2.0
 
-# Copy to $XDG_CONFIG_HOME/glow-adoc/config.toml or ~/.config/glow-adoc/config.toml.
+# User file: $XDG_CONFIG_HOME/glow-adoc/config.toml or ~/.config/glow-adoc/config.toml.
+# Project file: .glow-adoc.local.toml or .glow-adoc.toml; nearest directory wins.
 pager = true
-width = 0 # Follow terminal width; direct output defaults to 80 columns.
-color = "auto" # auto, always, never
-theme = "auto" # auto, light, dark
-images = "auto" # auto, never
-merman = "merman-cli" # Executable name on PATH or an absolute path.
+width = 0 # 0: terminal width; redirected output defaults to 80.
+center = false
+icons = "nerd" # nerd, unicode, ascii; no font detection.
+mouse = true # Press m to toggle capture; Shift-drag can select natively.
+page-background = false
+table-stripes = true
+table-frame = "auto" # auto, all, sides, ends, none.
+table-grid = "auto" # auto, all, rows, cols, none.
+table-section-borders = "thin" # thin, heavy.
+shortcodes = "hide" # hide, show; code/literal examples are preserved.
+color = "auto" # auto, always, never.
+theme = "auto" # auto, light, dark.
+images = "auto" # auto, never.
+merman = "merman-cli" # User/explicit files only; executable name or absolute path.
+image-roots = [] # Additional directories, relative to this configuration file.
+
+[attributes]
+# image-assets = "assets" # With image-roots = ["static"], resolves static/assets.

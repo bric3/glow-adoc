@@ -1,0 +1,115 @@
+# flags=[] file=small.adoc
+run,milliseconds
+1,1326.7
+2,1302.1
+3,1303.7
+median,1303.7
+p95,1326.7
+# flags=[] file=2020-12-11-CompletableFuture-with-burstable-pods.adoc
+run,milliseconds
+1,3485.7
+2,3479.9
+3,3468.2
+median,3479.9
+p95,3485.7
+# flags=[] file=large.adoc
+run,milliseconds
+1,4585.4
+2,3729.4
+3,3641.1
+median,3729.4
+p95,4585.4
+# flags=[-Djruby.compile.mode=OFF] file=small.adoc
+run,milliseconds
+1,1271.2
+2,1222.6
+3,1252.7
+median,1252.7
+p95,1271.2
+# flags=[-Djruby.compile.mode=OFF] file=2020-12-11-CompletableFuture-with-burstable-pods.adoc
+run,milliseconds
+1,3451.4
+2,3473.5
+3,4317.8
+median,3473.5
+p95,4317.8
+# flags=[-Djruby.compile.mode=OFF] file=large.adoc
+run,milliseconds
+1,3928.3
+2,4323.7
+3,3563.7
+median,3928.3
+p95,4323.7
+# flags=[-XX:TieredStopAtLevel=1] file=small.adoc
+run,milliseconds
+1,1102.5
+2,1108.6
+3,1101.5
+median,1102.5
+p95,1108.6
+# flags=[-XX:TieredStopAtLevel=1] file=2020-12-11-CompletableFuture-with-burstable-pods.adoc
+run,milliseconds
+1,4007.6
+2,4120.2
+3,4123.6
+median,4120.2
+p95,4123.6
+# flags=[-XX:TieredStopAtLevel=1] file=large.adoc
+run,milliseconds
+1,4115.0
+2,4110.8
+3,4207.2
+median,4115.0
+p95,4207.2
+# flags=[-Djruby.compile.mode=OFF, -XX:TieredStopAtLevel=1] file=small.adoc
+run,milliseconds
+1,1078.1
+2,1083.0
+3,1108.2
+median,1083.0
+p95,1108.2
+# flags=[-Djruby.compile.mode=OFF, -XX:TieredStopAtLevel=1] file=2020-12-11-CompletableFuture-with-burstable-pods.adoc
+run,milliseconds
+1,3993.6
+2,4025.6
+3,3958.0
+median,3993.6
+p95,4025.6
+# flags=[-Djruby.compile.mode=OFF, -XX:TieredStopAtLevel=1] file=large.adoc
+run,milliseconds
+1,4035.9
+2,4052.5
+3,4031.7
+median,4035.9
+p95,4052.5
+# flags=[-Djruby.compile.invokedynamic=false, -Djruby.invokedynamic.enabled=false] file=small.adoc
+run,milliseconds
+1,1320.0
+2,1300.8
+3,1303.1
+median,1303.1
+p95,1320.0
+# flags=[-Djruby.compile.invokedynamic=false, -Djruby.invokedynamic.enabled=false] file=2020-12-11-CompletableFuture-with-burstable-pods.adoc
+run,milliseconds
+1,3423.1
+2,3902.9
+3,3519.2
+median,3519.2
+p95,3902.9
+# flags=[-Djruby.compile.invokedynamic=false, -Djruby.invokedynamic.enabled=false] file=large.adoc
+run,milliseconds
+1,3693.5
+2,3651.7
+3,3735.5
+median,3693.5
+p95,3735.5
+# flags=[-XX:+UseSerialGC, -Xms32m, -Xmx512m] file=small.adoc
+run,milliseconds
+1,1314.4
+2,1404.1
+3,1448.6
+median,1404.1
+p95,1448.6
+# flags=[-XX:+UseSerialGC, -Xms32m, -Xmx512m] file=2020-12-11-CompletableFuture-with-burstable-pods.adoc
+run,milliseconds
+# FAILED: 512 MiB heap exhausted while loading LumisModule/Chicory on the supplied post; remaining larger case not run.

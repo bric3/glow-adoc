@@ -2,37 +2,41 @@
 
 = Verification
 
-Tests cover custom conversion, nested inline styles, tables/lists, local includes, highlighter output,
-wide-character layout, TOML configuration, terminal reply framing, diagram fallbacks and packaged CLI execution.
+== Automated checks
 
-Automated pseudo-terminal tests verify pager startup, search input, quit, alternate-screen restoration,
-simulated dark/light notifications, Kitty image transmission and application-owned image cleanup.
-They do not verify visual placement, fonts or graphics appearance.
+[source,sh]
+----
+./gradlew checkAll
+GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :diagrams:test
+----
 
-Native Image compilation succeeded locally on macOS ARM64 with Oracle GraalVM 25.0.4.1.1.
-The resulting executable failed while creating AsciidoctorJ: JRuby's `LoggerFactory` reflectively loads
-`org.jruby.util.log.StandardErrorLogger`, which was absent from the image's reachability metadata.
-This establishes a runtime blocker; native packaging remains experimental. GraalVM 27 is configured
-in the manual workflow but has not been exercised locally.
+The second command enables an optional integration with a separately reviewed executable.
+Without it, that test is skipped. Ordinary builds never install Merman.
 
-The JVM jar renders the showcase. All 29 module and packaged-jar tests pass, including the optional
-integration with a verified Merman 0.8.0 macOS ARM64 release binary. AOT training and required-cache
-loading both pass with the matching Java 27 build. Training enables `AOTCompatibleOopCompression`
-so cache loading tolerates changes to the heap address layout; five consecutive required-cache
-launches pass. Repeating the final Gradle invocation reuses
-the configuration cache. Actionlint and Homebrew formula Ruby syntax checks pass.
+Coverage includes conversion, inline styles, callouts, tables/spans, wrapping/graphemes, HTML filtering,
+shortcodes, includes, configuration precedence, CLI attributes, allowed image roots and symlink escapes.
+Highlighter tests cover source preservation, progressive output, cache reuse and cancellation.
 
-The Java and Kotlin sources use consistent four-space formatting, with explicit Java control-flow
-blocks and resolved imports. Ktlint checks pass. PlantUML's MIT artifact at version 1.2026.6 passes
-the embedded rendering test. Packaged-jar checks verify the project licence and separate upstream
-notices. The runtime dependency graph no longer contains the default GPL PlantUML artifact.
+PTY checks cover keys/mouse, search, folding, themes, images and terminal restoration.
+Image tests assert unchanged frames emit no commands, scrolling reuses uploaded pixels,
+crops use source coordinates, off-screen data can be evicted and exit releases owned images.
+Launcher checks cover manager priority, installed-version selection, spaces, arguments,
+exit codes, opt-in AOT training, cache invalidation and corrupt-cache fallback with clean stdout.
 
-Packaged-launcher tests verify manager priority, incompatible selected runtimes, installed-version
-fallbacks, custom manager directories, paths with spaces, JVM/application arguments and exit codes.
-The install task copies the launcher to a temporary `~/.local/bin`; the installed executable runs.
+== Performance
 
-These are local macOS ARM64 results. GitHub-hosted Linux/macOS jobs have been prepared but not executed.
-The Homebrew formula remains a template until repository, release version and checksum are supplied.
+See link:PERFORMANCE.adoc[the measurement procedure and local results].
+Measurements use fresh JVMs. Repeated launches normally have warm filesystem caches;
+these are not equivalent to dropping the operating system's disk cache.
 
-Before release, manually check Ghostty and Kitty on macOS/Linux, a terminal without graphics,
-SSH, resize while images are visible, light/dark changes and terminal restoration after cancellation.
+== Platform limits
+
+Local automated checks run on macOS ARM64. CI is configured for Linux/macOS.
+PTY transmission does not verify visual appearance, fonts or real-terminal rendering.
+Manually check iTerm2/Ghostty, SSH, resize, scrolling, theme changes and cancellation before release.
+
+Native Image compilation previously succeeded with GraalVM 25, but JRuby startup failed on missing
+reflection metadata for `org.jruby.util.log.StandardErrorLogger`. Native runtime support remains experimental;
+compilation alone is not a compatibility check. This performance change does not repair that blocker.
+
+The Homebrew formula is a release template until repository, version and checksums are supplied.
