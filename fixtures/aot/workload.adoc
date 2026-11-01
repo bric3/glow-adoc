@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= glow-adoc AOT corpus
+:service-name: queue-worker
+
+This reference exercises the reader with a small service operations guide.
+Examples describe logging, asynchronous work and deployment settings.
+
+include::prose.adoc[]
+
+include::blocks.adoc[]
+
+include::tables.adoc[]
+
+include::code.adoc[]
+
+include::html.adoc[]
+
+include::diagrams.adoc[]

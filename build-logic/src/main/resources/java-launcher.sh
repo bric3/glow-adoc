@@ -138,7 +138,7 @@ if [ "${1:-}" = --train-aot ] || [ "$matching_generation" = yes ]; then
             launcher_dir=${0%/*}
             [ "$launcher_dir" != "$0" ] || launcher_dir=.
             launcher_location=$(CDPATH= cd "$launcher_dir" && printf '%s/%s' "$(pwd -P)" "${0##*/}")
-            aot_key=$(printf '%s\n' "$artifact_hash" "$launcher_location" "$java_executable" "$java_identity" "${JAVA_OPTS:-}" "${JAVA_TOOL_OPTIONS:-}" "${JDK_JAVA_OPTIONS:-}" "${_JAVA_OPTIONS:-}" "$(uname -sm)" | hash_stdin)
+            aot_key=$(printf '%s\n' "$artifact_hash" "${0##*/}" "$java_executable" "$java_identity" "${JAVA_OPTS:-}" "${JAVA_TOOL_OPTIONS:-}" "${JDK_JAVA_OPTIONS:-}" "${_JAVA_OPTIONS:-}" "$(uname -sm)" | hash_stdin)
             [ -z "$aot_key" ] || aot_cache=$aot_root/$cache_generation-$aot_key.aot
             launch_stage cache-key-ready
         fi
@@ -146,9 +146,14 @@ if [ "${1:-}" = --train-aot ] || [ "$matching_generation" = yes ]; then
 fi
 launch_stage cache-lookup-ready
 if [ "${1:-}" = --train-aot ]; then
-    if [ "$#" -ne 2 ] || [ -z "$aot_cache" ]; then
-        printf 'Usage: glow-adoc --train-aot FILE (requires JDK release metadata and sha256sum or shasum)\n' >&2
+    if [ "$#" -gt 2 ] || [ -z "$aot_cache" ]; then
+        printf 'Usage: glow-adoc --train-aot [FILE] (requires JDK release metadata and sha256sum or shasum)\n' >&2
         exit 2
+    fi
+    if [ "$#" -eq 2 ]; then
+        set -- "$2"
+    else
+        set -- --aot-workload
     fi
     umask 077
     mkdir -p "$aot_root" || exit 1
@@ -161,7 +166,7 @@ if [ "${1:-}" = --train-aot ]; then
     (exec_selected java -Dsun.misc.unsafe.memory.access=allow ${JAVA_OPTS:-} \
         -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression \
         -XX:AOTCacheOutput="$training_dir/cache.aot" -jar "$0" \
-        --no-cache --no-pager --color=always "$2") > /dev/null || exit "$?"
+        --no-cache --no-pager --color=always "$@") > /dev/null || exit "$?"
     mv "$training_dir/cache.aot" "$aot_cache" || exit 1
     printf 'AOT cache: %s\n' "$aot_cache"
     exit 0

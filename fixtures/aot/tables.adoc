@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: MPL-2.0
+
+== Diagnostic tables
+
+[[logging-options]]
+.Logging categories
+[cols="1m,1m,3",options="header,footer"]
+|===
+|Category |Level |Purpose
+|gc |info |Summarise collection activity.
+|safepoint |debug |Inspect pauses with a detailed explanation that wraps within its column.
+|class+load |info |Identify classes loaded by the application.
+3+|Restore the ordinary logging configuration after collecting the sample.
+|===
+
+.Worker capacity
+[cols="1,>1,>1",frame="ends",grid="rows",options="header"]
+|===
+|Pool |Active |Queued
+.2+|Notifications |4 |12
+|6 |3
+|Maintenance |1 |0
+|===
+
+.Inline and block content
+[cols="1,2a",options="header"]
+|===
+|Setting |Explanation
+|Diagnostic window
+|
+* Start the recording.
+* Read a short sample.
+* Stop the recording.
+
+NOTE: Keep the sample bounded.
+
+|Label |Names such as café and 日本語 use terminal cell widths.
+|===

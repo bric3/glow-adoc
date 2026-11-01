@@ -28,10 +28,17 @@ PTY checks cover keys/mouse, search, folding, themes, images and terminal restor
 Image tests assert unchanged frames emit no commands, scrolling reuses uploaded pixels,
 crops use source coordinates, off-screen data can be evicted and exit releases owned images.
 Launcher checks cover manager priority, direct delegation, PATH fallback, spaces, arguments,
-exit codes, opt-in AOT training, cache invalidation and corrupt-cache fallback with clean stdout.
+exit codes, AOT training, cache invalidation and corrupt-cache fallback with clean stdout.
 Fake runtimes reject version probes. Checks cover manager failure without fallback, missing JDK metadata,
 checksum failures, diagnostic markers and artifact-hash handoff. Cache checks reject malformed hashes
 and mismatched artifact paths.
+Corpus checks verify packaged resources, include expansion, temporary-file cleanup and execution
+without an external document or project configuration. Relocation checks preserve executable names
+and reject renamed cache candidates.
+Verify `install` using a temporary home and cache root, then load the installed executable
+with `-XX:AOTMode=required`. Check that executable timestamps match the staged training copy.
+Repeat opens must still hit the conversion cache after relocation. Cache tests simulate archived
+classes retaining different training-time CodeSource URLs while their resources share the runtime jar.
 JDK metadata and manager-supplied JVM option changes invalidate AOT caches. Editing the executable with its generation hint
 unchanged must still invalidate AOT caches.
 

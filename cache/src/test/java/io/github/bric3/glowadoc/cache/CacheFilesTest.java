@@ -10,13 +10,23 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
+import java.security.CodeSource;
+import java.security.MessageDigest;
+import java.security.cert.Certificate;
+import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
 
 class CacheFilesTest {
     @TempDir Path directory;
@@ -121,6 +131,60 @@ class CacheFilesTest {
             } else {
                 System.setProperty(hashProperty, previousHash);
             }
+        }
+    }
+
+    @Test
+    void resolvesRuntimeJarWhenAotRetainsTrainingCodeSources() throws Exception {
+        Path runtimeJar = directory.resolve("installed.jar");
+        var classes = new ArrayList<Class<?>>(List.of(CacheFiles.class));
+        classes.addAll(List.of(CacheFiles.class.getDeclaredClasses()));
+        try (var jar = new JarOutputStream(Files.newOutputStream(runtimeJar))) {
+            for (Class<?> type : classes) {
+                String name = type.getName().replace('.', '/') + ".class";
+                jar.putNextEntry(new JarEntry(name));
+                try (var bytes = type.getResourceAsStream("/" + name)) {
+                    bytes.transferTo(jar);
+                }
+                jar.closeEntry();
+            }
+        }
+        URL runtime = runtimeJar.toUri().toURL();
+        URL training = directory.resolve("deleted-training.jar").toUri().toURL();
+        try (var loader =
+                new URLClassLoader(new URL[] {runtime}, ClassLoader.getPlatformClassLoader()) {
+                    @Override
+                    protected Class<?> findClass(String name) throws ClassNotFoundException {
+                        URL resource = findResource(name.replace('.', '/') + ".class");
+                        if (resource == null) {
+                            throw new ClassNotFoundException(name);
+                        }
+                        try (var input = resource.openStream()) {
+                            byte[] bytes = input.readAllBytes();
+                            URL recorded = name.contains("$") ? training : runtime;
+                            return defineClass(
+                                    name,
+                                    bytes,
+                                    0,
+                                    bytes.length,
+                                    new CodeSource(recorded, (Certificate[]) null));
+                        } catch (IOException e) {
+                            throw new ClassNotFoundException(name, e);
+                        }
+                    }
+                }) {
+            Class<?> cache = loader.loadClass(CacheFiles.class.getName());
+            Class<?> component = loader.loadClass(CacheFiles.class.getName() + "$Artifact");
+            assertEquals(runtime, cache.getProtectionDomain().getCodeSource().getLocation());
+            assertEquals(training, component.getProtectionDomain().getCodeSource().getLocation());
+            var identity = cache.getMethod("artifactIdentity", Class[].class);
+            String expected =
+                    HexFormat.of()
+                            .formatHex(
+                                    MessageDigest.getInstance("SHA-256")
+                                            .digest(Files.readAllBytes(runtimeJar)));
+            assertEquals(expected, identity.invoke(null, (Object) new Class<?>[] {component}));
+            assertNull(identity.invoke(null, (Object) new Class<?>[] {String.class}));
         }
     }
 

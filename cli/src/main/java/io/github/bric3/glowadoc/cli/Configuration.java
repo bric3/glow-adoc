@@ -62,6 +62,10 @@ public record Configuration(
         return load(explicit, Path.of(""));
     }
 
+    static Configuration defaults() {
+        return DEFAULTS;
+    }
+
     public static Configuration load(Path explicit, Path directory) throws IOException {
         return load(
                 explicit,

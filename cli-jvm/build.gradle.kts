@@ -3,6 +3,7 @@
 import io.github.bric3.glowadoc.buildlogic.AotTrain
 import io.github.bric3.glowadoc.buildlogic.CollectDependencyNotices
 import io.github.bric3.glowadoc.buildlogic.ExecutableJar
+import io.github.bric3.glowadoc.buildlogic.InstallExecutable
 import io.github.bric3.glowadoc.buildlogic.PackagedCliArguments
 
 plugins {
@@ -78,15 +79,11 @@ val executableJar = tasks.register<ExecutableJar>("executableJar") {
     outputJar = layout.buildDirectory.file("libs/glow-adoc-${project.version}-app.jar")
 }
 
-tasks.register<Copy>("install") {
+val installWithoutAot = tasks.register<InstallExecutable>("installWithoutAot") {
     group = "distribution"
-    description = "Install the glow-adoc executable to ~/.local/bin."
-    from(executableJar.flatMap { it.outputJar })
-    into(providers.systemProperty("user.home").map { "$it/.local/bin" })
-    rename { "glow-adoc" }
-    filePermissions {
-        unix("rwxr-xr-x")
-    }
+    description = "Install glow-adoc to ~/.local/bin without AOT training."
+    jar = executableJar.flatMap { it.outputJar }
+    executable = layout.file(providers.systemProperty("user.home").map { File("$it/.local/bin/glow-adoc") })
 }
 
 tasks.assemble {
@@ -126,7 +123,17 @@ tasks.test {
 
 val aotTrain = tasks.register<AotTrain>("aotTrain") {
     group = "distribution"
-    description = "Train a Java 27 AOT cache against the packaged application."
+    description = "Pre-train an installable executable with the bundled AsciiDoc workload."
     jar = executableJar.flatMap { it.outputJar }
-    document = rootProject.layout.projectDirectory.file("fixtures/showcase.adoc")
+    executable = layout.buildDirectory.file("aot/glow-adoc")
+}
+
+installWithoutAot.configure {
+    mustRunAfter(aotTrain)
+}
+
+tasks.register("install") {
+    group = "distribution"
+    description = "Pre-train locally, then install glow-adoc with a reusable AOT cache."
+    dependsOn(aotTrain, installWithoutAot)
 }

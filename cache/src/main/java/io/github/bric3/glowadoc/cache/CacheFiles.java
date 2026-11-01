@@ -4,6 +4,7 @@ package io.github.bric3.glowadoc.cache;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.JarURLConnection;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
@@ -49,7 +50,8 @@ public final class CacheFiles {
             return null;
         }
         for (Class<?> component : components) {
-            if (!own.equals(origin(component))) {
+            if (component.getClassLoader() != CacheFiles.class.getClassLoader()
+                    || !own.equals(origin(component))) {
                 return null;
             }
         }
@@ -100,8 +102,17 @@ public final class CacheFiles {
     }
 
     private static URL origin(Class<?> type) {
-        var source = type.getProtectionDomain().getCodeSource();
-        return source == null ? null : source.getLocation();
+        // Archived CodeSource URLs can retain the training path after AOT relocation.
+        try {
+            URL resource = type.getResource("/" + type.getName().replace('.', '/') + ".class");
+            if (resource != null && resource.openConnection() instanceof JarURLConnection jar) {
+                URL location = jar.getJarFileURL();
+                return location.getProtocol().equals("file") ? location : null;
+            }
+        } catch (IOException | SecurityException ignored) {
+            // Unavailable or unpackaged classes leave disk caches disabled.
+        }
+        return null;
     }
 
     public static String key(List<String> values) {

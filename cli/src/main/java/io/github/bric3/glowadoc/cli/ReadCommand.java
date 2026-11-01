@@ -25,6 +25,7 @@ import org.aesh.command.invocation.CommandInvocation;
 import org.aesh.command.option.Argument;
 import org.aesh.command.option.Option;
 import org.aesh.command.option.OptionList;
+import org.aesh.command.option.OptionVisibility;
 import org.aesh.terminal.tty.TerminalBuilder;
 import org.aesh.terminal.tty.TtyDetect;
 
@@ -121,25 +122,38 @@ public final class ReadCommand implements Command<CommandInvocation> {
     @Option(
             name = "train-aot",
             hasValue = false,
-            description = "Launcher only: --train-aot FILE creates a local startup cache")
+            description = "Launcher only: --train-aot [FILE] creates a local startup cache")
     boolean trainAot;
+
+    @Option(name = "aot-workload", hasValue = false, visibility = OptionVisibility.HIDDEN)
+    boolean aotWorkload;
 
     @Override
     public CommandResult execute(CommandInvocation invocation) {
         long started = System.nanoTime();
-        try {
+        try (var workload = aotWorkload ? AotWorkload.open() : null) {
+            if (workload != null) {
+                noPager = true;
+                noCache = true;
+            }
             if (trainAot) {
                 throw new IllegalArgumentException(
-                        "Use the executable launcher: glow-adoc --train-aot FILE");
+                        "Use the executable launcher: glow-adoc --train-aot [FILE]");
             }
             if (version) {
                 String value = ReadCommand.class.getPackage().getImplementationVersion();
                 System.out.println("glow-adoc " + (value == null ? "development" : value));
                 return CommandResult.SUCCESS;
             }
-            Path input = file == null || file.equals("-") ? null : Path.of(file).toRealPath();
+            Path input =
+                    workload != null
+                            ? workload.document()
+                            : file == null || file.equals("-") ? null : Path.of(file).toRealPath();
             Path base = input == null ? Path.of("").toAbsolutePath() : input.getParent();
-            var settings = Configuration.load(config == null ? null : Path.of(config), base);
+            var settings =
+                    aotWorkload
+                            ? Configuration.defaults()
+                            : Configuration.load(config == null ? null : Path.of(config), base);
             var cliAttributes = Configuration.attributes(Map.of(), attributes);
             var selectedAttributes = new LinkedHashMap<>(settings.attributes());
             selectedAttributes.putAll(cliAttributes);
@@ -224,7 +238,7 @@ public final class ReadCommand implements Command<CommandInvocation> {
                             "table-section-borders",
                             Set.of("thin", "heavy"));
             boolean stdoutTty = TtyDetect.isStdoutTty();
-            if (file == null && TtyDetect.isStdinTty()) {
+            if (!aotWorkload && file == null && TtyDetect.isStdinTty()) {
                 System.out.println(
                         "Usage: glow-adoc [--no-pager] [--width N] [--color auto|always|never]"
                                 + " [--theme auto|light|dark] FILE|-\n"

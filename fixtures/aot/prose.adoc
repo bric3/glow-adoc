@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: MPL-2.0
+
+== Reading service diagnostics
+
+The `{service-name}` service records *events*, _durations_ and `request.id` values.
+Replace [line-through]#unbounded tracing# with a bounded diagnostic window.
+Long prose wraps across terminal cells while preserving emphasis, inline code,
+https://example.org/diagnostics[links] and Unicode such as café, 日本語 and 👩‍💻.
+
+=== A short investigation
+
+. Read the latest worker events.
+. Compare queue delay with processing time.
+.. Check the executor configuration.
+.. Inspect the container resource settings.
+. Restore the usual logging level.
+
+=== Recording notes
+
+* Keep timestamps and event names together.
+** Include the request identifier.
+* Record the configuration used for the investigation.
+
+=== Terms
+
+queue delay:: Time between submitting a task and starting it.
+processing time:: Time spent executing the task.
+
+The <<logging-options>> table lists a few diagnostic categories.
+A note footnote:[Durations in these examples are illustrative.] stays attached to the text.
+
+{{< notice >}}Shortcode wrapper content remains readable.{{< /notice >}}
+
+{{% details title="Diagnostic window" %}}
+Capture a bounded sample and retain the configuration with it.
+{{% /details %}}

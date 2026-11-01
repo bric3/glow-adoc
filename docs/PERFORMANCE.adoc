@@ -58,24 +58,44 @@ The CLI disables JRuby native extensions by default because Java handles documen
 
 == Local AOT cache
 
-Train the executable you intend to use:
+Pre-train locally before installation:
 
 [source,sh]
 ----
-glow-adoc --train-aot fixtures/showcase.adoc
+./gradlew :cli-jvm:install
+----
+
+The task trains a staged executable named `glow-adoc`, then installs it with its original timestamp.
+The JVM permits relocation when the filename and timestamp match. The launcher validates the full
+executable bytes, filename and runtime before selecting that cache; its directory is not part of the key.
+`:cli-jvm:installWithoutAot` copies the executable without training. An existing compatible cache
+can still be selected at runtime.
+
+To train an existing installation:
+
+[source,sh]
+----
+glow-adoc --train-aot
 glow-adoc --timings document.adoc
 ----
 
-`./gradlew :cli-jvm:aotTrain` trains the built executable rather than the installed copy.
-The source tree's showcase supplies varied highlighted content. AOT training bypasses both document
-caches and does not open a pager.
+The default workload is the project-owned link:../fixtures/aot/README.adoc[training corpus], bundled
+in the jar. Original examples exercise includes, conversion, HTML, tables, lists, nested quotations,
+five admonitions, disclosures, callouts, eight code languages and local image references. The CLI
+extracts the listed files into a private temporary directory and removes them afterwards.
+Training does not read an external document or user/project configuration. It bypasses both document caches
+and does not open a pager or execute diagram programs. `--train-aot FILE` selects a custom workload.
+
+`./gradlew :cli-jvm:aotTrain` prepares the staged executable and local cache without installing.
+A later `:cli-jvm:installWithoutAot` can reuse them with the same runtime and JVM options.
 
 A trained AOT cache can serve other documents: the document argument is not part of its identity.
 It does not preconvert other files or retain an AsciidoctorJ engine between CLI processes.
 Each document still needs its own valid conversion entry to bypass JRuby startup.
+Additional document features can load classes absent from training; they run normally.
 
 Caches live under `$XDG_CACHE_HOME/glow-adoc/aot`, falling back to `~/.cache/glow-adoc/aot`.
-Identity includes executable bytes and location, selected Java path and complete JDK release metadata,
+Identity includes executable bytes and filename, selected Java path and complete JDK release metadata,
 OS/architecture and JVM option environment. `JAVA_OPTS`, `JAVA_TOOL_OPTIONS`, `JDK_JAVA_OPTIONS`
 and `_JAVA_OPTIONS` participate in identity. Train again after any of these change.
 New cache filenames start with a build-generation hash covering the launcher template and Shadow jar.
@@ -83,7 +103,9 @@ This hint only skips impossible lookups: training and possible hits still hash t
 and validate the complete runtime identity. Manually editing a jar while retaining its generation hint
 therefore invalidates existing caches. Caches from earlier launcher formats require retraining;
 an executable update already invalidates their identity.
-Installation never trains a cache. No cache means normal startup; incompatible/corrupt cache loading
+Pre-training uses the locally selected JDK. These caches are not universal release artifacts:
+application, JDK build, platform and JVM option changes require compatible training.
+No cache means normal startup; incompatible/corrupt cache loading
 uses the JVM's auto fallback and may report diagnostics on stderr.
 
 The launcher supplies the same compressed-reference compatibility flags during training and loading.
@@ -154,7 +176,7 @@ Only AOT training and possible hits read the installed JDK's `release` file, con
 vendor and build metadata. Checksum parsing uses shell builtins. When AOT lookup has already hashed the artifact,
 the launcher passes its canonical path and SHA-256 through the internal JVM properties
 `glowadoc.launcher.artifact` and `glowadoc.launcher.sha256`. The cache accepts the digest only when
-the path identifies its own packaged code source and the value contains 64 hex digits. Missing or
+the path identifies its own runtime jar and the value contains 64 hex digits. Missing or
 invalid launcher hash metadata falls back to hashing the jar. Full-content hashing and cache identity remain in use;
 this avoids reading the same jar twice during one launch.
 
@@ -182,6 +204,33 @@ java --sun-misc-unsafe-memory-access=allow \
 ----
 
 == Local measurements
+
+=== Bundled training corpus, 2026-11-01
+
+The default installation trained the project-owned corpus before copying its executable into a
+temporary home. Required-mode loading succeeded after relocation, and conversion caching remained
+available after removing the staged executable. The installed file retained its bytes, timestamp
+and executable permissions.
+
+Ten interleaved pairs per case compared the same installed executable with and without a matching
+AOT cache. Inputs came from `fixtures/aot/code.adoc`, with OpenJDK 27+35-2325 on macOS ARM64 and an
+80 x 24 PTY. First-open pairs used a new file path each time; repeat-open pairs used a document
+whose conversion and highlights were already cached. Every first open started JRuby; every repeat
+open reported a conversion-cache hit. No build or other benchmark ran concurrently.
+
+[cols="3,1,1",options="header"]
+|===
+|First text |Without AOT |With AOT
+|First-open median |1497.9 ms |1183.9 ms
+|First-open p95 |1573.3 ms |1381.5 ms
+|Repeat-open median |384.0 ms |603.2 ms
+|Repeat-open p95 |408.0 ms |652.4 ms
+|===
+
+AOT helped first opens in this sample, while its lookup and loading increased repeat-open latency.
+It does not remove JRuby initialisation or document parsing. See
+link:benchmarks/pretrained-corpus.csv[all samples and observed stages]. To bypass automatic AOT
+selection even when a compatible cache exists, run with `JAVA_OPTS='-XX:AOTMode=off'`.
 
 === Manager delegation, 2026-11-01
 
@@ -399,7 +448,7 @@ See link:benchmarks/aot-paired.csv[paired samples]. An earlier sequential compar
 1542.7 ms uncached median versus 2762.8 ms cached, with cached samples ranging from 1325.0 to 2849.3 ms.
 Both initial datasets are retained: link:benchmarks/aot-initial-uncached.csv[uncached] and
 link:benchmarks/aot-initial-cached.csv[cached]. AOT gains depend on the workload and machine;
-training remains opt-in.
+training was opt-in for those earlier measurements.
 
 The final installed-launcher smoke test opened the same post with an explicit image-assets directory
 in 2085.8 ms, using OpenJDK 27+35-2325 without training an installed cache. Its 20 scroll steps measured
@@ -441,7 +490,7 @@ This supports deferring highlighting; it does not establish an exact CPU attribu
 |Java executable discovery cache |Deferred: invalidation adds complexity to a small measured contribution.
 |JRuby compilation and JVM compiler limits |Benchmark separately; flags that help parsing can slow highlighting.
 |Invokedynamic, heap and GC settings |Included in the experiment matrix; no unmeasured default changes.
-|AOT training coverage |Includes highlighted output; training remains opt-in.
+|AOT training coverage |Default installation trains the bundled corpus, including highlighted output; `installWithoutAot` skips training.
 |Persistent JVM |Deferred by design; it adds process lifetime, isolation and memory costs.
 |Converted-document disk cache |Implemented for self-contained files; source/settings/application hashes validate entries. Includes and temporal substitutions bypass it.
 |Off-screen diagrams |Wait until visible; serial background rendering starts after the first text frame.

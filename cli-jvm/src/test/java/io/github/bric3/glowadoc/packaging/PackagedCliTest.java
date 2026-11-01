@@ -255,6 +255,48 @@ class PackagedCliTest {
         assertTrue(versionOutput.contains("glow-adoc"));
     }
 
+    @Test
+    void bundledAotWorkloadRunsWithoutAnExternalDocumentOrConfiguration() throws Exception {
+        Files.writeString(directory.resolve(".glow-adoc.toml"), "invalid = [\n");
+        try (var archive = new JarFile(System.getProperty("glow.jar"))) {
+            var resource = archive.getJarEntry("META-INF/glow-adoc/aot/workload.adoc");
+            assertTrue(resource != null, "Bundled workload missing from the packaged jar");
+            try (var input = archive.getInputStream(resource)) {
+                assertTrue(
+                        new String(input.readAllBytes(), StandardCharsets.UTF_8)
+                                .contains("glow-adoc AOT corpus"));
+            }
+        }
+        Path errors = directory.resolve("workload-errors");
+        var process =
+                new ProcessBuilder(
+                                java,
+                                "-jar",
+                                System.getProperty("glow.jar"),
+                                "--no-cache",
+                                "--no-pager",
+                                "--color=never",
+                                "--aot-workload")
+                        .directory(directory.toFile())
+                        .redirectError(errors.toFile())
+                        .start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+        assertEquals(0, process.exitValue(), Files.readString(errors));
+        for (String marker :
+                List.of(
+                        "glow-adoc AOT corpus",
+                        "Reading service diagnostics",
+                        "Bounded diagnostic sessions",
+                        "Diagnostic tables",
+                        "CompletableFuture",
+                        "Embedded HTML",
+                        "flowchart LR")) {
+            assertTrue(output.contains(marker), marker + ": " + output);
+        }
+        assertFalse(output.contains("[include unavailable:"), output);
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void rendersAdmonitionTitleBarsWithAndWithoutColour(boolean colour) throws Exception {

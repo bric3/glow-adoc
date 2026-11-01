@@ -8,7 +8,8 @@ Requires Java 27+. Read AsciiDoc through an embedded pager or direct text output
 - Live search, mouse controls and terminal appearance detection.
 - Progressive syntax highlighting and reusable Kitty image placements.
 - CLI attributes, project configuration and explicit image directories.
-- Optional local AOT training through `glow-adoc --train-aot FILE`.
+- Local AOT training with a bundled, self-contained corpus through `glow-adoc --train-aot`, or a custom FILE.
+- `./gradlew :cli-jvm:install` trains the bundled corpus before installation; `installWithoutAot` skips training.
 - Private conversion and highlight caches, with `--no-cache` to bypass both.
 - Visible diagrams render in the background after the first text frame.
 - JRuby native extensions disabled by default; Java handles document file access.

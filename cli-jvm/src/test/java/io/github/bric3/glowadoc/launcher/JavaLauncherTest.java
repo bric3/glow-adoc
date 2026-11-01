@@ -18,6 +18,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
@@ -271,6 +272,36 @@ class JavaLauncherTest {
         environment.remove("JAVA_OPTS");
         Files.writeString(launcher, "\n", StandardOpenOption.APPEND);
         assertEquals(0, run("document.adoc"));
+        assertFalse(arguments().contains("-XX:AOTMode=auto"));
+    }
+
+    @Test
+    void trainsBundledWorkloadWithoutAnInputFile() throws Exception {
+        usePathJava("selected");
+        environment.put("XDG_CACHE_HOME", directory.resolve("bundled-aot").toString());
+        assertEquals(0, run("--train-aot"));
+        assertTrue(arguments().contains("--aot-workload"), arguments().toString());
+        assertEquals(0, run("an-unseen-document.adoc"));
+        assertTrue(arguments().contains("-XX:AOTMode=auto"));
+        assertEquals(2, run("--train-aot", "first.adoc", "second.adoc"));
+    }
+
+    @Test
+    void reusesTrainingAfterRelocationWithTheSameExecutableName() throws Exception {
+        usePathJava("selected");
+        environment.put("XDG_CACHE_HOME", directory.resolve("relocation-aot").toString());
+        assertEquals(0, run("--train-aot"));
+        Path relocated =
+                Files.createDirectories(directory.resolve("installed bin"))
+                        .resolve(launcher.getFileName());
+        Files.copy(launcher, relocated, StandardCopyOption.COPY_ATTRIBUTES);
+        launcher = relocated;
+        assertEquals(0, run("other.adoc"));
+        assertTrue(arguments().contains("-XX:AOTMode=auto"), arguments().toString());
+        Path renamed = relocated.resolveSibling("renamed.jar");
+        Files.move(relocated, renamed);
+        launcher = renamed;
+        assertEquals(0, run("other.adoc"));
         assertFalse(arguments().contains("-XX:AOTMode=auto"));
     }
 

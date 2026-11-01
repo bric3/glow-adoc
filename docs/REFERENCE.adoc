@@ -29,7 +29,7 @@ Direct output also supports Windows. Exit status is zero on success and non-zero
 |`--image-root PATH` |none |Repeatable image directory, relative to the working directory.
 |`--config FILE` |discovery |Read this file over application defaults.
 |`--timings` |off |Write cumulative startup stages to stderr.
-|`--train-aot FILE` |manual |Executable launcher only; must be the first option.
+|`--train-aot [FILE]` |manual |Train the bundled corpus, or FILE; launcher only, first option.
 |`--version`, `--help` | |Print version or usage.
 |===
 

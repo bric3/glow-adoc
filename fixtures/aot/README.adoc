@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= AOT training corpus
+
+`workload.adoc` is the entry point. It includes original, self-contained examples for the reader's
+normal conversion and rendering paths. `corpus.list` declares the files bundled and extracted by
+the CLI. Add every required include or local asset to that list.
+
+[cols="1,3",options="header"]
+|===
+|File |Coverage
+|`prose.adoc` |Inline markup, Unicode, links, lists, descriptions, references, footnotes and shortcodes.
+|`blocks.adoc` |Nested quotations, five admonitions, examples, sidebars, literals and disclosures.
+|`tables.adoc` |Header/footer rows, spanning cells, alignment, borders and block content.
+|`code.adoc` |Java, Bash, YAML, JSON, Python, JavaScript, SQL and XML; source titles and callouts.
+|`html.adoc` |HTML passthrough, inline code, strike-through, quotations, details and tables.
+|`diagrams.adoc` |Diagram source and a local SVG image.
+|===
+
+Train the bundled corpus with `glow-adoc --train-aot`, or run `./gradlew :cli-jvm:install` from the
+project root to train before installing. Training uses direct output and application defaults.
+It does not open a pager, execute diagram programs or fetch remote resources.
+The source examples are data; they are never executed.
+
+The same cache can serve other documents. Unseen features load normally, and each document still
+needs parsing until its conversion cache is populated. See link:../../docs/PERFORMANCE.adoc[performance]
+for compatibility requirements and measurement limits.

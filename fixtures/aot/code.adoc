@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: MPL-2.0
+
+== Source examples
+
+.Submit independent operations
+[source,java]
+----
+try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+    var first = CompletableFuture.supplyAsync(() -> readQueue("mail"), executor); // <1>
+    var second = CompletableFuture.supplyAsync(() -> readQueue("audit"), executor);
+    first.thenCombine(second, QueueSummary::merge)
+         .thenAccept(System.out::println); // <2>
+}
+----
+<1> Use an explicit executor for the blocking operation.
+<2> Print the combined result.
+
+.Collect a short diagnostic sample
+[source,bash]
+----
+java -Xlog:gc=info,safepoint=debug -jar worker.jar # <1>
+printf 'service=%s state=%s\n' "queue-worker" "ready" # <2>
+----
+<1> Select two logging categories.
+<2> Keep structured fields on one line.
+
+.Declare container resources
+[source,yaml]
+----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: queue-worker
+spec:
+  selector:
+    matchLabels: { app: queue-worker }
+  template:
+    metadata:
+      labels: { app: queue-worker }
+    spec:
+      containers:
+        - name: worker
+          image: example.invalid/queue-worker:1
+          resources:
+            requests: { cpu: "250m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "512Mi" }
+----
+
+.An event record
+[source,json]
+----
+{"event":"task-complete","queue":"mail","duration_ms":12,"ok":true}
+----
+
+.Aggregate a sample
+[source,python]
+----
+def average_duration(events):
+    durations = [event["duration_ms"] for event in events if event["ok"]]
+    return sum(durations) / len(durations) if durations else 0
+----
+
+.Expose worker state
+[source,javascript]
+----
+const state = { active: 4, queued: 12 };
+export const isBusy = () => state.active > 0 || state.queued > 0;
+----
+
+.Count events by category
+[source,sql]
+----
+SELECT category, COUNT(*) AS events
+FROM diagnostic_event
+GROUP BY category
+ORDER BY events DESC;
+----
+
+.A compact configuration
+[source,xml]
+----
+<worker name="queue-worker">
+  <queue capacity="128" />
+  <diagnostics enabled="true" />
+</worker>
+----

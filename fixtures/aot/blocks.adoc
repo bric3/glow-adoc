@@ -1,0 +1,51 @@
+// SPDX-License-Identifier: MPL-2.0
+
+== Bounded diagnostic sessions
+
+.Operator guidance
+[quote]
+____
+Start with the smallest useful diagnostic window.
+
+[quote]
+______
+Keep enough context to explain the next event.
+______
+____
+
+NOTE: A new process creates a new runtime and parser instance.
+
+TIP: Save the selected logging configuration beside the sample.
+
+IMPORTANT: Request identifiers should survive asynchronous hand-offs.
+
+CAUTION: Verbose event streams can produce substantial output.
+
+WARNING: Review resource limits before collecting a long diagnostic sample.
+
+.A reproducible observation
+====
+Record the command, runtime version and relevant service configuration.
+
+    event=task-start queue=mail duration_ms=12
+====
+
+.Interpreting a sample
+****
+Compare a group of related events before drawing a conclusion.
+The same event name can appear in several worker threads.
+****
+
+.Executor details
+[%collapsible]
+====
+The worker submits blocking operations to a dedicated executor.
+
+.Resource details
+[%collapsible%open]
+======
+The deployment declares both a request and a limit.
+======
+====
+
+---

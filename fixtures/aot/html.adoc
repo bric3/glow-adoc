@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: MPL-2.0
+
+== Embedded HTML
+
+++++
+<p>HTML diagnostics support <strong>emphasis</strong>, <em>titles</em>,
+<code>request.id</code> and <span style="text-decoration: line-through">removed fields</span>.</p>
+<blockquote><p>Keep related events together.</p>
+<blockquote><p>Preserve the request identifier.</p></blockquote></blockquote>
+<details><summary>Event fields</summary>
+<ul><li><code>event</code></li><li><code>duration_ms</code></li></ul>
+</details>
+<table><thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+<tbody><tr><td>queue</td><td>The selected work queue.</td></tr></tbody></table>
+++++

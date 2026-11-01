@@ -15,3 +15,9 @@ dependencies {
     annotationProcessor(libs.aesh.processor)
     implementation(libs.tomlj)
 }
+
+tasks.processResources {
+    from(rootProject.layout.projectDirectory.dir("fixtures/aot")) {
+        into("META-INF/glow-adoc/aot")
+    }
+}

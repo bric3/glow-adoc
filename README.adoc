@@ -20,6 +20,18 @@ mise, SDKMAN!'s current candidate, asdf-vm, jenv, then jabba. Otherwise it runs 
 The selected runtime must be Java 27+; the Java bootstrap reports older versions. The launcher
 does not probe versions, search other installations or download a JDK.
 
+Installation trains a local AOT cache with the bundled link:fixtures/aot/README.adoc[training corpus]
+before copying the executable. To skip training:
+
+[source,sh]
+----
+./gradlew :cli-jvm:installWithoutAot
+----
+
+Skipping training leaves any existing compatible cache available to the launcher.
+The cache serves other AsciiDoc files with the same executable and runtime. It requires retraining
+after application or JDK changes. New documents still need parsing; see link:docs/PERFORMANCE.adoc[performance].
+
 A link:packaging/homebrew/glow-adoc.rb[Homebrew formula template] is supplied for future releases.
 Fill in its repository, version and checksum before use. Native Image remains experimental.
 
@@ -94,15 +106,15 @@ Text appears before syntax highlighting and diagram rendering complete. Visible 
 the background. Images upload once and are reused while scrolling.
 Unchanged files skip JRuby through a private conversion cache. Completed highlights are also reused
 across launches. `--no-cache` bypasses both disk caches.
-Optional local AOT training can reduce startup time:
+The default install task trains the bundled AOT corpus. To retrain an existing installation:
 
 [source,sh]
 ----
-glow-adoc --train-aot fixtures/showcase.adoc
+glow-adoc --train-aot
 glow-adoc --timings document.adoc
 ----
 
-Training is explicit. Matching caches load automatically through the executable launcher.
+Matching caches load automatically through the executable launcher.
 See link:docs/PERFORMANCE.adoc[performance] and link:docs/TROUBLESHOOTING.adoc[troubleshooting].
 
 == Development and licence

@@ -81,10 +81,17 @@ It performs no version probes or installed-version searches; the Java 8-compatib
 the Java 27 minimum. A generation hash of the launcher template and Shadow jar filters impossible
 AOT lookups. Possible hits still require the full executable hash and runtime identity. When the launcher hashes the jar
 for AOT lookup, it supplies that digest and the artifact path to Java. The document cache reuses the
-digest only for a matching code source and a valid SHA-256 value; ordinary Java invocation hashes the jar itself.
+digest only for the matching runtime jar and a valid SHA-256 value; ordinary Java invocation hashes the jar itself.
+Artifact ownership comes from live class-resource jar URLs. Archived protection domains can retain
+training-time paths, so their CodeSource URLs cannot identify a relocated runtime jar.
 
-AOT training is explicit. Training and possible hits enter the selected manager's environment before
-resolving Java and reading its release metadata. Cache identity includes executable bytes and location,
-Java path and release metadata, OS/architecture and JVM option environment. Missing metadata disables
+AOT training uses a bundled, project-owned corpus. `install` trains a staged executable before
+installing it; `installWithoutAot` skips training. The CLI extracts the declared corpus includes and
+assets into a private temporary directory and removes it after rendering. Training and installation
+preserve the executable basename and timestamp so HotSpot
+can relocate the cache. Training and possible hits enter the selected manager's environment before
+resolving Java and reading its release metadata. Cache identity includes executable bytes and filename,
+Java path and release metadata, OS/architecture and JVM option environment. The installation directory
+is excluded from identity; full executable bytes still validate candidates. Missing metadata disables
 automatic AOT and prevents training. A missing cache selects ordinary startup.
 Source uses MPL 2.0; dependencies retain their own licences and notices.
