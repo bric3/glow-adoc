@@ -5,6 +5,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":cache"))
     api(project(":document"))
     implementation(libs.asciidoctor)
     implementation(libs.jsoup)

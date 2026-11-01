@@ -11,7 +11,7 @@ Direct output also supports Windows. Exit status is zero on success and non-zero
 |===
 |Option |Default |Meaning
 |`--no-pager` |off |Write directly to stdout.
-|`--no-cache` |off |Bypass reading and writing the conversion cache.
+|`--no-cache` |off |Bypass reading and writing conversion and syntax highlighting disk caches.
 |`--width N` |terminal |Content width, 1-1000 cells. Redirected output defaults to 80.
 |`--center true/false` |false |Centre width-limited content.
 |`--color auto/always/never` |auto |Auto respects NO_COLOR and TERM=dumb.
@@ -85,7 +85,7 @@ Direct output expands disclosures and retains image descriptions. The pager disp
 
 `JAVA_OPTS` supplies JVM options to the executable launcher. Its default Unsafe policy is
 `--sun-misc-unsafe-memory-access=allow`; JAVA_OPTS can override it. Direct Java invocation retains JVM defaults.
-`XDG_CACHE_HOME` selects the AOT cache root, falling back to `~/.cache`.
+`XDG_CACHE_HOME` selects the conversion, highlighting and AOT cache root, falling back to `~/.cache`.
 Conversion files use the same root under `glow-adoc/conversions`; Windows uses
 `%LOCALAPPDATA%/glow-adoc/conversions`, falling back to `~/AppData/Local/glow-adoc/conversions`.
 The CLI defaults `jruby.native.enabled` to `false`; override it with `-Djruby.native.enabled=true`.

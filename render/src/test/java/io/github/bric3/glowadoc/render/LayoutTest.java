@@ -422,6 +422,25 @@ class LayoutTest {
     }
 
     @Test
+    void splitsLiteralLinesWithoutChangingUnicodeWhitespaceOrStyles() {
+        var bold = Style.PLAIN.bolded();
+        var lines =
+                TextLayout.wrap(
+                        List.of(
+                                new Span("\te\u0301 👩‍💻\r\n", bold),
+                                new Span("x".repeat(100_000)),
+                                new Span("\r", bold),
+                                new Span("\nend\n")),
+                        3,
+                        true);
+        assertEquals(List.of(new Span("    e\u0301 👩‍💻", bold)), lines.getFirst());
+        assertEquals(List.of(new Span("x".repeat(100_000)), new Span("\r", bold)), lines.get(1));
+        assertEquals(List.of(new Span("end")), lines.get(2));
+        assertTrue(lines.getLast().isEmpty());
+        assertEquals(List.of(List.of()), TextLayout.wrap(List.of(), 1, true));
+    }
+
+    @Test
     void preservesGraphemesAndVerseWhitespace() {
         var text = "e\u0301 e\u0301 👩‍💻";
         String joined =

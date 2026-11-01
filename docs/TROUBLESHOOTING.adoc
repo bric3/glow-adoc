@@ -29,8 +29,9 @@ Multiplexer passthrough and graphics settings are terminal-specific.
 == Slow startup or scrolling
 
 Run `glow-adoc --timings FILE` and follow link:PERFORMANCE.adoc[the benchmark procedure].
-`conversion-cache-hit` means the file opened without JRuby. `--no-cache` forces conversion and avoids
-persisting converted text. Remove the `glow-adoc/conversions` cache directory to clear saved content.
+`conversion-cache-hit` means the file opened without JRuby. Completed highlights also persist across
+launches. `--no-cache` forces conversion and highlighting and avoids persisting either result.
+Remove `glow-adoc/conversions` and `glow-adoc/highlights` under the cache root to clear saved text.
 AOT training is optional. Caches match the application, selected JDK, platform and JVM options.
 Retrain after updates; do not copy caches between incompatible builds.
 

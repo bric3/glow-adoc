@@ -88,8 +88,10 @@ Missing renderers retain diagram source.
 
 == Startup and troubleshooting
 
-Text appears before syntax highlighting completes. Images are uploaded once and reused while scrolling.
-Unchanged files reuse a private conversion cache and skip JRuby startup. Use `--no-cache` to bypass it.
+Text appears before syntax highlighting and diagram rendering complete. Visible diagrams render in
+the background. Images upload once and are reused while scrolling.
+Unchanged files skip JRuby through a private conversion cache. Completed highlights are also reused
+across launches. `--no-cache` bypasses both disk caches.
 Optional local AOT training can reduce startup time:
 
 [source,sh]

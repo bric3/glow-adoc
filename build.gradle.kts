@@ -8,6 +8,7 @@ tasks.register("checkAll") {
     group = "verification"
     description = "Run checks in all application modules."
     dependsOn(
+        ":cache:test",
         ":cli-jvm:build",
         ":cli:test",
         ":asciidoctor:test",

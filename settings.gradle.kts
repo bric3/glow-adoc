@@ -14,6 +14,7 @@ dependencyResolutionManagement {
 rootProject.name = "glow-adoc"
 
 include(
+    "cache",
     "document",
     "asciidoctor",
     "highlight",

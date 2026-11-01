@@ -37,6 +37,93 @@ class PackagedCliTest {
     private final String java = Path.of(System.getProperty("java.home"), "bin/java").toString();
 
     @Test
+    void persistentHighlightsAvoidLoadingWasmAndPreserveOutput() throws Exception {
+        Path input = directory.resolve("highlighted.adoc");
+        Files.writeString(input, "[source,java]\n----\nclass Example { int answer = 42; }\n----\n");
+        Path output = directory.resolve("highlight-output");
+        Path classes = directory.resolve("loaded-classes");
+        String expected = null;
+        for (String mode : List.of("miss", "hit", "bypass")) {
+            var command =
+                    new ArrayList<>(
+                            List.of(
+                                    java,
+                                    "--sun-misc-unsafe-memory-access=allow",
+                                    "-Xlog:class+load=info:file=" + classes,
+                                    "-jar",
+                                    System.getProperty("glow.jar"),
+                                    "--no-pager",
+                                    "--color=always"));
+            if (mode.equals("bypass")) {
+                command.add("--no-cache");
+            }
+            command.add(input.toString());
+            var builder =
+                    new ProcessBuilder(command)
+                            .redirectOutput(output.toFile())
+                            .redirectError(directory.resolve("highlight-errors").toFile());
+            builder.environment().put("XDG_CACHE_HOME", directory.resolve("cache-home").toString());
+            builder.environment()
+                    .put("XDG_CONFIG_HOME", directory.resolve("config-home").toString());
+            var process = builder.start();
+            try {
+                assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+                assertEquals(
+                        0,
+                        process.exitValue(),
+                        Files.readString(directory.resolve("highlight-errors")));
+                String text = Files.readString(output);
+                assertTrue(text.contains("38;2;"), "Source has syntax colours");
+                if (expected == null) {
+                    expected = text;
+                }
+                assertEquals(expected, text, mode);
+                assertEquals(
+                        !mode.equals("hit"),
+                        Files.readString(classes).contains("com.dylibso.chicory.wasm.Parser"),
+                        mode);
+            } finally {
+                process.destroyForcibly();
+            }
+        }
+    }
+
+    @Test
+    void pagerDisplaysTextBeforeSlowDiagramsAndQuitsWithoutWaiting() throws Exception {
+        Path command = directory.resolve("slow-merman");
+        Files.writeString(command, "#!/bin/sh\nexec sleep 30\n");
+        assertTrue(command.toFile().setExecutable(true));
+        Path config = directory.resolve("diagrams.toml");
+        Files.writeString(config, "merman = '" + command + "'\n");
+        Path input = directory.resolve("diagrams.adoc");
+        Files.writeString(input, "FIRST_TEXT\n\n[mermaid]\n....\nflowchart LR; A --> B\n....\n");
+        Path transcript = directory.resolve("diagram-transcript");
+        var process =
+                startPty(
+                        input.toString(),
+                        transcript,
+                        true,
+                        "--config",
+                        config.toString(),
+                        "--timings");
+        try {
+            await(process, transcript, "a=q,t=d,f=24");
+            process.getOutputStream().write("\u001b_Gi=2147483000;OK\u001b\\".getBytes());
+            process.getOutputStream().flush();
+            await(process, transcript, "timing first-frame:");
+            assertTrue(screen(Files.readString(transcript)).contains("FIRST_TEXT"));
+            assertFalse(Files.readString(transcript).contains("Merman timed out"));
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(5, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
+    @Test
     void conversionCacheSkipsJrubyAndInvalidatesContentAndAttributes() throws Exception {
         Path input = directory.resolve("cached.adoc");
         Files.writeString(input, "= Cached\n\n{name}\n");

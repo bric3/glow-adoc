@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= Reggie evaluation
+
+Tested the published `com.datadoghq:reggie:0.5.0` artifact with OpenJDK 27+35-2325 on macOS ARM64.
+This report covers the renderer's grapheme pattern and two small candidate patterns.
+
+== Compatibility gap: grapheme clusters
+
+`TextLayout` uses `\X` to keep combining characters, emoji sequences and CRLF together when wrapping.
+Reggie accepts this pattern and returns a `PrefilteringMatcher`, but its results differ from the JDK:
+
+[cols="2,1,1,1,1",options="header"]
+|===
+|Input |JDK find |Reggie find |JDK matches |Reggie matches
+|`a` |true |false |true |false
+|`X` |true |true |true |true
+|`e` + U+0301 |true |false |true |false
+|Woman technologist emoji (ZWJ sequence) |true |false |true |false
+|Two Japanese characters |true |false |false |false
+|CRLF |true |false |true |false
+|===
+
+The pattern is accepted without an unsupported-pattern error. A caller that handles only compilation
+failures cannot detect this difference. Retain the JDK implementation for grapheme wrapping.
+
+Reproduce from the `glow-adoc` repository root:
+
+[source,sh]
+----
+jbang --java 27 tools/ReggieProbe.java
+----
+
+The probe uses the published artifact, independently of any local Reggie checkout.
+No upstream issue has been filed. Other Unicode constructs and compile-time generation were not tested.
+
+Minimal JBang reproducer:
+
+[source,java]
+----
+//JAVA 27
+//DEPS com.datadoghq:reggie:0.5.0
+import com.datadoghq.reggie.Reggie;
+import java.util.regex.Pattern;
+
+class GraphemeProbe {
+    public static void main(String[] args) {
+        String text = "e\u0301";
+        System.out.println(Pattern.compile("\\X").matcher(text).find()); // true
+        System.out.println(Reggie.compile("\\X").find(text));           // false
+    }
+}
+----
+
+== Small-pattern measurements
+
+JMH 1.37, two forks, three 500 ms warmups and five 500 ms measurements per fork, with the GC profiler.
+Matchers are precompiled. Colour inputs cycle through eight valid, empty and invalid strings;
+the SGR input contains 64 escape sequences, accented text and emoji. Both candidate engines agree
+on these inputs. These steady-state measurements exclude startup and pattern compilation.
+
+[cols="2,1,1,1",options="header"]
+|===
+|Operation |JDK Pattern |Reggie |JDK HexFormat
+|RGB validation |18.9 ns/op, 112 B/op |3.4 ns/op, approximately 0 B/op |1.8 ns/op, approximately 0 B/op
+|SGR boundary scan |2346.6 ns/op, 136 B/op |847.5 ns/op, 4632 B/op |Not applicable
+|===
+
+The SGR benchmark uses `findBoundsFrom` with a reusable bounds array inside each invocation.
+It checks boundaries, not capture extraction. Reggie's lower scan time comes with more allocation
+in this configuration. The application needs captured SGR parameters, so these numbers alone do
+not justify replacing its ANSI decoder. Runtime flags and alternative generated strategies were not tested.
+
+RGB validation uses `HexFormat.isHexDigit`; no regex dependency is needed for that operation.
+Reggie has not been added to the application's runtime dependencies.
+
+Sources: https://github.com/DataDog/java-reggie[Reggie],
+https://github.com/DataDog/java-reggie/blob/main/CHANGELOG.md[changelog].

@@ -53,11 +53,13 @@ public final class ReaderPager {
     private final Set<Integer> toggled = new HashSet<>();
     private int focused = -1;
     private boolean layoutDirty;
+    private boolean anchorAssets;
     private List<RenderedLine> lines = List.of();
 
     private record ImageAsset(Path path, KittyImages.Size size) {}
 
     private final Map<Integer, ImageAsset> assets = new HashMap<>();
+    private final Map<Integer, Block> diagramBlocks = new HashMap<>();
     private int top;
     private int left;
     private int width;
@@ -118,7 +120,16 @@ public final class ReaderPager {
                 runner.run(
                         (event, tui) -> {
                             session.tick();
-                            boolean redraw = session.takeDirty();
+                            boolean redraw = session.takeDirty() || layoutDirty;
+                            if (diagrams.takeDirty()) {
+                                layoutDirty = true;
+                                anchorAssets = true;
+                                redraw = true;
+                            }
+                            for (String diagnostic : diagrams.takeDiagnostics()) {
+                                message = diagnostic;
+                                redraw = true;
+                            }
                             for (int id : session.takeMissingImages()) {
                                 kitty.invalidate(id);
                             }
@@ -239,14 +250,20 @@ public final class ReaderPager {
                 || width != nextWidth
                 || appearance != session.appearance()
                 || lines.isEmpty()) {
-            boolean preserveViewport = layoutDirty || width == nextWidth;
+            boolean preserveViewport = (layoutDirty || width == nextWidth) && !anchorAssets;
             int previousTop = top;
             layoutDirty = false;
             int anchor =
                     lines.isEmpty() ? 0 : lines.get(Math.min(top, lines.size() - 1)).blockIndex();
+            int anchorStart = Math.min(top, Math.max(0, lines.size() - 1));
+            while (anchorStart > 0 && lines.get(anchorStart - 1).blockIndex() == anchor) {
+                anchorStart--;
+            }
+            int anchorOffset = Math.max(0, top - anchorStart);
             width = nextWidth;
             appearance = session.appearance();
             assets.clear();
+            diagramBlocks.clear();
             lines = new ArrayList<>(layout.render(document, width, appearance, toggled, true));
             if (lines.stream().noneMatch(line -> line.disclosure() == focused)) {
                 focused = -1;
@@ -258,6 +275,14 @@ public final class ReaderPager {
             while (top < lines.size() && lines.get(top).blockIndex() < anchor) {
                 top++;
             }
+            if (anchorAssets && top < lines.size() && lines.get(top).blockIndex() == anchor) {
+                int end = top + 1;
+                while (end < lines.size() && lines.get(end).blockIndex() == anchor) {
+                    end++;
+                }
+                top += Math.min(anchorOffset, end - top - 1);
+            }
+            anchorAssets = false;
             // Leave blank space below a folded block rather than moving its title.
             retainedTop = preserveViewport ? previousTop : 0;
             if (preserveViewport) {
@@ -428,6 +453,7 @@ public final class ReaderPager {
                     if (!images || !session.kitty()) {
                         return;
                     }
+                    requestVisibleDiagrams();
                     try {
                         pendingImages.draw();
                     } catch (java.io.IOException e) {
@@ -443,6 +469,21 @@ public final class ReaderPager {
 
     private ImageDraw pendingImages = () -> {};
 
+    private void requestVisibleDiagrams() {
+        int previous = -1;
+        for (int i = top; i < Math.min(lines.size(), top + height); i++) {
+            int position = lines.get(i).blockIndex();
+            if (position == previous) {
+                continue;
+            }
+            previous = position;
+            Block block = diagramBlocks.get(position);
+            if (block != null) {
+                diagrams.request(block, appearance);
+            }
+        }
+    }
+
     private boolean prepareImages(TerminalSession session) {
         boolean changed = false;
         for (int i = 0; i < lines.size(); i++) {
@@ -451,9 +492,12 @@ public final class ReaderPager {
                 continue;
             }
             var block = row.asset();
+            if (block.kind() == Block.Kind.DIAGRAM) {
+                diagramBlocks.put(row.blockIndex(), block);
+            }
             Optional<Path> path =
                     block.kind() == Block.Kind.DIAGRAM
-                            ? diagrams.render(block, appearance)
+                            ? firstFrame ? Optional.empty() : diagrams.cached(block, appearance)
                             : DiagramRenderer.localImage(document, block.target());
             if (path.isEmpty()) {
                 continue;
@@ -540,6 +584,7 @@ public final class ReaderPager {
             toggled.remove(disclosure);
         }
         layoutDirty = true;
+        anchorAssets = false;
     }
 
     private int clampTop(int requested) {

@@ -35,6 +35,9 @@ final class TextLayout {
     }
 
     static List<List<Span>> wrap(List<Span> spans, int width, boolean literal) {
+        if (literal) {
+            return literalLines(spans);
+        }
         width = Math.max(1, width);
         var cells = new ArrayList<Cell>();
         for (Span span : spans) {
@@ -57,18 +60,16 @@ final class TextLayout {
             }
             int end = at + 1;
             boolean space = cell.text().isBlank();
-            if (!literal) {
-                while (end < cells.size()
-                        && !cells.get(end).text().contains("\n")
-                        && cells.get(end).text().isBlank() == space) {
-                    end++;
-                }
+            while (end < cells.size()
+                    && !cells.get(end).text().contains("\n")
+                    && cells.get(end).text().isBlank() == space) {
+                end++;
             }
             int wordWidth = 0;
             for (int i = at; i < end; i++) {
                 wordWidth += CharWidth.of(cells.get(i).text());
             }
-            if (!literal && !space && used > 0 && used + wordWidth > width) {
+            if (!space && used > 0 && used + wordWidth > width) {
                 trim(line);
                 lines.add(line);
                 line = new ArrayList<>();
@@ -77,21 +78,40 @@ final class TextLayout {
             for (; at < end; at++) {
                 Cell next = cells.get(at);
                 int size = CharWidth.of(next.text());
-                if (!literal && used + size > width && used > 0) {
+                if (used + size > width && used > 0) {
                     trim(line);
                     lines.add(line);
                     line = new ArrayList<>();
                     used = 0;
                 }
-                if (!literal && used == 0 && next.text().isBlank()) {
+                if (used == 0 && next.text().isBlank()) {
                     continue;
                 }
                 append(line, next.text(), next.style());
                 used += size;
             }
         }
-        if (!literal) {
-            trim(line);
+        trim(line);
+        lines.add(line);
+        return lines;
+    }
+
+    private static List<List<Span>> literalLines(List<Span> spans) {
+        var lines = new ArrayList<List<Span>>();
+        var line = new ArrayList<Span>();
+        // Literal text scrolls horizontally, so only line endings need segmentation.
+        for (Span span : spans) {
+            String text = span.text().replace("\t", "    ");
+            int start = 0;
+            int end;
+            while ((end = text.indexOf('\n', start)) >= 0) {
+                int contentEnd = end > start && text.charAt(end - 1) == '\r' ? end - 1 : end;
+                append(line, text.substring(start, contentEnd), span.style());
+                lines.add(line);
+                line = new ArrayList<>();
+                start = end + 1;
+            }
+            append(line, text.substring(start), span.style());
         }
         lines.add(line);
         return lines;

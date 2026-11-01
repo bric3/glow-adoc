@@ -18,20 +18,38 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class DiagramRenderer implements AutoCloseable {
     private final String merman;
     private final Path directory;
-    private final Map<String, Optional<Path>> cache = new HashMap<>();
+
+    private record Key(String language, String source, Appearance appearance) {}
+
+    private final Map<Key, Future<Optional<Path>>> cache = new ConcurrentHashMap<>();
+    private final ExecutorService renders =
+            Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
+    private final Queue<String> diagnostics = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean dirty = new AtomicBoolean();
+    private volatile boolean closed;
     private final ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
     private final Set<Process> processes = ConcurrentHashMap.newKeySet();
     private final java.util.function.Consumer<String> diagnostic;
@@ -46,48 +64,145 @@ public final class DiagramRenderer implements AutoCloseable {
     }
 
     public Optional<Path> render(Block block, Appearance appearance) {
-        String key = block.language() + appearance + block.text();
+        var task = task(block, appearance, false);
+        try {
+            return task.get();
+        } catch (InterruptedException e) {
+            task.cancel(true);
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (CancellationException e) {
+            return Optional.empty();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("Diagram rendering failed", e.getCause());
+        }
+    }
+
+    /** Enqueue a render without delaying the terminal frame. */
+    public Optional<Path> request(Block block, Appearance appearance) {
+        if (!closed) {
+            task(block, appearance, true);
+        }
+        return cached(block, appearance);
+    }
+
+    /** Keep the previous theme's image visible while its replacement is rendering. */
+    public Optional<Path> cached(Block block, Appearance appearance) {
+        if (closed) {
+            return Optional.empty();
+        }
+        Key key = new Key(block.language(), block.text(), appearance);
+        var future = cache.get(key);
+        if (future == null || !future.isDone()) {
+            future =
+                    cache.get(
+                            new Key(
+                                    key.language(),
+                                    key.source(),
+                                    appearance == Appearance.DARK
+                                            ? Appearance.LIGHT
+                                            : Appearance.DARK));
+        }
+        if (future == null || !future.isDone()) {
+            return Optional.empty();
+        }
+        try {
+            return future.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (CancellationException | ExecutionException e) {
+            return Optional.empty();
+        }
+    }
+
+    public boolean takeDirty() {
+        return dirty.getAndSet(false);
+    }
+
+    public List<String> takeDiagnostics() {
+        var result = new ArrayList<String>();
+        String message;
+        while ((message = diagnostics.poll()) != null) {
+            result.add(message);
+        }
+        return result;
+    }
+
+    private Future<Optional<Path>> task(Block block, Appearance appearance, boolean background) {
+        if (closed) {
+            return CompletableFuture.completedFuture(Optional.empty());
+        }
+        Key key = new Key(block.language(), block.text(), appearance);
         return cache.computeIfAbsent(
                 key,
                 ignored -> {
+                    var task =
+                            new FutureTask<Optional<Path>>(() -> renderNow(key, background)) {
+                                @Override
+                                protected void done() {
+                                    if (background && !closed) {
+                                        dirty.set(true);
+                                    }
+                                }
+                            };
                     try {
-                        if (block.text().length() > 100_000) {
-                            throw new IOException("Diagram source exceeds 100 KB");
-                        }
-                        Path output = Files.createTempFile(directory, "diagram-", ".png");
-                        if (block.language().equals("plantuml")) {
-                            var task =
-                                    workers.submit(
-                                            () -> {
-                                                plantuml(block.text(), output, appearance);
-                                                return output;
-                                            });
-                            try {
-                                task.get(15, TimeUnit.SECONDS);
-                            } finally {
-                                task.cancel(true);
-                            }
-                        } else if (block.language().equals("mermaid")) {
-                            mermaid(block.text(), output, appearance);
-                        } else {
-                            throw new IOException("Unknown diagram language: " + block.language());
-                        }
-                        if (Files.size(output) == 0) {
-                            throw new IOException("Diagram renderer produced no image");
-                        }
-                        return Optional.of(output);
-                    } catch (Exception e) {
-                        if (e instanceof InterruptedException) {
-                            Thread.currentThread().interrupt();
-                        }
-                        diagnostic.accept(
-                                block.language()
-                                        + ": "
-                                        + Controls.visible(String.valueOf(e.getMessage()))
-                                        + "; showing source");
-                        return Optional.empty();
+                        renders.execute(task);
+                    } catch (RejectedExecutionException e) {
+                        task.cancel(false);
                     }
+                    return task;
                 });
+    }
+
+    private Optional<Path> renderNow(Key key, boolean background) {
+        if (closed) {
+            return Optional.empty();
+        }
+        try {
+            if (key.source().length() > 100_000) {
+                throw new IOException("Diagram source exceeds 100 KB");
+            }
+            Path output = Files.createTempFile(directory, "diagram-", ".png");
+            if (key.language().equals("plantuml")) {
+                var task =
+                        workers.submit(
+                                () -> {
+                                    plantuml(key.source(), output, key.appearance());
+                                    return output;
+                                });
+                try {
+                    task.get(15, TimeUnit.SECONDS);
+                } finally {
+                    task.cancel(true);
+                }
+            } else if (key.language().equals("mermaid")) {
+                mermaid(key.source(), output, key.appearance());
+            } else {
+                throw new IOException("Unknown diagram language: " + key.language());
+            }
+            if (Files.size(output) == 0) {
+                throw new IOException("Diagram renderer produced no image");
+            }
+            return Optional.of(output);
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            String message =
+                    key.language()
+                            + ": "
+                            + Controls.visible(String.valueOf(e.getMessage()))
+                            + "; showing source";
+            if (!closed) {
+                if (background) {
+                    diagnostics.add(message);
+                } else {
+                    diagnostic.accept(message);
+                }
+            }
+            return Optional.empty();
+        }
     }
 
     private static void plantuml(String source, Path output, Appearance appearance)
@@ -140,6 +255,11 @@ public final class DiagramRenderer implements AutoCloseable {
                         .directory(directory.toFile())
                         .start();
         processes.add(process);
+        if (closed) {
+            process.destroyForcibly();
+            processes.remove(process);
+            throw new InterruptedException("Diagram renderer closed");
+        }
         var stdout =
                 workers.submit(
                         () -> {
@@ -202,12 +322,20 @@ public final class DiagramRenderer implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        closed = true;
+        renders.shutdownNow();
+        cache.values().forEach(future -> future.cancel(true));
         processes.forEach(
                 p -> {
                     p.descendants().forEach(ProcessHandle::destroyForcibly);
                     p.destroyForcibly();
                 });
         workers.shutdownNow();
+        try {
+            renders.awaitTermination(1, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         try (var files = Files.walk(directory)) {
             for (Path path : files.sorted(Comparator.reverseOrder()).toList()) {
                 Files.deleteIfExists(path);

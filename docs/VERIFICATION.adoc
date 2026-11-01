@@ -16,6 +16,10 @@ Without it, that test is skipped. Ordinary builds never install Merman.
 Coverage includes conversion, inline styles, callouts, tables/spans, wrapping/graphemes, HTML filtering,
 shortcodes, includes, configuration precedence, CLI attributes, allowed image roots and symlink escapes.
 Highlighter tests cover source preservation, progressive output, cache reuse and cancellation.
+Packaged tests compare persisted highlight output across fresh JVMs, verify that a hit skips Wasm
+loading and check `--no-cache`. Cache checks cover integrity, size limits, permissions and eviction.
+Diagram checks cover background failure reporting, theme fallback, process cancellation and a first
+pager frame that precedes a slow renderer.
 Conversion-cache checks cover fresh JVMs without JRuby, source edits with restored timestamps,
 attributes, application-byte changes, includes, time-dependent substitutions, private file permissions,
 corrupt XML, external entities and unavailable storage.
@@ -31,6 +35,8 @@ exit codes, opt-in AOT training, cache invalidation and corrupt-cache fallback w
 See link:PERFORMANCE.adoc[the measurement procedure and local results].
 Measurements use fresh JVMs. Repeated launches normally have warm filesystem caches;
 these are not equivalent to dropping the operating system's disk cache.
+The recorded 23-document corpus pass compares full ANSI output hashes between versions as well as
+timing first frames and complete output. Article contents stay outside the repository.
 
 == Platform limits
 

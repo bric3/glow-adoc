@@ -52,7 +52,7 @@ public final class ReadCommand implements Command<CommandInvocation> {
     @Option(
             name = "no-cache",
             hasValue = false,
-            description = "Bypass the on-disk conversion cache")
+            description = "Bypass conversion and syntax highlighting disk caches")
     boolean noCache;
 
     @Option(description = "Output width in terminal cells (1-1000)")
@@ -255,20 +255,22 @@ public final class ReadCommand implements Command<CommandInvocation> {
                             && !"dumb".equals(System.getenv("TERM"))
                             && !System.getProperty("os.name").startsWith("Windows");
             timing("config-input", started);
+            Path conversionCache =
+                    noCache || input == null
+                            ? null
+                            : Configuration.cachePath(
+                                    System.getenv(),
+                                    System.getProperty("user.home"),
+                                    System.getProperty("os.name"));
+            Path highlightCache =
+                    conversionCache == null ? null : conversionCache.resolveSibling("highlights");
             try (var reader =
                             new AsciiDocReader(
-                                    input,
-                                    noCache
-                                            ? null
-                                            : Configuration.cachePath(
-                                                    System.getenv(),
-                                                    System.getProperty("user.home"),
-                                                    System.getProperty("os.name")),
-                                    stage -> timing(stage, started));
+                                    input, conversionCache, stage -> timing(stage, started));
                     var highlighter =
                             pager && useColour
-                                    ? new DeferredHighlighter(new LumisHighlighter())
-                                    : new LumisHighlighter();
+                                    ? new DeferredHighlighter(new LumisHighlighter(highlightCache))
+                                    : new LumisHighlighter(highlightCache);
                     var diagrams =
                             new DiagramRenderer(
                                     settings.merman(),

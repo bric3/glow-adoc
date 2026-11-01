@@ -11,12 +11,24 @@ import io.roastedroot.lumis4j.core.Lang;
 import io.roastedroot.lumis4j.core.Lumis;
 import io.roastedroot.lumis4j.core.Theme;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
 public final class LumisHighlighter implements Highlighter {
     private Lumis lumis;
+    private final Path cacheDirectory;
+    private HighlightCache cache;
+    private boolean cacheReady;
+
+    public LumisHighlighter() {
+        this(null);
+    }
+
+    public LumisHighlighter(Path cacheDirectory) {
+        this.cacheDirectory = cacheDirectory;
+    }
 
     @Override
     public List<Span> highlight(String source, String language, Appearance appearance) {
@@ -26,6 +38,16 @@ public final class LumisHighlighter implements Highlighter {
         }
         try {
             var lang = Lang.fromString(language);
+            if (!cacheReady) {
+                cache = HighlightCache.open(cacheDirectory);
+                cacheReady = true;
+            }
+            if (cache != null) {
+                var cached = cache.read(source, language, appearance);
+                if (cached != null) {
+                    return cached;
+                }
+            }
             if (lumis == null) {
                 lumis = Lumis.builder().build();
             }
@@ -44,12 +66,18 @@ public final class LumisHighlighter implements Highlighter {
             String rendered =
                     spans.stream().map(Span::text).collect(java.util.stream.Collectors.joining());
             if (rendered.equals(source)) {
+                if (cache != null) {
+                    cache.write(source, language, appearance, spans);
+                }
                 return spans;
             }
             if (rendered.equals(source + "\n")) {
                 var last = spans.removeLast();
                 spans.add(
                         new Span(last.text().substring(0, last.text().length() - 1), last.style()));
+                if (cache != null) {
+                    cache.write(source, language, appearance, spans);
+                }
                 return spans;
             }
         } catch (RuntimeException e) {
