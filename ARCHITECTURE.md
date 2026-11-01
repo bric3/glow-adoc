@@ -33,6 +33,11 @@ Layout assigns stable positions before folding. Text wraps by terminal cells; co
 Table ownership determines span-aware separators. Direct output expands disclosures.
 The pager retains folding and viewport state during reflow.
 
+Packaged file reads retain normalised converter XML in a private disk cache. Source, attributes,
+shortcode policy, application bytes and runtime context validate each entry. Includes and temporal
+substitutions bypass caching. A hit uses the secure XML parser and leaves JRuby uninitialised.
+The CLI selects the cache directory; `asciidoctor` owns identity, persistence and conversion.
+
 The first pager frame uses source text. A serial background worker highlights requested blocks,
 caches results by source/language/appearance and requests reflow. Closing cancels queued work;
 an active task releases its highlighter when it finishes.

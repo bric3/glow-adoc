@@ -17,6 +17,7 @@ import org.asciidoctor.extension.PreprocessorReader;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
+import org.xml.sax.helpers.DefaultHandler;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -25,15 +26,36 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
 public final class AsciiDocReader implements AutoCloseable {
-    private final Asciidoctor engine = Asciidoctor.Factory.create();
+    private Asciidoctor engine;
+    private final ConversionCache cache;
+    private final Consumer<String> milestone;
     private Path includeRoot;
     private boolean showShortcodes;
+    private boolean includesUsed;
 
     public AsciiDocReader() {
+        this(null, ignored -> {});
+    }
+
+    public AsciiDocReader(Path input, Path cacheDirectory, Consumer<String> milestone) {
+        this(ConversionCache.open(input, cacheDirectory), milestone);
+    }
+
+    AsciiDocReader(ConversionCache cache, Consumer<String> milestone) {
+        this.cache = cache;
+        this.milestone = milestone;
+    }
+
+    private Asciidoctor engine() {
+        if (engine != null) {
+            return engine;
+        }
+        engine = Asciidoctor.Factory.create();
         engine.javaConverterRegistry().register(TerminalConverter.class);
         engine.javaExtensionRegistry()
                 .includeProcessor(
@@ -49,6 +71,7 @@ public final class AsciiDocReader implements AutoCloseable {
                                     PreprocessorReader reader,
                                     String target,
                                     Map<String, Object> attributes) {
+                                includesUsed = true;
                                 try {
                                     Path path =
                                             Path.of(reader.getDir())
@@ -88,6 +111,8 @@ public final class AsciiDocReader implements AutoCloseable {
                                 }
                             }
                         });
+        milestone.accept("jruby-ready");
+        return engine;
     }
 
     public Document read(String source, Path baseDirectory) {
@@ -106,6 +131,21 @@ public final class AsciiDocReader implements AutoCloseable {
         try {
             this.showShortcodes = showShortcodes;
             includeRoot = baseDirectory.toRealPath();
+            String key =
+                    cache == null
+                            ? null
+                            : cache.key(source, includeRoot, showShortcodes, attributes);
+            String cached = cache == null ? null : cache.read(key);
+            if (cached != null) {
+                try {
+                    Document document = parse(cached, baseDirectory);
+                    milestone.accept("conversion-cache-hit");
+                    return document;
+                } catch (Exception ignored) {
+                    // Corrupt entries are replaced after a successful conversion.
+                }
+            }
+            includesUsed = false;
             var conversionAttributes = Attributes.builder();
             attributes.forEach(
                     (name, value) -> conversionAttributes.attribute(name, Controls.visible(value)));
@@ -114,27 +154,37 @@ public final class AsciiDocReader implements AutoCloseable {
                     // The terminal highlighter owns source styling.
                     .attribute("source-highlighter", "none");
             String xml =
-                    engine.convert(
-                            Controls.visible(showShortcodes ? source : Shortcodes.hide(source)),
-                            Options.builder()
-                                    .backend("glow-terminal")
-                                    .safe(SafeMode.SAFE)
-                                    .baseDir(baseDirectory.toFile())
-                                    .toFile(false)
-                                    .attributes(conversionAttributes.build())
-                                    .build());
-            var factory = DocumentBuilderFactory.newInstance();
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-            var root =
-                    factory.newDocumentBuilder()
-                            .parse(new InputSource(new StringReader(HtmlContent.normalise(xml))))
-                            .getDocumentElement();
-            return new Document(blocks(root), baseDirectory);
+                    engine().convert(
+                                    Controls.visible(
+                                            showShortcodes ? source : Shortcodes.hide(source)),
+                                    Options.builder()
+                                            .backend("glow-terminal")
+                                            .safe(SafeMode.SAFE)
+                                            .baseDir(baseDirectory.toFile())
+                                            .toFile(false)
+                                            .attributes(conversionAttributes.build())
+                                            .build());
+            xml = HtmlContent.normalise(xml);
+            Document document = parse(xml, baseDirectory);
+            // Includes can change independently of the top-level source and attributes.
+            if (cache != null && !includesUsed) {
+                cache.write(key, xml);
+            }
+            return document;
         } catch (Exception e) {
             throw new IllegalArgumentException("Cannot read AsciiDoc: " + e.getMessage(), e);
         }
+    }
+
+    private static Document parse(String xml, Path baseDirectory) throws Exception {
+        var factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        var builder = factory.newDocumentBuilder();
+        builder.setErrorHandler(new DefaultHandler());
+        var root = builder.parse(new InputSource(new StringReader(xml))).getDocumentElement();
+        return new Document(blocks(root), baseDirectory);
     }
 
     private static List<Block> blocks(Element parent) {
@@ -248,6 +298,8 @@ public final class AsciiDocReader implements AutoCloseable {
 
     @Override
     public void close() {
-        engine.shutdown();
+        if (engine != null) {
+            engine.shutdown();
+        }
     }
 }

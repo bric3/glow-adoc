@@ -14,6 +14,29 @@ The off-screen residency target is 128 MiB of decoded pixels; visible images rem
 when their working set exceeds that target. All owned image IDs are released on exit.
 This is terminal image residency, not a JVM heap limit.
 
+== Conversion cache
+
+Packaged applications cache AsciidoctorJ's normalised XML for regular file inputs. A hit reconstructs
+the document model without starting JRuby. Layout, terminal detection, image access and highlighting
+still run for the current invocation. No background service is required.
+
+Entries live under `$XDG_CACHE_HOME/glow-adoc/conversions`, falling back to
+`~/.cache/glow-adoc/conversions`. Windows uses LOCALAPPDATA or `~/AppData/Local`.
+Each input path retains one variant, replaced after source or settings change.
+The key covers source bytes, base directory, attributes, shortcode policy, application bytes,
+JDK version, user home, locale and time-zone environment. Restoring a file timestamp does not hide edits.
+
+Stdin, non-regular inputs, documents that process includes and sources referencing date/time attributes
+are not cached. Exploded development classpaths are also excluded. Entries are limited to 8 MiB;
+invalid, inaccessible and corrupt entries fall back to conversion. Cached XML uses the same secure parser.
+
+Cache files contain converted document text. New directories are private and files are owner-only
+on POSIX systems. Writes replace entries atomically where supported. `--no-cache` bypasses reads and writes.
+Delete the conversions directory to remove retained text.
+
+The CLI disables JRuby native extensions by default because Java handles document files.
+`-Djruby.native.enabled=true` restores JRuby's native support. JVM compiler and GC defaults are retained.
+
 == Local AOT cache
 
 Train the executable you intend to use:
@@ -25,7 +48,8 @@ glow-adoc --timings document.adoc
 ----
 
 `./gradlew :cli-jvm:aotTrain` trains the built executable rather than the installed copy.
-The source tree's showcase supplies varied highlighted content. AOT training does not open a pager.
+The source tree's showcase supplies varied highlighted content. AOT training bypasses the conversion
+cache and does not open a pager.
 
 Caches live under `$XDG_CACHE_HOME/glow-adoc/aot`, falling back to `~/.cache/glow-adoc/aot`.
 Identity includes executable bytes and location, selected Java path and full version output,
@@ -43,7 +67,7 @@ For direct Java invocation, train and load an explicitly named cache with the sa
 
 [source,sh]
 ----
-java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTCacheOutput=glow-adoc.aot -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --no-pager --color=always fixtures/showcase.adoc
+java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTCacheOutput=glow-adoc.aot -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --no-cache --no-pager --color=always fixtures/showcase.adoc
 java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=auto -XX:AOTCache=glow-adoc.aot -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc
 ----
 
@@ -53,7 +77,9 @@ Use an installed Java 27 and JBang. Run benchmarks without concurrent builds or 
 
 [source,sh]
 ----
+glow-adoc --no-pager --color=never document.adoc
 jbang --java 27 tools/Benchmark.java --runs 20 --pty -- glow-adoc document.adoc
+jbang --java 27 tools/Benchmark.java --runs 20 --pty --empty-cache -- glow-adoc document.adoc
 jbang --java 27 tools/Benchmark.java --runs 20 --scroll -- glow-adoc -a image-assets="$PWD/static/assets" content/posts/post.adoc
 jbang --java 27 tools/StartupMatrix.java /path/to/java cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc
 ----
@@ -64,6 +90,9 @@ and image uploads. It requires an image in the initial viewport. Frame latency e
 synchronised text-frame completion; it does not measure physical display latency.
 CSV output reports each fresh JVM launch, median and nearest-rank p95. Polling adds measurement overhead.
 The first launch is retained. Later launches normally have warm filesystem caches.
+`--empty-cache` assigns a new temporary XDG_CACHE_HOME to each launch and removes it afterwards.
+It measures an empty application cache; it does not clear the OS filesystem cache. Seed the default
+cache before measuring repeated opens. `--no-cache` excludes cache lookup and writing altogether.
 
 The matrix compares defaults, JRuby compilation disabled, tier-one compilation, their combination,
 invokedynamic settings, and Serial GC with a bounded heap. Inputs are small, supplied and larger synthetic documents.
@@ -72,11 +101,48 @@ These are experiments, not recommended JAVA_OPTS defaults.
 `--timings` reports cumulative milliseconds from command execution: configuration/input, JRuby ready,
 conversion, first pager frame/image, highlighting completion or direct output completion. JVM launch and manager discovery
 precede that timer and are included in the external benchmark.
+A conversion hit reports `conversion-cache-hit` and omits `jruby-ready`.
 
 For a startup recording, pass `-XX:StartFlightRecording=filename=startup.jfr,settings=profile` to Java
 and inspect it with `jfr summary` or a JFR viewer. Keep profiling separate from timed comparisons.
 
 == Local measurements
+
+=== First text, 2026-11-01
+
+Twenty fresh JVMs per mode, interleaved before/miss/hit launches, OpenJDK 27+35-2325, macOS ARM64,
+80 x 24 PTY and the supplied CompletableFuture post. The baseline is commit `d290f30`.
+Each miss starts with an empty conversion cache; each hit follows a successful conversion with
+the same attributes. No AOT cache or JVM tuning flags were used. OS filesystem caches remain warm.
+
+[cols="3,1,1,1",options="header"]
+|===
+|Measurement |Before |Empty conversion cache |Conversion hit
+|Median first frame |1473.8 ms |1298.6 ms |346.7 ms
+|p95 first frame |1496.4 ms |1325.3 ms |358.6 ms
+|===
+
+See link:benchmarks/first-text.csv[raw first-text samples]. The first-open improvement comes from
+disabling unused JRuby native extensions. Repeat opens additionally skip JRuby and HTML normalisation.
+
+The installed launcher measured 564.4 ms median and 946.3 ms p95 across ten fresh launches with a
+populated conversion cache, including manager discovery. No matching AOT cache was used.
+See link:benchmarks/first-text-installed.csv[installed-launcher samples]. Its image-scrolling smoke
+test measured 3.7 ms p95 and zero reuploads over 20 steps;
+link:benchmarks/first-text-installed-scroll.csv[scrolling sample].
+
+A three-run screen before these changes measured median first-frame times of 1502 ms with defaults,
+1249 ms with tier-one compilation, 1445 ms with two compiler threads, 1440 ms with two active processors,
+1290 ms without JRuby native extensions, 1210 ms with tier-one compilation and JRuby compilation disabled,
+and 1550 ms with Serial GC. See link:benchmarks/first-frame-settings.csv[settings samples].
+Only the native-extension setting became a default; compiler limits retain the highlighting regressions
+shown in the earlier output benchmark.
+
+An uncompressed-jar screen increased the archive from 69.5 MiB to 256.4 MiB. Three empty-cache
+launches per archive measured 1284.5 ms median compressed and 1350.2 ms uncompressed.
+Compression remains enabled. See link:benchmarks/jar-compression.csv[compression samples].
+
+=== Earlier rendering work, 2026-10-31
 
 2026-10-31, macOS ARM64, Corretto 27.0.1+11-FR, 80 x 24 PTY, supplied CompletableFuture post,
 20 fresh JVMs per version.
@@ -153,10 +219,11 @@ This supports deferring highlighting; it does not establish an exact CPU attribu
 |Invokedynamic, heap and GC settings |Included in the experiment matrix; no unmeasured default changes.
 |AOT training coverage |Includes highlighted output; training remains opt-in.
 |Persistent JVM |Deferred by design; it adds process lifetime, isolation and memory costs.
-|Parsed-document disk cache |Deferred; includes, attributes and file invalidation need a separate design.
+|Converted-document disk cache |Implemented for self-contained files; source/settings/application hashes validate entries. Includes and temporal substitutions bypass it.
 |Off-screen diagrams |No new scheduler in this change; evaluate with diagram-heavy documents before adding concurrency.
 |Diagram initialisation |Existing renderer work is demand-driven; no dependency changes.
-|Shadow compression/classpath splitting |Retain the executable jar until profiling establishes a material packaging cost.
+|Shadow compression |Uncompressed jar tested; larger archive and no first-frame gain. Retain compression.
+|Classpath splitting |Retain the single executable jar; no measured reason to change delivery.
 |Service scanning |Existing generated Aesh metadata is retained.
 |XML/jsoup pipeline |Retained for HTML/inline correctness; parser replacement is outside this change.
 |JRuby/AsciidoctorJ upgrades |Deferred pending compatibility and performance evidence for a specific version pair.

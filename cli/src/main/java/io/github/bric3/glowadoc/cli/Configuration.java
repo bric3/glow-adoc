@@ -256,4 +256,16 @@ public record Configuration(
         }
         return Path.of(root).resolve("glow-adoc/config.toml");
     }
+
+    static Path cachePath(Map<String, String> env, String home, String os) {
+        Path fallback = Path.of(home, os.startsWith("Windows") ? "AppData/Local" : ".cache");
+        String root =
+                env.getOrDefault(os.startsWith("Windows") ? "LOCALAPPDATA" : "XDG_CACHE_HOME", "");
+        try {
+            return (root.isBlank() || !Path.of(root).isAbsolute() ? fallback : Path.of(root))
+                    .resolve("glow-adoc/conversions");
+        } catch (InvalidPathException e) {
+            return fallback.resolve("glow-adoc/conversions");
+        }
+    }
 }

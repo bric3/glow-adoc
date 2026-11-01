@@ -27,6 +27,19 @@ class ConfigurationTest {
         assertEquals(
                 Path.of("/home/me/AppData/Roaming/glow-adoc/config.toml"),
                 Configuration.defaultPath(Map.of(), "/home/me", "Windows 11"));
+        assertEquals(
+                Path.of("/cache/glow-adoc/conversions"),
+                Configuration.cachePath(Map.of("XDG_CACHE_HOME", "/cache"), "/home/me", "Linux"));
+        assertEquals(
+                Path.of("/home/me/.cache/glow-adoc/conversions"),
+                Configuration.cachePath(Map.of("XDG_CACHE_HOME", "relative"), "/home/me", "Linux"));
+        assertEquals(
+                Path.of("/home/me/AppData/Local/glow-adoc/conversions"),
+                Configuration.cachePath(Map.of(), "/home/me", "Windows 11"));
+        assertEquals(
+                Path.of("/home/me/.cache/glow-adoc/conversions"),
+                Configuration.cachePath(
+                        Map.of("XDG_CACHE_HOME", "invalid\u0000path"), "/home/me", "Linux"));
     }
 
     @Test

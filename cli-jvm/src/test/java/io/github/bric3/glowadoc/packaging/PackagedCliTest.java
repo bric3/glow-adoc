@@ -17,9 +17,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -33,6 +35,78 @@ import javax.imageio.ImageIO;
 class PackagedCliTest {
     @TempDir Path directory;
     private final String java = Path.of(System.getProperty("java.home"), "bin/java").toString();
+
+    @Test
+    void conversionCacheSkipsJrubyAndInvalidatesContentAndAttributes() throws Exception {
+        Path input = directory.resolve("cached.adoc");
+        Files.writeString(input, "= Cached\n\n{name}\n");
+        var modified = Files.getLastModifiedTime(input);
+        String first = cachedRead(input, "-a", "name=first");
+        String expected = Files.readString(directory.resolve("cache-output"));
+        assertTrue(first.contains("timing jruby-ready:"));
+        String hit = cachedRead(input, "-a", "name=first");
+        assertTrue(hit.contains("timing conversion-cache-hit:"));
+        assertFalse(hit.contains("timing jruby-ready:"));
+        assertEquals(expected, Files.readString(directory.resolve("cache-output")));
+        assertTrue(
+                cachedRead(input, "--no-cache", "-a", "name=first")
+                        .contains("timing jruby-ready:"));
+        assertTrue(cachedRead(input, "-a", "name=changed").contains("timing jruby-ready:"));
+        assertTrue(Files.readString(directory.resolve("cache-output")).contains("changed"));
+        Files.writeString(input, "= Edited\n\n{name}\n");
+        Files.setLastModifiedTime(input, modified);
+        assertTrue(cachedRead(input, "-a", "name=changed").contains("timing jruby-ready:"));
+        assertTrue(Files.readString(directory.resolve("cache-output")).contains("Edited"));
+        Path patched = directory.resolve("patched.jar");
+        Files.copy(Path.of(System.getProperty("glow.jar")), patched);
+        try (var archive = FileSystems.newFileSystem(patched)) {
+            Files.writeString(archive.getPath("/cache-test-marker"), "changed");
+        }
+        assertTrue(
+                cachedReadWithJar(input, patched.toString(), "-a", "name=changed")
+                        .contains("timing jruby-ready:"));
+        Files.writeString(input, "include::part.adoc[]\n");
+        Path part = Files.writeString(directory.resolve("part.adoc"), "FIRST\n");
+        assertTrue(cachedRead(input).contains("timing jruby-ready:"));
+        assertTrue(Files.readString(directory.resolve("cache-output")).contains("FIRST"));
+        Files.writeString(part, "SECOND\n");
+        assertTrue(cachedRead(input).contains("timing jruby-ready:"));
+        assertTrue(Files.readString(directory.resolve("cache-output")).contains("SECOND"));
+    }
+
+    private String cachedRead(Path input, String... options) throws Exception {
+        return cachedReadWithJar(input, System.getProperty("glow.jar"), options);
+    }
+
+    private String cachedReadWithJar(Path input, String jar, String... options) throws Exception {
+        var command =
+                new ArrayList<>(
+                        List.of(
+                                java,
+                                "--sun-misc-unsafe-memory-access=allow",
+                                "-jar",
+                                jar,
+                                "--timings",
+                                "--no-pager",
+                                "--color=never"));
+        command.addAll(List.of(options));
+        command.add(input.toString());
+        Path errors = directory.resolve("cache-errors");
+        var builder =
+                new ProcessBuilder(command)
+                        .redirectError(errors.toFile())
+                        .redirectOutput(directory.resolve("cache-output").toFile());
+        builder.environment().put("XDG_CACHE_HOME", directory.resolve("cache-home").toString());
+        builder.environment().put("XDG_CONFIG_HOME", directory.resolve("config-home").toString());
+        var process = builder.start();
+        try {
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(errors));
+            return Files.readString(errors);
+        } finally {
+            process.destroyForcibly();
+        }
+    }
 
     @Test
     void packagesProjectLicenceAndDistinctUpstreamNotices() throws Exception {

@@ -49,6 +49,12 @@ public final class ReadCommand implements Command<CommandInvocation> {
     @Option(name = "no-pager", hasValue = false, description = "Write directly to stdout")
     boolean noPager;
 
+    @Option(
+            name = "no-cache",
+            hasValue = false,
+            description = "Bypass the on-disk conversion cache")
+    boolean noCache;
+
     @Option(description = "Output width in terminal cells (1-1000)")
     Integer width;
 
@@ -249,7 +255,16 @@ public final class ReadCommand implements Command<CommandInvocation> {
                             && !"dumb".equals(System.getenv("TERM"))
                             && !System.getProperty("os.name").startsWith("Windows");
             timing("config-input", started);
-            try (var reader = new AsciiDocReader();
+            try (var reader =
+                            new AsciiDocReader(
+                                    input,
+                                    noCache
+                                            ? null
+                                            : Configuration.cachePath(
+                                                    System.getenv(),
+                                                    System.getProperty("user.home"),
+                                                    System.getProperty("os.name")),
+                                    stage -> timing(stage, started));
                     var highlighter =
                             pager && useColour
                                     ? new DeferredHighlighter(new LumisHighlighter())
@@ -258,7 +273,6 @@ public final class ReadCommand implements Command<CommandInvocation> {
                             new DiagramRenderer(
                                     settings.merman(),
                                     message -> System.err.println("glow-adoc: " + message))) {
-                timing("jruby-ready", started);
                 var parsed =
                         reader.read(
                                 source,

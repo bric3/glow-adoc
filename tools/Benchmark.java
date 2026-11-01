@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -18,6 +19,7 @@ public class Benchmark {
         int runs = 10;
         boolean pty = false;
         boolean scroll = false;
+        boolean emptyCache = false;
         int start = 0;
         for (; start < args.length && !args[start].equals("--"); start++) {
             if (args[start].equals("--runs")) {
@@ -27,9 +29,12 @@ public class Benchmark {
             } else if (args[start].equals("--scroll")) {
                 scroll = true;
                 pty = true;
+            } else if (args[start].equals("--empty-cache")) {
+                emptyCache = true;
             } else {
                 throw new IllegalArgumentException(
-                        "Usage: Benchmark.java [--runs N] [--pty] -- COMMAND [ARGS]");
+                        "Usage: Benchmark.java [--runs N] [--pty|--scroll] [--empty-cache] --"
+                            + " COMMAND [ARGS]");
             }
         }
         if (runs < 1 || start + 1 >= args.length) {
@@ -76,6 +81,10 @@ public class Benchmark {
             builder.environment().put("TERM", "xterm-256color");
             builder.environment().put("COLORTERM", "truecolor");
             builder.environment().remove("NO_COLOR");
+            Path cache = emptyCache ? Files.createTempDirectory("glow-benchmark-cache-") : null;
+            if (cache != null) {
+                builder.environment().put("XDG_CACHE_HOME", cache.toString());
+            }
             long begin = System.nanoTime();
             Process process = builder.start();
             try {
@@ -109,6 +118,13 @@ public class Benchmark {
                 process.descendants().forEach(ProcessHandle::destroyForcibly);
                 process.destroyForcibly();
                 Files.deleteIfExists(transcript);
+                if (cache != null) {
+                    try (var files = Files.walk(cache)) {
+                        for (Path file : files.sorted(Comparator.reverseOrder()).toList()) {
+                            Files.deleteIfExists(file);
+                        }
+                    }
+                }
             }
         }
         times.sort(Double::compareTo);

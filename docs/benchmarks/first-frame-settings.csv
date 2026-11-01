@@ -1,0 +1,49 @@
+# []
+run,milliseconds
+1,1807.3
+2,1502.3
+3,1464.1
+median,1502.3
+p95,1807.3
+# [-XX:TieredStopAtLevel=1]
+run,milliseconds
+1,1249.3
+2,1247.4
+3,1268.8
+median,1249.3
+p95,1268.8
+# [-XX:CICompilerCount=2]
+run,milliseconds
+1,1450.9
+2,1445.4
+3,1410.5
+median,1445.4
+p95,1450.9
+# [-XX:ActiveProcessorCount=2]
+run,milliseconds
+1,1440.2
+2,1485.5
+3,1403.0
+median,1440.2
+p95,1485.5
+# [-Djruby.native.enabled=false]
+run,milliseconds
+1,1290.8
+2,1290.2
+3,1287.8
+median,1290.2
+p95,1290.8
+# [-Djruby.compile.mode=OFF, -XX:TieredStopAtLevel=1]
+run,milliseconds
+1,1251.2
+2,1203.7
+3,1209.8
+median,1209.8
+p95,1251.2
+# [-XX:+UseSerialGC]
+run,milliseconds
+1,1584.7
+2,1550.4
+3,1541.1
+median,1550.4
+p95,1584.7

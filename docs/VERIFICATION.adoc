@@ -16,6 +16,9 @@ Without it, that test is skipped. Ordinary builds never install Merman.
 Coverage includes conversion, inline styles, callouts, tables/spans, wrapping/graphemes, HTML filtering,
 shortcodes, includes, configuration precedence, CLI attributes, allowed image roots and symlink escapes.
 Highlighter tests cover source preservation, progressive output, cache reuse and cancellation.
+Conversion-cache checks cover fresh JVMs without JRuby, source edits with restored timestamps,
+attributes, application-byte changes, includes, time-dependent substitutions, private file permissions,
+corrupt XML, external entities and unavailable storage.
 
 PTY checks cover keys/mouse, search, folding, themes, images and terminal restoration.
 Image tests assert unchanged frames emit no commands, scrolling reuses uploaded pixels,

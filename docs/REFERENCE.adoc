@@ -11,6 +11,7 @@ Direct output also supports Windows. Exit status is zero on success and non-zero
 |===
 |Option |Default |Meaning
 |`--no-pager` |off |Write directly to stdout.
+|`--no-cache` |off |Bypass reading and writing the conversion cache.
 |`--width N` |terminal |Content width, 1-1000 cells. Redirected output defaults to 80.
 |`--center true/false` |false |Centre width-limited content.
 |`--color auto/always/never` |auto |Auto respects NO_COLOR and TERM=dumb.
@@ -47,7 +48,7 @@ Attribute tables merge by name; image-root arrays replace inherited arrays.
 Explicit `--config` bypasses discovery. Malformed files, invalid values and unknown keys are errors.
 
 The link:config.toml[example] lists all configuration keys. `pager = false` disables paging;
-`width = 0` follows terminal width. Help, version, config selection, timings and AOT training are CLI-only.
+`width = 0` follows terminal width. Help, version, config selection, cache bypass, timings and AOT training are CLI-only.
 `attributes` is a table of strings; `image-roots` is an array of paths.
 `merman` selects an executable in user or explicit configuration; discovered project files cannot select one.
 
@@ -85,4 +86,7 @@ Direct output expands disclosures and retains image descriptions. The pager disp
 `JAVA_OPTS` supplies JVM options to the executable launcher. Its default Unsafe policy is
 `--sun-misc-unsafe-memory-access=allow`; JAVA_OPTS can override it. Direct Java invocation retains JVM defaults.
 `XDG_CACHE_HOME` selects the AOT cache root, falling back to `~/.cache`.
+Conversion files use the same root under `glow-adoc/conversions`; Windows uses
+`%LOCALAPPDATA%/glow-adoc/conversions`, falling back to `~/AppData/Local/glow-adoc/conversions`.
+The CLI defaults `jruby.native.enabled` to `false`; override it with `-Djruby.native.enabled=true`.
 See link:PERFORMANCE.adoc[performance] and link:TROUBLESHOOTING.adoc[troubleshooting].

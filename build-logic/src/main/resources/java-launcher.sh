@@ -77,7 +77,7 @@ try_java() {
         "$java_executable" --sun-misc-unsafe-memory-access=allow ${JAVA_OPTS:-} \
             -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression \
             -XX:AOTCacheOutput="$training_dir/cache.aot" -jar "$0" \
-            --no-pager --color=always "$2" > /dev/null || exit "$?"
+            --no-cache --no-pager --color=always "$2" > /dev/null || exit "$?"
         mv "$training_dir/cache.aot" "$aot_cache" || exit 1
         printf 'AOT cache: %s\n' "$aot_cache"
         exit 0

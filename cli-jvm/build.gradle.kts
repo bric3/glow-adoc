@@ -109,6 +109,7 @@ tasks.named("shadowDistZip") {
 }
 
 tasks.test {
+    environment("XDG_CACHE_HOME", layout.buildDirectory.dir("test-cache").get().asFile.absolutePath)
     jvmArgumentProviders.add(
         objects.newInstance<PackagedCliArguments>().apply {
             jar = tasks.shadowJar.flatMap { it.archiveFile }
