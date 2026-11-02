@@ -3,7 +3,7 @@
 import io.github.bric3.glowadoc.buildlogic.NativeImage
 
 plugins {
-    id("glow.java")
+    id("glowadoc.java")
     application
 }
 

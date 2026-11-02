@@ -7,7 +7,7 @@ import io.github.bric3.glowadoc.buildlogic.InstallExecutable
 import io.github.bric3.glowadoc.buildlogic.PackagedCliArguments
 
 plugins {
-    id("glow.java")
+    id("glowadoc.java")
     id("com.gradleup.shadow") version "9.4.0"
     application
 }

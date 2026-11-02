@@ -28,7 +28,7 @@ java -jar /path/to/plantuml-mit-1.2026.6.jar -license
 ```
 
 These references are separate from the notices extracted automatically from dependency jars.
-[`CollectDependencyNotices`](../build-logic/src/main/kotlin/io/github/bric3/glowadoc/buildlogic/CollectDependencyNotices.kt)
+[`CollectDependencyNotices`](../build-logic/conventions/src/main/kotlin/io/github/bric3/glowadoc/buildlogic/CollectDependencyNotices.kt)
 creates those per-artifact copies in `glowadoc-cli-jvm/build/dependency-notices/`.
 See the [direct and transitive dependency inventory](../THIRD-PARTY.md) for their owners and roles.
 

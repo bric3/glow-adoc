@@ -4,10 +4,12 @@
 
 == Checks
 
-`checkAll` includes tests, Spotless and Yumi Licenser. The `glow.quality` convention is shared by the
-application and independent build-logic builds. Its separate included build avoids a bootstrap cycle;
-build-logic's checks also cover the convention's own sources. Gradle TestKit checks missing headers,
-Java and table formatting, executable directives, exclusions, idempotence and configuration-cache reuse.
+`checkAll` includes tests, Spotless and Yumi Licenser. The root build applies `glowadoc.quality`
+to application, build-logic and tool sources, including the convention's own sources.
+Project conventions live in `build-logic/conventions`; the Semver settings convention lives in
+`build-logic/settings-conventions`. Both are independent included builds with tests run by `checkAll`.
+Gradle TestKit checks missing headers, Java and table formatting, executable directives,
+exclusions, idempotence and configuration-cache reuse.
 
 Java uses Prince of Space 2.3.0, four-space indentation and 120 columns, followed by TableTest
 formatter 1.1.2. TableTest 1.2.2 supplies readable parameter matrices; JUnit converters handle values

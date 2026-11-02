@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MPL-2.0
 
 pluginManagement {
-    includeBuild("build-logic/quality") {
-        name = "glowadoc-quality"
+    includeBuild("build-logic/conventions") {
+        name = "glowadoc-conventions"
     }
-    includeBuild("build-logic") {
-        name = "glowadoc-build-logic"
+    includeBuild("build-logic/settings-conventions") {
+        name = "glowadoc-settings-conventions"
     }
 }
 
 plugins {
-    id("glow.versioning")
+    id("glowadoc.versioning")
 }
 
 dependencyResolutionManagement {

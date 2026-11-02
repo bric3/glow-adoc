@@ -2,15 +2,15 @@
 
 plugins {
     base
-    id("glow.quality")
+    id("glowadoc.quality")
 }
 
 tasks.register("checkAll") {
     group = "verification"
-    description = "Run checks in all application modules."
+    description = "Run checks for all application modules and build conventions."
     dependsOn(tasks.check)
-    dependsOn(gradle.includedBuild("glowadoc-build-logic").task(":check"))
-    dependsOn(gradle.includedBuild("glowadoc-quality").task(":test"))
+    dependsOn(gradle.includedBuild("glowadoc-conventions").task(":check"))
+    dependsOn(gradle.includedBuild("glowadoc-settings-conventions").task(":check"))
     dependsOn(
         ":glowadoc-cache:test",
         ":glowadoc-cli-jvm:build",

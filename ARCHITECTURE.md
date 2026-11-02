@@ -80,6 +80,13 @@ its AsciiDoc block style and registering the adapter in the CLI. No svgbob rende
 
 ## Resources and distribution
 
+Project conventions and packaging task types live in the `build-logic/conventions` included build.
+Its `glowadoc.java` plugin configures application modules; `glowadoc.quality` runs from the root
+and checks application, build-logic and tool sources. The separate `build-logic/settings-conventions`
+build provides `glowadoc.versioning` and owns the Semver dependency and release-policy tests.
+`checkAll` runs tests in both included builds. Root quality checks cover both source trees,
+so neither included build needs to apply its own convention.
+
 Includes stay within the document directory. Images also use configured roots and absolute directories
 explicitly supplied through CLI attributes. Resolved symlinks must remain within a root.
 Project roots stay within the configuration directory's tree; discovery cannot select an executable.

@@ -26,11 +26,11 @@ Use four-space indentation and 120 columns. Spotless runs Prince of Space follow
 formatter for Java, and ktlint's IntelliJ style for Kotlin. Apply formatting explicitly:
 
 ```sh
-./gradlew spotlessApply :glowadoc-build-logic:spotlessApply
+./gradlew spotlessApply
 ```
 
 `checkAll` checks formatting and MPL-2.0 SPDX headers in application, bootstrap, build and tool sources.
-Yumi Licenser owns headers; `applyLicenses` and `:glowadoc-build-logic:applyLicenses` insert missing headers
+Yumi Licenser owns headers; `applyLicenses` inserts missing headers
 while preserving shebangs and JBang directives. Fixtures, generated files and upstream notices are excluded.
 
 Prefer TableTest for input/output matrices. Use argument converters for domain values; ordinary JUnit
@@ -75,10 +75,10 @@ Keep `plantuml-mit` and the [packaged dependency notices](THIRD-PARTY.md).
 ## Release
 
 CI covers Linux/macOS, configuration-cache reuse, AOT and pinned Merman integration.
-Native Image has a manual feasibility workflow. Run `./gradlew -p build-logic test` for version-policy
+Native Image has a manual feasibility workflow. Run `./gradlew :glowadoc-settings-conventions:test` for version-policy
 tests and `jbang tools/Release.java --self-test` for release lifecycle checks.
 
-The settings convention `glow.versioning` applies Javier's Semver plugin. Untagged repositories build
+The settings convention `glowadoc.versioning` applies Javier's Semver plugin. Untagged repositories build
 `0.1.0-SNAPSHOT`. A clean `v0.1.0` checkout builds `0.1.0`; subsequent commits build `0.1.1-SNAPSHOT`.
 Select a minor bump with `-Psemver.scope=minor -Psemver.tagPrefix=v`.
 Builds do not create or push tags.
