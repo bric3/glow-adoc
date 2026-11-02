@@ -29,12 +29,14 @@ If mise is available, it must provide an installed Java 27.
 
 === Homebrew
 
-The formula will be published in https://github.com/bric3/homebrew-bric3[bric3/bric3]:
+Install from the https://github.com/bric3/homebrew-tap[bric3/tap] tap:
 
 [source,sh]
 ----
-brew install bric3/bric3/glow-adoc
+brew install bric3/tap/glow-adoc
 ----
+
+Homebrew installs Java 27 automatically.
 
 === ZIP archive
 
