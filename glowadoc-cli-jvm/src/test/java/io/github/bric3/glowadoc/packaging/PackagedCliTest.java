@@ -3,6 +3,7 @@ package io.github.bric3.glowadoc.packaging;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -31,6 +32,79 @@ class PackagedCliTest {
     @TempDir
     Path directory;
     private final String java = Path.of(System.getProperty("java.home"), "bin/java").toString();
+
+    @Test
+    void distributionZipRunsAfterExtractionRelocationAndSymlinking() throws Exception {
+        String distribution = System.getProperty("glow.distribution");
+        assertNotNull(distribution, "A ZIP distribution must be supplied to packaged tests");
+        String version;
+        try (var jar = new JarFile(System.getProperty("glow.jar"))) {
+            version = jar.getManifest().getMainAttributes().getValue("Implementation-Version");
+        }
+        Path extracted = directory.resolve("downloaded release");
+        var unzip = new ProcessBuilder("unzip", "-q", distribution, "-d", extracted.toString())
+            .redirectErrorStream(true)
+            .start();
+        try {
+            assertTrue(unzip.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(
+                    0,
+                    unzip.exitValue(),
+                    new String(unzip.getInputStream().readAllBytes(), StandardCharsets.UTF_8)
+            );
+        } finally {
+            unzip.destroyForcibly();
+        }
+        try (var entries = Files.list(extracted)) {
+            assertEquals(List.of("glow-adoc-" + version), entries
+                .map(path -> path.getFileName().toString())
+                .toList());
+        }
+        Path home =
+                Files.move(extracted.resolve("glow-adoc-" + version), directory.resolve("relocated app with spaces"));
+        Path launcher = home.resolve("bin/glow-adoc");
+        assertTrue(Files.isExecutable(launcher), "The ZIP preserves executable permissions");
+        assertEquals(-1L, Files.mismatch(Path.of(System.getProperty("glow.jar")), home.resolve("lib/glow-adoc.jar")));
+        Path link = Files.createSymbolicLink(directory.resolve("glow-adoc-link"), directory.relativize(launcher));
+        Path output = directory.resolve("distribution-output");
+        for (Path executable : List.of(launcher, link)) {
+            var builder = new ProcessBuilder(executable.toString(), "--version")
+                .directory(directory.toFile())
+                .redirectOutput(output.toFile())
+                .redirectErrorStream(true);
+            selectTestJava(builder);
+            var process = builder.start();
+            try {
+                assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+                assertEquals(0, process.exitValue(), Files.readString(output));
+                assertEquals("glow-adoc " + version, Files.readString(output).strip());
+            } finally {
+                process.destroyForcibly();
+            }
+        }
+        Path document = directory.resolve("document with spaces.adoc");
+        Files.writeString(document, "= Download\n\nA *bold* sentence.\n");
+        var builder = new ProcessBuilder(
+                link.toString(),
+                "--no-pager",
+                "--no-cache",
+                "--color=never",
+                document.toString()
+        )
+            .directory(directory.toFile())
+            .redirectOutput(output.toFile())
+            .redirectErrorStream(true);
+        selectTestJava(builder);
+        builder.environment().put("XDG_CONFIG_HOME", directory.resolve("config").toString());
+        var process = builder.start();
+        try {
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(output));
+            assertTrue(Files.readString(output).contains("A bold sentence."));
+        } finally {
+            process.destroyForcibly();
+        }
+    }
 
     @Test
     void defaultsTo120ColumnsAndKeepsYamlFrontMatterLiteral() throws Exception {
@@ -945,7 +1019,7 @@ class PackagedCliTest {
     }
 
     private void selectTestJava(ProcessBuilder builder) {
-        builder.environment().put("PATH", Path.of(System.getProperty("java.home"), "bin").toString());
+        builder.environment().put("PATH", Path.of(System.getProperty("java.home"), "bin") + ":/usr/bin:/bin");
         builder.environment().put("SDKMAN_CANDIDATES_DIR", directory.resolve("unused-sdkman").toString());
     }
 

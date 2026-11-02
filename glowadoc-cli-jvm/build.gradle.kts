@@ -78,6 +78,26 @@ val executableJar = tasks.register<ExecutableJar>("executableJar") {
     inputJar = tasks.shadowJar.flatMap { it.archiveFile }
     launcherScript = layout.projectDirectory.file("src/main/scripts/java-launcher.sh")
     outputJar = layout.buildDirectory.file("libs/glow-adoc-${project.version}-app.jar")
+    outputLauncher = layout.buildDirectory.file("launcher/glow-adoc")
+}
+
+val distributionZip = tasks.register<Zip>("distributionZip") {
+    group = "distribution"
+    description = "Package the launcher and Shadow jar in a versioned ZIP."
+    archiveBaseName = "glow-adoc"
+    destinationDirectory = layout.buildDirectory.dir("distributions")
+    into("glow-adoc-${project.version}") {
+        from(executableJar.flatMap { it.outputLauncher }) {
+            into("bin")
+            filePermissions { unix("755") }
+        }
+        from(tasks.shadowJar.flatMap { it.archiveFile }) {
+            into("lib")
+            rename { "glow-adoc.jar" }
+        }
+        from(rootProject.layout.projectDirectory.file("LICENSE"))
+        from(rootProject.layout.projectDirectory.file("THIRD-PARTY.md"))
+    }
 }
 
 val releaseMetadata = tasks.register<WriteProperties>("releaseMetadata") {
@@ -87,10 +107,9 @@ val releaseMetadata = tasks.register<WriteProperties>("releaseMetadata") {
 
 tasks.register<Sync>("releaseArtifacts") {
     group = "distribution"
-    description = "Stage release jars, version metadata and notices."
+    description = "Stage the release ZIP and version metadata."
     into(layout.buildDirectory.dir("release"))
-    from(tasks.shadowJar.flatMap { it.archiveFile })
-    from(executableJar.flatMap { it.outputJar })
+    from(distributionZip.flatMap { it.archiveFile })
     from(releaseMetadata.flatMap { it.destinationFile })
 }
 
@@ -107,7 +126,7 @@ val installWithoutAot = tasks.register<InstallExecutable>("installWithoutAot") {
 }
 
 tasks.assemble {
-    dependsOn(executableJar)
+    dependsOn(executableJar, distributionZip)
 }
 
 tasks.jar {
@@ -137,6 +156,7 @@ tasks.test {
         objects.newInstance<PackagedCliArguments>().apply {
             jar = tasks.shadowJar.flatMap { it.archiveFile }
             executable = executableJar.flatMap { it.outputJar }
+            distribution = distributionZip.flatMap { it.archiveFile }
             fixture = rootProject.layout.projectDirectory.file("fixtures/showcase.adoc")
         },
     )

@@ -19,11 +19,16 @@ abstract class PackagedCliArguments : CommandLineArgumentProvider {
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
+    abstract val distribution: RegularFileProperty
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
     abstract val fixture: RegularFileProperty
 
     override fun asArguments() = listOf(
         "-Dglow.jar=${jar.get().asFile.absolutePath}",
         "-Dglow.executable=${executable.get().asFile.absolutePath}",
+        "-Dglow.distribution=${distribution.get().asFile.absolutePath}",
         "-Dglow.fixture=${fixture.get().asFile.absolutePath}",
         "-Dlauncher.executable=${executable.get().asFile.absolutePath}",
     )

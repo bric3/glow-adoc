@@ -113,7 +113,10 @@ Unsupported capabilities and failed renderers retain readable text.
 
 The Gradle daemon uses Java 27; application bytecode targets 25 and the bootstrap targets 8.
 Shadow preserves service registrations, JRuby resources and multi-release metadata.
-The executable jar prepends a POSIX launcher with Java-manager selection.
+The downloadable ZIP contains a versioned root directory with `bin/glow-adoc`, the plain Shadow jar
+at `lib/glow-adoc.jar`, and licence notices. Its POSIX launcher selects Java and resolves the jar
+relative to the extracted directory, including when the launcher is symlinked into PATH.
+The local executable jar prepends the same launcher to the Shadow jar.
 Both launcher templates live in `glowadoc-cli-jvm/src/main/scripts` and are declared file inputs
 to the packaging and installation tasks.
 Local installation writes a small script to `~/.local/bin/glow-adoc` and the jar to
@@ -125,7 +128,7 @@ The launcher requests Java 27 from mise, or delegates to the next available mana
 then falls back to `java` on PATH.
 It performs no version probes or installed-version searches; the Java 8-compatible bootstrap checks
 the Java 27 minimum. A generation hash of the launcher template and Shadow jar filters impossible
-AOT lookups. Possible hits still require the full executable hash and runtime identity. When the launcher hashes the jar
+AOT lookups. Possible hits still require the full jar hash and runtime identity. When the launcher hashes the jar
 for AOT lookup, it supplies that digest and the artifact path to Java. The document cache reuses the
 digest only for the matching runtime jar and a valid SHA-256 value; ordinary Java invocation hashes the jar itself.
 Artifact ownership comes from live class-resource jar URLs. Archived protection domains can retain

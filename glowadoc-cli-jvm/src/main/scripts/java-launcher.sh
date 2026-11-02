@@ -3,6 +3,23 @@
 
 cache_generation=@CACHE_GENERATION@
 
+# Resolve symlinks so an extracted distribution can be moved or linked into PATH.
+launcher_path=$0
+while [ -L "$launcher_path" ]; do
+    launcher_target=$(readlink "$launcher_path") || exit "$?"
+    case "$launcher_target" in
+        /*) launcher_path=$launcher_target ;;
+        *)
+            launcher_dir=${launcher_path%/*}
+            [ "$launcher_dir" != "$launcher_path" ] || launcher_dir=.
+            launcher_path=$launcher_dir/$launcher_target
+            ;;
+    esac
+done
+launcher_dir=${launcher_path%/*}
+[ "$launcher_dir" != "$launcher_path" ] || launcher_dir=.
+artifact=@JAR@
+
 # Manager execution must never install a missing runtime.
 export MISE_AUTO_INSTALL=0 MISE_EXEC_AUTO_INSTALL=0 MISE_OFFLINE=1
 
@@ -151,14 +168,14 @@ if [ "${1:-}" = --train-aot ] || [ "$matching_generation" = yes ]; then
         [ "$launch_timings" != yes ] || printf 'glow-adoc timing java: %s\n' "$java_executable" >&2
         launch_stage artifact-hash-start
         # A simple command substitution avoids intermittent subshell delays on macOS.
-        artifact_hash=$("$hash_program" "$hash_option" < "$0") || artifact_hash=
+        artifact_hash=$("$hash_program" "$hash_option" < "$artifact") || artifact_hash=
         artifact_hash=${artifact_hash%% *}
         launch_stage artifact-hash-ready
         if [ -n "$artifact_hash" ]; then
-            launcher_dir=${0%/*}
-            [ "$launcher_dir" != "$0" ] || launcher_dir=.
-            launcher_location=$(CDPATH= cd "$launcher_dir" && printf '%s/%s' "$(pwd -P)" "${0##*/}")
-            aot_key=$(printf '%s\n' "$artifact_hash" "${0##*/}" "$java_executable" "$java_identity" \
+            artifact_dir=${artifact%/*}
+            [ "$artifact_dir" != "$artifact" ] || artifact_dir=.
+            launcher_location=$(CDPATH= cd "$artifact_dir" && printf '%s/%s' "$(pwd -P)" "${artifact##*/}")
+            aot_key=$(printf '%s\n' "$artifact_hash" "${artifact##*/}" "$java_executable" "$java_identity" \
                 "${JAVA_OPTS:-}" "${JAVA_TOOL_OPTIONS:-}" "${JDK_JAVA_OPTIONS:-}" "${_JAVA_OPTIONS:-}" \
                 "$(uname -sm)" | "$hash_program" "$hash_option") || aot_key=
             aot_key=${aot_key%% *}
@@ -188,7 +205,7 @@ if [ "${1:-}" = --train-aot ]; then
     # shellcheck disable=SC2086
     (exec_selected "$java_executable" -Dsun.misc.unsafe.memory.access=allow ${JAVA_OPTS:-} \
         -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression \
-        -XX:AOTCacheOutput="$training_dir/cache.aot" -jar "$0" \
+        -XX:AOTCacheOutput="$training_dir/cache.aot" -jar "$artifact" \
         --no-cache --no-pager --color=always "$@") > /dev/null || exit "$?"
     mv "$training_dir/cache.aot" "$aot_cache" || exit 1
     printf 'AOT cache: %s\n' "$aot_cache"
@@ -199,6 +216,6 @@ if [ -n "$aot_cache" ] && [ -r "$aot_cache" ]; then
     # Auto mode falls back to normal startup when the VM cannot use the cache.
     launch_java cached \
         -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression \
-        -XX:AOTMode=auto -XX:AOTCache="$aot_cache" -jar "$0" "$@"
+        -XX:AOTMode=auto -XX:AOTCache="$aot_cache" -jar "$artifact" "$@"
 fi
-launch_java normal -jar "$0" "$@"
+launch_java normal -jar "$artifact" "$@"

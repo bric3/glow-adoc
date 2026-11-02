@@ -25,6 +25,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipFile;
 
 class JavaLauncherTest {
     @TempDir
@@ -44,7 +45,7 @@ class JavaLauncherTest {
         launcher = directory.resolve("reader with spaces.jar");
         Files.copy(Path.of(System.getProperty("launcher.executable")), launcher);
         assertTrue(launcher.toFile().setExecutable(true));
-        for (String utility : List.of("uname", "mkdir", "mktemp", "rm", "mv", "shasum", "sha256sum")) {
+        for (String utility : List.of("uname", "mkdir", "mktemp", "rm", "mv", "readlink", "shasum", "sha256sum")) {
             Path source = Path.of("/usr/bin", utility);
             if (!Files.exists(source)) {
                 source = Path.of("/bin", utility);
@@ -349,6 +350,48 @@ class JavaLauncherTest {
         Path renamed = relocated.resolveSibling("renamed.jar");
         Files.move(relocated, renamed);
         launcher = renamed;
+        assertEquals(0, run("other.adoc"));
+        assertFalse(arguments().contains("-XX:AOTMode=auto"));
+    }
+
+    @Test
+    void archiveLauncherSelectsJavaAndTracksTheJarForAotAfterRelocation() throws Exception {
+        Path app = Files.createDirectories(directory.resolve("extracted archive"));
+        launcher = Files.createDirectories(app.resolve("bin")).resolve("glow-adoc");
+        Path jar = Files.createDirectories(app.resolve("lib")).resolve("glow-adoc.jar");
+        try (var archive = new ZipFile(System.getProperty("glow.distribution"))) {
+            for (Path target : List.of(launcher, jar)) {
+                var entry = archive
+                    .stream()
+                    .filter(item -> item.getName().endsWith("/" + app.relativize(target)))
+                    .findFirst()
+                    .orElseThrow();
+                try (var input = archive.getInputStream(entry)) {
+                    Files.copy(input, target);
+                }
+            }
+        }
+        assertTrue(launcher.toFile().setExecutable(true));
+        manager("mise", javaHome("mise selected", "mise"), "");
+        environment.put("XDG_CACHE_HOME", directory.resolve("archive-aot").toString());
+        assertEquals(0, run("--train-aot"));
+        assertEquals("mise", arguments().getFirst());
+        assertEquals(jar, Path.of(arguments().get(arguments().indexOf("-jar") + 1)).normalize());
+
+        Path relocated = Files.move(app, directory.resolve("relocated archive"));
+        launcher = Files.createSymbolicLink(
+                directory.resolve("linked-glow-adoc"),
+                directory.relativize(relocated.resolve("bin/glow-adoc"))
+        );
+        assertEquals(0, run("other.adoc"));
+        assertTrue(arguments().contains("-XX:AOTMode=auto"), arguments().toString());
+        assertTrue(
+                arguments().contains(
+                        "-Dglowadoc.launcher.artifact=" + relocated.resolve("lib/glow-adoc.jar").toRealPath()
+                ),
+                arguments().toString()
+        );
+        Files.writeString(relocated.resolve("lib/glow-adoc.jar"), "changed", StandardOpenOption.APPEND);
         assertEquals(0, run("other.adoc"));
         assertFalse(arguments().contains("-XX:AOTMode=auto"));
     }

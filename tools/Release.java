@@ -7,6 +7,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -22,7 +23,13 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Properties;
-import java.util.jar.JarFile;
+import java.util.jar.Attributes;
+import java.util.jar.JarInputStream;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Refreshes the newest draft with tested artifacts and updates published releases.
@@ -86,26 +93,20 @@ public class Release {
         if (!tag.equals(System.getenv("RELEASE_TAG"))) {
             throw new IllegalArgumentException("Release tag does not match artifact version");
         }
-        var files = new ArrayList<>(List.of(
-                directory.resolve("glow-adoc-" + version + ".jar"),
-                directory.resolve("glow-adoc-" + version + "-app.jar")
-        ));
+        Path distribution = directory.resolve("glow-adoc-" + version + ".zip");
+        validateDistribution(distribution, version);
+        var files = new ArrayList<>(List.of(distribution));
         var checksums = new StringBuilder();
-        for (Path jar : files) {
-            try (var archive = new JarFile(jar.toFile())) {
-                if (!version.equals(archive.getManifest().getMainAttributes().getValue("Implementation-Version"))) {
-                    throw new IllegalStateException("Jar version mismatch: " + jar);
-                }
-            }
+        for (Path file : files) {
             var digest = MessageDigest.getInstance("SHA-256");
-            try (var input = Files.newInputStream(jar)) {
+            try (var input = Files.newInputStream(file)) {
                 byte[] bytes = new byte[65536];
                 int count;
                 while ((count = input.read(bytes)) >= 0) {
                     digest.update(bytes, 0, count);
                 }
             }
-            checksums.append(HexFormat.of().formatHex(digest.digest())).append("  ").append(jar.getFileName()).append(
+            checksums.append(HexFormat.of().formatHex(digest.digest())).append("  ").append(file.getFileName()).append(
                     '\n'
             );
         }
@@ -116,6 +117,24 @@ public class Release {
                 ? Long.parseLong(System.getenv("RELEASE_ID"))
                 : publisher.request("GET", "releases/tags/" + tag, null).getAsJsonObject().get("id").getAsLong();
         publisher.update(draft, id, tag, System.getenv("GITHUB_SHA"), files);
+    }
+
+    static void validateDistribution(Path distribution, String version) throws Exception {
+        try (var archive = new ZipFile(distribution.toFile())) {
+            String root = "glow-adoc-" + version + "/";
+            var launcher = archive.getEntry(root + "bin/glow-adoc");
+            var jar = archive.getEntry(root + "lib/glow-adoc.jar");
+            if (launcher == null || launcher.isDirectory() || jar == null || jar.isDirectory()) {
+                throw new IllegalStateException("Missing launcher or jar: " + distribution);
+            }
+            try (var input = new JarInputStream(archive.getInputStream(jar))) {
+                var manifest = input.getManifest();
+                if (manifest == null
+                        || !version.equals(manifest.getMainAttributes().getValue("Implementation-Version"))) {
+                    throw new IllegalStateException("Jar version mismatch: " + distribution);
+                }
+            }
+        }
     }
 
     JsonObject selectDraft() throws Exception {
@@ -181,7 +200,7 @@ public class Release {
         for (var asset : assets(id)) {
             String name = asset.getAsJsonObject().get("name").getAsString();
             if (!expected.contains(name)
-                    && (name.startsWith("glow-adoc-") && name.endsWith(".jar")
+                    && (name.startsWith("glow-adoc-") && (name.endsWith(".jar") || name.endsWith(".zip"))
                     || name.startsWith("checksums-") && name.endsWith(".txt"))) {
                 request("DELETE", "releases/assets/" + asset.getAsJsonObject().get("id").getAsLong(), null);
             }
@@ -258,6 +277,46 @@ public class Release {
     }
 
     static void selfTest() throws Exception {
+        Path distribution = Files.createTempFile("glow-adoc-release-test-", ".zip");
+        try {
+            for (String scenario : List.of("missing launcher", "wrong version", "valid")) {
+                try (var archive = new ZipOutputStream(Files.newOutputStream(distribution))) {
+                    if (!scenario.equals("missing launcher")) {
+                        archive.putNextEntry(new ZipEntry("glow-adoc-0.1.0/bin/glow-adoc"));
+                        archive.write("#!/bin/sh\n".getBytes(StandardCharsets.UTF_8));
+                        archive.closeEntry();
+                    }
+                    archive.putNextEntry(new ZipEntry("glow-adoc-0.1.0/lib/glow-adoc.jar"));
+                    var manifest = new Manifest();
+                    manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+                    manifest.getMainAttributes().putValue(
+                            "Implementation-Version",
+                            scenario.equals("wrong version") ? "0.2.0" : "0.1.0"
+                    );
+                    var jar = new ByteArrayOutputStream();
+                    try (var output = new JarOutputStream(jar, manifest)) {
+                        output.finish();
+                    }
+                    archive.write(jar.toByteArray());
+                    archive.closeEntry();
+                }
+                try {
+                    validateDistribution(distribution, "0.1.0");
+                    if (!scenario.equals("valid")) {
+                        throw new AssertionError("Accepted distribution with " + scenario);
+                    }
+                } catch (IllegalStateException expected) {
+                    if (scenario.equals("valid")
+                            || !expected
+                        .getMessage()
+                        .contains(scenario.equals("wrong version") ? "version mismatch" : "Missing launcher")) {
+                        throw expected;
+                    }
+                }
+            }
+        } finally {
+            Files.deleteIfExists(distribution);
+        }
         var fake = new Fake();
         if (fake.selectDraft() != null) {
             throw new AssertionError("Selected a release when no draft exists");
@@ -270,18 +329,19 @@ public class Release {
         if (fake.selectDraft().get("id").getAsLong() != 1) {
             throw new AssertionError("Selected the wrong draft");
         }
-        var files = List.of(
-                Path.of("glow-adoc-0.2.0-rc.1.jar"),
-                Path.of("glow-adoc-0.2.0-rc.1-app.jar"),
-                Path.of("checksums-0.2.0-rc.1.txt")
-        );
-        fake.names.addAll(List.of("glow-adoc-0.1.0-SNAPSHOT.jar", "checksums-0.1.0-SNAPSHOT.txt", "notes.pdf"));
+        var files = List.of(Path.of("glow-adoc-0.2.0-rc.1.zip"), Path.of("checksums-0.2.0-rc.1.txt"));
+        fake.names.addAll(List.of(
+                "glow-adoc-0.1.0-SNAPSHOT.jar",
+                "glow-adoc-0.1.0.zip",
+                "checksums-0.1.0-SNAPSHOT.txt",
+                "notes.pdf"
+        ));
         fake.fail = true;
         try {
             fake.update(true, 1, "v0.2.0-rc.1", "head", files);
             throw new AssertionError("Upload should fail");
         } catch (java.io.IOException expected) {
-            if (!fake.names.contains("glow-adoc-0.1.0-SNAPSHOT.jar")) {
+            if (!fake.names.containsAll(List.of("glow-adoc-0.1.0-SNAPSHOT.jar", "glow-adoc-0.1.0.zip"))) {
                 throw new AssertionError("Lost previous artifacts on failure");
             }
         }
@@ -292,7 +352,7 @@ public class Release {
                 || !fake.name.equals("Human title")
                 || !fake.prerelease
                 || !fake.target.equals("head")
-                || fake.names.size() != 4
+                || fake.names.size() != 3
                 || !fake.names.contains("notes.pdf")) {
             throw new AssertionError("Lost draft metadata or left incorrect assets");
         }

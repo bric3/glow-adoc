@@ -56,7 +56,7 @@ timing first frames and complete output. Article contents stay outside the repos
 
 == Platform limits
 
-Local automated checks run on macOS ARM64. CI is configured for Linux/macOS.
+Local automated checks run on macOS ARM64. CI checks pull requests on Linux/macOS and pushes on Linux.
 PTY transmission does not verify visual appearance, fonts or real-terminal rendering.
 Manually check iTerm2/Ghostty, SSH, resize, scrolling, theme changes and cancellation before release.
 

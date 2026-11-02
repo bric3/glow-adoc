@@ -36,6 +36,20 @@ The formula will be published in https://github.com/bric3/homebrew-bric3[bric3/b
 brew install bric3/bric3/glow-adoc
 ----
 
+=== ZIP archive
+
+Download `glow-adoc-VERSION.zip` from https://github.com/bric3/glow-adoc/releases[GitHub Releases].
+Extract the archive and run its launcher, replacing `VERSION` with the release version:
+
+[source,sh]
+----
+unzip glow-adoc-VERSION.zip
+./glow-adoc-VERSION/bin/glow-adoc document.adoc
+----
+
+Keep the `bin` and `lib` directories together. Add `bin` to `PATH` or symlink `bin/glow-adoc` into a directory on `PATH`.
+The archive includes the Shadow jar, launcher and licence notices. Use `glow-adoc --train-aot` to train a local AOT cache.
+
 === From source
 
 From a checkout, with Java 27 installed:

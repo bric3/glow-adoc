@@ -16,7 +16,7 @@ import java.security.MessageDigest
 import java.util.HexFormat
 
 /**
- * Prepends a POSIX launcher to a copy of the shaded jar.
+ * Creates standalone and jar-prefixed POSIX launchers for the shaded jar.
  * The JVM locates the ZIP directory from the end of the file, allowing jar entries to follow the script.
  */
 @CacheableTask
@@ -32,21 +32,29 @@ abstract class ExecutableJar : DefaultTask() {
     @get:OutputFile
     abstract val outputJar: RegularFileProperty
 
+    @get:OutputFile
+    abstract val outputLauncher: RegularFileProperty
+
     @TaskAction
     fun create() {
+        val template = launcherScript.get().asFile.readText(Charsets.UTF_8)
+        // The build hint filters AOT misses; complete artifact hashes still validate candidates.
+        val generation = MessageDigest.getInstance("SHA-256")
+        generation.update(template.toByteArray(Charsets.UTF_8))
+        DigestInputStream(inputJar.get().asFile.inputStream(), generation).use {
+            it.transferTo(OutputStream.nullOutputStream())
+        }
+        val launcher = template.replace("@CACHE_GENERATION@", HexFormat.of().formatHex(generation.digest()))
+
+        val script = outputLauncher.get().asFile
+        script.parentFile.mkdirs()
+        script.writeText(launcher.replace("@JAR@", "\"\$launcher_dir/../lib/glow-adoc.jar\""), Charsets.UTF_8)
+        check(script.setExecutable(true, false)) { "Cannot make executable: $script" }
+
         val target = outputJar.get().asFile
         target.parentFile.mkdirs()
         target.outputStream().use { output ->
-            val template = launcherScript.get().asFile.readText(Charsets.UTF_8)
-            // The build hint filters AOT misses; complete executable hashes still validate candidates.
-            val generation = MessageDigest.getInstance("SHA-256")
-            generation.update(template.toByteArray(Charsets.UTF_8))
-            DigestInputStream(inputJar.get().asFile.inputStream(), generation).use {
-                it.transferTo(OutputStream.nullOutputStream())
-            }
-            val generationId = HexFormat.of().formatHex(generation.digest())
-            val launcher = template.replace("@CACHE_GENERATION@", generationId)
-            output.write((launcher.trimEnd() + "\n\n").toByteArray(Charsets.UTF_8))
+            output.write((launcher.replace("@JAR@", "\"\$0\"").trimEnd() + "\n\n").toByteArray(Charsets.UTF_8))
             inputJar.get().asFile.inputStream().use { it.copyTo(output) }
         }
         check(target.setExecutable(true, false)) { "Cannot make executable: $target" }
