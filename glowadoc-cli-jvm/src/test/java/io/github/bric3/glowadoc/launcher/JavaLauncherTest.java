@@ -49,6 +49,9 @@ class JavaLauncherTest {
             if (!Files.exists(source)) {
                 source = Path.of("/bin", utility);
             }
+            if (!Files.exists(source)) {
+                source = Path.of("/sbin", utility);
+            }
             if (Files.exists(source)) {
                 Files.createSymbolicLink(bin.resolve(utility), source);
             }
@@ -216,6 +219,40 @@ class JavaLauncherTest {
             .stream()
             .anyMatch(value -> value.startsWith("-Dglowadoc.launcher.")));
         assertEquals(2, run("--train-aot", "document.adoc"));
+    }
+
+    @TableTest("""
+        utility
+        sha256sum
+        shasum
+        """)
+    void checksumUtilitiesProduceCompatibleAotIdentities(String utility) throws Exception {
+        Assumptions.assumeTrue(
+                Files.isExecutable(bin.resolve("sha256sum")) && Files.isExecutable(bin.resolve("shasum"))
+        );
+        Path sha256sum = bin.resolve("sha256sum").toRealPath();
+        Path shasum = bin.resolve("shasum").toRealPath();
+        Files.delete(bin.resolve("sha256sum"));
+        Files.delete(bin.resolve("shasum"));
+        Files.createSymbolicLink(bin.resolve(utility), utility.equals("sha256sum") ? sha256sum : shasum);
+        usePathJava("selected");
+        environment.put("XDG_CACHE_HOME", directory.resolve("checksum-cache").toString());
+        assertEquals(0, run("--train-aot"));
+        assertEquals(0, run("document.adoc"));
+        var checksum = MessageDigest.getInstance("SHA-256");
+        try (var input = new DigestInputStream(Files.newInputStream(launcher), checksum)) {
+            input.transferTo(OutputStream.nullOutputStream());
+        }
+        String digest = HexFormat.of().formatHex(checksum.digest());
+        assertTrue(arguments().contains("-Dglowadoc.launcher.sha256=" + digest));
+        assertTrue(arguments().contains("-XX:AOTMode=auto"));
+
+        Files.delete(bin.resolve(utility));
+        String alternative = utility.equals("sha256sum") ? "shasum" : "sha256sum";
+        Files.createSymbolicLink(bin.resolve(alternative), alternative.equals("sha256sum") ? sha256sum : shasum);
+        assertEquals(0, run("document.adoc"));
+        assertTrue(arguments().contains("-Dglowadoc.launcher.sha256=" + digest));
+        assertTrue(arguments().contains("-XX:AOTMode=auto"));
     }
 
     @Test

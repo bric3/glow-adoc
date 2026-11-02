@@ -58,6 +58,7 @@ Stdin and exploded classpaths are excluded. `--no-cache` bypasses both document 
 Each directory has a 128 MiB soft target. The first write in an invocation removes the oldest entries
 when existing content exceeds that target; new entries can exceed it until the next invocation.
 This is a disk cache policy, separate from terminal image residency and JVM heap usage.
+Idle time does not invalidate conversion entries or local AOT caches.
 
 The CLI disables JRuby native extensions by default because Java handles document files.
 `-Djruby.native.enabled=true` restores JRuby's native support. JVM compiler and GC defaults are retained.
@@ -256,6 +257,32 @@ This upgrade establishes compatibility for the tested features, with a measured 
 See link:benchmarks/jruby10-first-text.csv[all 80 timing samples] and
 link:benchmarks/jruby10-artifacts.csv[exact jar sizes and SHA-256 identities]. The baseline was built
 from commit `8db5310` with JRuby 9.4.14.0. Native Image execution and remote CI were not tested.
+
+=== Cached reopens, 2026-11-02
+
+An initial installed-command probe opened `README.adoc` in 1130 ms while selecting AOT and hitting
+the conversion cache. The artifact-hash phase took 354 ms. Direct native SHA-256 hashing took about
+47 ms; shell controls exposed intermittent waits when the checksum ran through a function inside
+command substitution. Selecting the utility first and invoking it directly reduced this control from
+54-313 ms to 50-54 ms across ten launches. Full-byte SHA-256 validation remains in place.
+
+Ten interleaved before/after pairs alternated order, using Java 27 on macOS ARM64 and an 80 x 24 PTY.
+The application payloads were byte-identical, both variants used trained AOT, and every measured
+open hit its conversion cache. The new installation's conversion entry was seeded before measurement.
+No build or other benchmark ran concurrently.
+
+[cols="2,1,1",options="header"]
+|===
+|First text |Before |After
+|Median |636.3 ms |383.1 ms
+|p95 |1073.6 ms |710.5 ms
+|===
+
+See link:benchmarks/launcher-hash-paired.csv[all samples and launcher stages]. Cache files with
+timestamps twenty minutes old still hit, and required-mode AOT loading passed after relocation.
+This checks file age, rather than reproducing a 10-15 minute OS-idle interval. Intermittent time
+around shell/manager entry remains; its operating-system cause is unconfirmed. A standalone copy
+of the complete launcher did not remove that variability reliably, so installation keeps its existing layout.
 
 === Launcher file size, 2026-11-02
 

@@ -24,15 +24,16 @@ launch_stage() {
 
 launch_stage entered
 
-hash_stdin() {
+select_hash_tool() {
     if command -v sha256sum >/dev/null 2>&1; then
-        hash_result=$(sha256sum) || return 1
+        hash_program=sha256sum
+        hash_option=--
     elif command -v shasum >/dev/null 2>&1; then
-        hash_result=$(shasum -a 256) || return 1
+        hash_program=shasum
+        hash_option=-a256
     else
         return 1
     fi
-    printf '%s\n' "${hash_result%% *}"
 }
 
 exec_selected() {
@@ -146,16 +147,21 @@ if [ "${1:-}" = --train-aot ] || [ "$matching_generation" = yes ]; then
 "
         done < "${java_executable%/*}/../release"
     fi
-    if [ -n "$java_identity" ]; then
+    if [ -n "$java_identity" ] && select_hash_tool; then
         [ "$launch_timings" != yes ] || printf 'glow-adoc timing java: %s\n' "$java_executable" >&2
         launch_stage artifact-hash-start
-        artifact_hash=$(hash_stdin < "$0")
+        # A simple command substitution avoids intermittent subshell delays on macOS.
+        artifact_hash=$("$hash_program" "$hash_option" < "$0") || artifact_hash=
+        artifact_hash=${artifact_hash%% *}
         launch_stage artifact-hash-ready
         if [ -n "$artifact_hash" ]; then
             launcher_dir=${0%/*}
             [ "$launcher_dir" != "$0" ] || launcher_dir=.
             launcher_location=$(CDPATH= cd "$launcher_dir" && printf '%s/%s' "$(pwd -P)" "${0##*/}")
-            aot_key=$(printf '%s\n' "$artifact_hash" "${0##*/}" "$java_executable" "$java_identity" "${JAVA_OPTS:-}" "${JAVA_TOOL_OPTIONS:-}" "${JDK_JAVA_OPTIONS:-}" "${_JAVA_OPTIONS:-}" "$(uname -sm)" | hash_stdin)
+            aot_key=$(printf '%s\n' "$artifact_hash" "${0##*/}" "$java_executable" "$java_identity" \
+                "${JAVA_OPTS:-}" "${JAVA_TOOL_OPTIONS:-}" "${JDK_JAVA_OPTIONS:-}" "${_JAVA_OPTIONS:-}" \
+                "$(uname -sm)" | "$hash_program" "$hash_option") || aot_key=
+            aot_key=${aot_key%% *}
             [ -z "$aot_key" ] || aot_cache=$aot_root/$cache_generation-$aot_key.aot
             launch_stage cache-key-ready
         fi
