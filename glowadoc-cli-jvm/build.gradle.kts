@@ -8,7 +8,7 @@ import io.github.bric3.glowadoc.buildlogic.PackagedCliArguments
 
 plugins {
     id("glowadoc.java")
-    id("com.gradleup.shadow") version "9.4.0"
+    id("com.gradleup.shadow") version "9.6.1"
     application
 }
 
