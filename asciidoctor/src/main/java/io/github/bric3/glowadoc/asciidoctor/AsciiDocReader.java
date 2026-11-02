@@ -222,7 +222,8 @@ public final class AsciiDocReader implements AutoCloseable {
                             List.of(new Span(frontMatter)),
                             List.of(),
                             "yaml",
-                            ""));
+                            "",
+                            new Block.Format("", "front-matter", "left", 1, 1, 0, false)));
         }
         return new Document(blocks, baseDirectory);
     }

@@ -40,11 +40,13 @@ Retrain after updates; do not copy caches between incompatible builds.
 Press `m` to disable capture, or use `--mouse=false`.
 With capture enabled, Shift-drag selects text in terminals that provide that override.
 
-Links use the terminal's modifier click. Enable Cmd-click in iTerm2's Pointer preferences.
-In Ghostty mouse mode, use Shift+Cmd-click on macOS or Shift+Ctrl-click on Linux.
-Cmd-click alone is forwarded to the application as an ordinary click.
+In local mouse mode, hover highlights links and a plain click opens the system browser.
+Linux requires `xdg-open`. Failure messages appear in the status line; the pager keeps running.
+Dragging does not open links. URLs use HTTP, HTTPS or mailto; other schemes remain inactive.
+
+Over SSH, use the terminal's modifier click so the client opens the browser.
+Ghostty uses Shift+Cmd-click on macOS or Shift+Ctrl-click on Linux during capture.
 In iTerm2, Option+Cmd-click bypasses capture. Press `m` to disable capture altogether.
-The terminal opens OSC 8 links locally even when the reader runs over SSH.
 
 Dark-mode images use 65% opacity in mouse mode; hover restores full opacity.
 Use `--image-dim=false` to keep original brightness. Hover needs terminal mouse motion reports.

@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
 import java.util.regex.Pattern;
@@ -59,8 +60,9 @@ class PackagedCliTest {
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertTrue(process.waitFor(30, TimeUnit.SECONDS));
         assertEquals(0, process.exitValue(), Files.readString(directory.resolve("width-errors")));
-        assertTrue(output.contains("| title: An _unchanged_ title"), output);
-        assertTrue(output.contains("|   - java"), output);
+        assertTrue(output.startsWith("title: An _unchanged_ title\ntags:\n  - java\n"), output);
+        assertTrue(output.contains("\n" + "-".repeat(120) + "\n"), output);
+        assertFalse(output.contains("+--"), output);
         var prose = output.lines().filter(line -> line.startsWith("word")).toList();
         assertEquals(4, prose.size(), output);
         assertTrue(prose.stream().allMatch(line -> line.length() <= 120));
@@ -735,6 +737,16 @@ class PackagedCliTest {
 
     private Process startPty(String document, Path transcript, boolean images, String... options)
             throws IOException {
+        return startPty(document, transcript, images, Map.of(), options);
+    }
+
+    private Process startPty(
+            String document,
+            Path transcript,
+            boolean images,
+            Map<String, String> environment,
+            String... options)
+            throws IOException {
         String invocation =
                 "stty cols 80 rows 24 && exec "
                         + quote(java)
@@ -759,7 +771,67 @@ class PackagedCliTest {
         builder.environment().put("TERM", "xterm-256color");
         builder.environment().put("COLORTERM", "truecolor");
         builder.environment().remove("NO_COLOR");
+        builder.environment().putAll(environment);
         return builder.start();
+    }
+
+    @Test
+    void mouseHoverHighlightsLinksAndClickReleaseInvokesTheOpener() throws Exception {
+        Path document = directory.resolve("mouse-link.adoc");
+        Files.writeString(document, "https://example.org/reference[LINK_LABEL]\n");
+        Path transcript = directory.resolve("mouse-link-transcript");
+        // SSH mode exercises real click dispatch without opening a browser during tests.
+        var process =
+                startPty(
+                        document.toString(),
+                        transcript,
+                        false,
+                        Map.of("SSH_CONNECTION", "test"),
+                        "--width=20",
+                        "--center=true",
+                        "--color=always");
+        try {
+            await(process, transcript, "quit");
+            await(process, transcript, "\u001b[?1003h");
+            int beforeHover = Files.readString(transcript).length();
+            process.getOutputStream().write("\u001b[<35;30;1M".getBytes());
+            process.getOutputStream().flush();
+            assertTimeoutPreemptively(
+                    Duration.ofSeconds(5),
+                    () -> {
+                        while (!Files.readString(transcript)
+                                .substring(beforeHover)
+                                .contains("48;2;121;192;255")) {
+                            Thread.sleep(10);
+                        }
+                    });
+            assertTrue(
+                    Files.readString(transcript)
+                            .substring(beforeHover)
+                            .contains("https://example.org/reference"));
+            process.getOutputStream().write("\u001b[<0;30;1M".getBytes());
+            process.getOutputStream().flush();
+            Thread.sleep(100);
+            assertFalse(
+                    Files.readString(transcript).contains("SSH:"),
+                    "Press alone must not open links");
+            process.getOutputStream().write("\u001b[<32;31;1M\u001b[<0;30;1m".getBytes());
+            process.getOutputStream().flush();
+            Thread.sleep(100);
+            assertFalse(
+                    Files.readString(transcript).contains("SSH:"),
+                    "Dragging must cancel link activation");
+            process.getOutputStream().write("\u001b[<0;30;1M\u001b[<0;30;1m".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "SSH:");
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
     }
 
     @ParameterizedTest

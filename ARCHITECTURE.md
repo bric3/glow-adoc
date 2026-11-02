@@ -45,12 +45,18 @@ caches results by source/language/appearance and requests reflow. Closing cancel
 an active task releases its highlighter when it finishes. `highlight-lumis4j` also persists validated
 spans by source/language/appearance and artifact identity. A disk hit leaves the Wasm engine uninitialised.
 Literal code splits at line endings; prose retains grapheme-aware wrapping.
+Detected YAML front matter uses literal rows and a horizontal separator. Layout adds external-link
+suffixes before wrapping, retaining link targets on the glyphs. Rendered rows resolve mouse columns
+to safe external targets, including horizontally scrolled content.
 
 ## Terminal lifecycle
 
 One Aesh connection carries keys, mouse reports and replies through TamboUI.
 Reply filtering prevents protocol responses from becoming commands.
 Colour detection uses OSC queries, theme notifications, bounded polling and manual refresh.
+The pager highlights hovered links and activates them on release, cancelling drags.
+The terminal adapter opens local links through a bounded system-opener process. SSH sessions retain
+native OSC 8 activation in the client terminal. Closing cancels the opener without terminating the browser.
 
 Image metadata reserves rows. Visible assets upload once per session; stable placement IDs update
 position and crop without retransmitting pixels. PNG bytes stream directly; other formats convert once.

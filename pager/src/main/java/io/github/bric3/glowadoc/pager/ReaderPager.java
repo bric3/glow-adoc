@@ -16,6 +16,7 @@ import dev.tamboui.tui.event.MouseEventKind;
 import io.github.bric3.glowadoc.diagrams.DiagramRenderer;
 import io.github.bric3.glowadoc.document.Appearance;
 import io.github.bric3.glowadoc.document.Block;
+import io.github.bric3.glowadoc.document.Controls;
 import io.github.bric3.glowadoc.document.Document;
 import io.github.bric3.glowadoc.document.Style;
 import io.github.bric3.glowadoc.highlight.DeferredHighlighter;
@@ -25,6 +26,7 @@ import io.github.bric3.glowadoc.render.Palette;
 import io.github.bric3.glowadoc.render.RenderedLine;
 import io.github.bric3.glowadoc.terminal.Ansi;
 import io.github.bric3.glowadoc.terminal.KittyImages;
+import io.github.bric3.glowadoc.terminal.LinkOpener;
 import io.github.bric3.glowadoc.terminal.Progress;
 import io.github.bric3.glowadoc.terminal.TerminalSession;
 
@@ -53,6 +55,10 @@ public final class ReaderPager {
     private final String progressMode;
     private final boolean imageDim;
     private boolean hoverTracking;
+    private boolean hasLinks;
+    private String hoveredLink = "";
+    private String pressedLink = "";
+    private int contentColumns;
     private int pointerX = -1;
     private int pointerY = -1;
     private int hoveredImage = -1;
@@ -127,12 +133,16 @@ public final class ReaderPager {
                             .build();
             try (var runner = TuiRunner.create(config);
                     var kitty = new KittyImages(session.backend());
-                    var progress = new Progress(session.backend(), progressMode, System.getenv())) {
+                    var progress = new Progress(session.backend(), progressMode, System.getenv());
+                    var links = new LinkOpener()) {
                 activeRunner = runner;
                 session.start();
                 runner.run(
                         (event, tui) -> {
                             session.tick();
+                            if (!session.focused()) {
+                                pressedLink = "";
+                            }
                             boolean redraw = session.takeDirty() || layoutDirty;
                             if (diagrams.takeDirty()) {
                                 layoutDirty = true;
@@ -140,6 +150,10 @@ public final class ReaderPager {
                                 redraw = true;
                             }
                             for (String diagnostic : diagrams.takeDiagnostics()) {
+                                message = diagnostic;
+                                redraw = true;
+                            }
+                            for (String diagnostic : links.takeDiagnostics()) {
                                 message = diagnostic;
                                 redraw = true;
                             }
@@ -155,6 +169,7 @@ public final class ReaderPager {
                                 }
                             }
                             if (event instanceof KeyEvent key) {
+                                pressedLink = "";
                                 if (key.isCtrlC() || (!searching && key.isChar('q'))) {
                                     tui.quit();
                                     return false;
@@ -224,17 +239,43 @@ public final class ReaderPager {
                             } else if (mouse && event instanceof MouseEvent pointer) {
                                 pointerX = pointer.x();
                                 pointerY = pointer.y();
+                                if (pointer.isPress()) {
+                                    pressedLink = "";
+                                }
+                                String target = linkAt(pointerX, pointerY);
+                                if (!hoveredLink.equals(target)) {
+                                    hoveredLink = target;
+                                    redraw = true;
+                                }
                                 int hovered = hoveredImage(visibleImages, pointerX, pointerY);
-                                if (hoverTracking && hovered != hoveredImage) {
+                                if (imageDim
+                                        && appearance == Appearance.DARK
+                                        && hovered != hoveredImage) {
                                     hoveredImage = hovered;
                                     redraw = true;
                                 }
                                 if (pointer.kind() == MouseEventKind.SCROLL_UP) {
+                                    pressedLink = "";
                                     top -= 3;
                                     redraw = true;
                                 } else if (pointer.kind() == MouseEventKind.SCROLL_DOWN) {
+                                    pressedLink = "";
                                     top += 3;
                                     redraw = true;
+                                } else if (pointer.kind() == MouseEventKind.DRAG) {
+                                    pressedLink = "";
+                                } else if (pointer.kind() == MouseEventKind.RELEASE
+                                        && pointer.isLeftButton()) {
+                                    if (!pressedLink.isEmpty() && pressedLink.equals(target)) {
+                                        message = "Opening link...";
+                                        links.open(target);
+                                        redraw = true;
+                                    }
+                                    pressedLink = "";
+                                } else if (pointer.isPress()
+                                        && pointer.isLeftButton()
+                                        && !target.isEmpty()) {
+                                    pressedLink = target;
                                 } else if (pointer.isPress()
                                         && pointer.isLeftButton()
                                         && pointer.y() >= 0
@@ -314,7 +355,14 @@ public final class ReaderPager {
             rebuilt = prepareImages(session);
         }
         top = clampTop(top);
-        boolean tracking = imageDim && images && session.kitty() && appearance == Appearance.DARK;
+        if (rebuilt) {
+            hasLinks =
+                    lines.stream()
+                            .flatMap(line -> line.spans().stream())
+                            .anyMatch(span -> Controls.safeLink(span.style().link()));
+        }
+        boolean tracking =
+                hasLinks || imageDim && images && session.kitty() && appearance == Appearance.DARK;
         if (tracking != hoverTracking) {
             hoverTracking = tracking;
             if (mouse) {
@@ -357,6 +405,8 @@ public final class ReaderPager {
         frame.buffer().setStyle(frame.area(), base);
         int margin = area.margin();
         contentMargin = margin;
+        contentColumns = available - margin;
+        hoveredLink = mouse && session.focused() ? linkAt(pointerX, pointerY) : "";
         for (int y = 0; y < height && top + y < lines.size(); y++) {
             var row = lines.get(top + y);
             var spans = new ArrayList<dev.tamboui.text.Span>();
@@ -370,15 +420,25 @@ public final class ReaderPager {
                     continue;
                 }
                 if (skipped < left) {
-                    int offset = 0;
-                    while (offset < text.length() && skipped < left) {
-                        int cp = text.codePointAt(offset);
-                        skipped += CharWidth.of(cp);
-                        offset += Character.charCount(cp);
-                    }
+                    int offset = RenderedLine.textOffset(text, left - skipped);
+                    skipped += CharWidth.of(text.substring(0, offset));
                     text = text.substring(offset);
                 }
                 var style = base.patch(Ansi.style(span.style(), colour, truecolour));
+                if (!hoveredLink.isEmpty() && hoveredLink.equals(span.style().link())) {
+                    style =
+                            colour
+                                    ? style.patch(
+                                            Ansi.style(
+                                                    Style.PLAIN
+                                                            .bolded()
+                                                            .colours(
+                                                                    palette.canvas(),
+                                                                    palette.accent()),
+                                                    true,
+                                                    truecolour))
+                                    : style.reversed();
+                }
                 if (row.disclosure() == focused && focused >= 0) {
                     style = style.reversed();
                 }
@@ -473,7 +533,7 @@ public final class ReaderPager {
                             session.focused()
                                     ? hoveredImage(visibleImages, pointerX, pointerY)
                                     : -1;
-                    if (hoverTracking && mouse) {
+                    if (imageDim && mouse && appearance == Appearance.DARK) {
                         placements.replaceAll(placement ->
                                 new KittyImages.Placement(
                                         placement.id(),
@@ -523,6 +583,17 @@ public final class ReaderPager {
     }
 
     private ImageDraw pendingImages = () -> {};
+
+    private String linkAt(int x, int y) {
+        return mouse
+                        && y >= 0
+                        && y < height
+                        && top + y < lines.size()
+                        && x >= contentMargin
+                        && x < contentMargin + contentColumns
+                ? lines.get(top + y).linkAt(x - contentMargin, left)
+                : "";
+    }
 
     static int hoveredImage(List<KittyImages.Placement> placements, int x, int y) {
         for (var placement : placements) {

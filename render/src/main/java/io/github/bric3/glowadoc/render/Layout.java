@@ -4,20 +4,27 @@ package io.github.bric3.glowadoc.render;
 
 import io.github.bric3.glowadoc.document.Appearance;
 import io.github.bric3.glowadoc.document.Block;
+import io.github.bric3.glowadoc.document.Controls;
 import io.github.bric3.glowadoc.document.Document;
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
 import io.github.bric3.glowadoc.highlight.Highlighter;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public final class Layout {
+    private static final Pattern ISSUE_PATH =
+            Pattern.compile("(?:^|/)issues(?:/(?:[0-9]+|new)(?:/.*)?)?/?$");
+    private static final Pattern PULL_PATH =
+            Pattern.compile("(?:^|/)(?:pulls?|merge_requests)(?:/(?:[0-9]+|new)(?:/.*)?)?/?$");
     private final Highlighter highlighter;
     private final RenderOptions options;
 
@@ -84,7 +91,8 @@ public final class Layout {
 
     private List<Span> theme(List<Span> spans, Palette palette) {
         var themed = new ArrayList<Span>();
-        for (Span span : spans) {
+        for (int i = 0; i < spans.size(); i++) {
+            Span span = spans.get(i);
             if (!span.callout().isEmpty()) {
                 if (options.callouts().equals("pill") && !options.ascii()) {
                     // Keep each pill atomic when prose wraps, including its rounded ends.
@@ -122,14 +130,69 @@ public final class Layout {
                                 span.text(),
                                 span.style().colours(palette.accent(), palette.stripe())));
             } else {
-                themed.add(span);
+                themed.add(
+                        Controls.safeLink(span.style().link())
+                                ? new Span(
+                                        span.text(),
+                                        span.style()
+                                                .colours(
+                                                        palette.accent(),
+                                                        span.style().background()))
+                                : span);
+            }
+            String target = span.style().link();
+            if (options.icons().equals("nerd")
+                    && Controls.safeLink(target)
+                    && (i + 1 == spans.size() || !target.equals(spans.get(i + 1).style().link()))) {
+                // A non-breaking space keeps the suffix with the link's final word.
+                themed.add(
+                        new Span(
+                                "\u00a0" + linkIcon(target),
+                                Style.PLAIN.linked(target).colours(palette.accent(), "")));
             }
         }
         return themed;
     }
 
+    private static String linkIcon(String target) {
+        try {
+            URI uri = URI.create(target);
+            String host = uri.getHost();
+            String path = uri.getPath();
+            boolean forge =
+                    host != null
+                            && path != null
+                            && (host.equalsIgnoreCase("github.com")
+                                    || host.equalsIgnoreCase("www.github.com")
+                                    || host.equalsIgnoreCase("gitlab.com")
+                                    || host.equalsIgnoreCase("www.gitlab.com")
+                                    || path.contains("/-/"));
+            if (forge && ISSUE_PATH.matcher(path).find()) {
+                return "\ueb0c";
+            }
+            if (forge && PULL_PATH.matcher(path).find()) {
+                return "\uea64";
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Malformed targets still retain their readable labels.
+        }
+        return "\ueb14";
+    }
+
     private List<Span> source(Block block, Palette palette, Appearance appearance) {
-        var themed = theme(block.spans(), palette);
+        var spans = block.spans();
+        if (block.format().variant().equals("front-matter")) {
+            String text = block.text();
+            int first = text.indexOf('\n');
+            int last = text.lastIndexOf('\n');
+            spans =
+                    List.of(
+                            new Span(
+                                    first >= 0 && last > first
+                                            ? text.substring(first + 1, last)
+                                            : ""));
+        }
+        var themed = theme(spans, palette);
         var highlighted =
                 highlighter.highlight(
                         themed.stream().map(Span::text).collect(Collectors.joining()),
@@ -193,10 +256,13 @@ public final class Layout {
             return lines;
         }
         boolean source = block.kind() == Block.Kind.CODE || block.kind() == Block.Kind.DIAGRAM;
+        boolean frontMatter =
+                block.kind() == Block.Kind.CODE && block.format().variant().equals("front-matter");
         boolean quote = block.kind() == Block.Kind.QUOTE || block.kind() == Block.Kind.VERSE;
         boolean box =
                 switch (block.kind()) {
-                    case CODE, EXAMPLE, SIDEBAR, ADMONITION, DETAILS -> true;
+                    case CODE -> !frontMatter;
+                    case EXAMPLE, SIDEBAR, ADMONITION, DETAILS -> true;
                     default -> false;
                 };
         if (width < 5) {
@@ -257,6 +323,16 @@ public final class Layout {
         }
         for (Block child : block.children()) {
             lines.addAll(render(child, inner, appearance, positions, toggled, interactive));
+        }
+        if (frontMatter) {
+            lines.add(
+                    new RenderedLine(
+                            List.of(
+                                    new Span(
+                                            (options.ascii() ? "-" : "─").repeat(width),
+                                            palette.borderStyle())),
+                            position,
+                            null));
         }
         if (block.kind() == Block.Kind.IMAGE || block.kind() == Block.Kind.DIAGRAM) {
             if (lines.isEmpty()) {

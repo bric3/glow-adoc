@@ -38,6 +38,7 @@ class AsciiDocReaderTest {
             var frontMatter = document.blocks().getFirst();
             assertEquals(Block.Kind.CODE, frontMatter.kind());
             assertEquals("yaml", frontMatter.language());
+            assertEquals("front-matter", frontMatter.format().variant());
             assertEquals(yaml, frontMatter.text());
             assertEquals("Heading", document.blocks().get(1).text());
             assertEquals("A paragraph with a soft break.", document.blocks().get(2).text());

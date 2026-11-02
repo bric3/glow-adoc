@@ -71,7 +71,8 @@ The standard `imagesdir` attribute prefixes relative image targets. Remote image
 == Rendering
 
 Text wraps to the content width; the final terminal column is reserved. Code scrolls horizontally.
-Detected YAML front matter stays in a literal YAML block, preserving indentation and line boundaries.
+Detected YAML front matter preserves indentation and line boundaries without a box.
+A horizontal rule separates it from the document body.
 Table cells wrap; structures wider than the viewport remain scrollable. Auto borders follow AsciiDoc frame/grid attributes.
 Source titles use italic text inside the top border. Callout pills use regular numbers on a contrasting
 background, with rounded ends in Nerd mode. Circle mode uses ❶ through ❿, then parenthesised numbers.
@@ -96,12 +97,19 @@ In dark mouse mode, images use 65% opacity until hovered. Light mode, selection 
 `--image-dim=false` show original images. Hover requires mouse motion reporting. Image variants are
 cached; scrolling reuses uploaded pixels. Theme changes update both text and images.
 
-Links use OSC 8. The terminal handles modifier clicks, including over SSH; glow-adoc does not launch
-a browser. iTerm2 uses Cmd-click when enabled in Pointer preferences. In Ghostty, use its configured
-link-opening modifier with Shift to bypass application mouse capture: Shift+Cmd-click on macOS,
-or Shift+Ctrl-click on Linux. In iTerm2, Option temporarily bypasses mouse reporting; use Option+Cmd-click
-if Cmd-click is captured. Press `m` to
-disable capture if a terminal intercepts the gesture. Links remain available with `--color=never` in the pager.
+External links are coloured and receive a Nerd Font suffix: `nf-cod-link_external`,
+`nf-cod-issues` for GitHub/GitLab issues, or `nf-cod-git_pull_request` for pull/merge requests.
+GitLab `/-/` paths also work on self-hosted instances. Suffixes remain part of the clickable link.
+Unicode and ASCII modes retain the label without a suffix.
+
+Hover highlights a link. A left-button press and release on it opens the local system browser;
+dragging cancels activation. The pager calls `open` on macOS or `xdg-open` on Linux without a shell,
+with a five-second timeout. Only HTTP, HTTPS and mailto targets are opened.
+
+OSC 8 links also remain available for terminal-managed activation and with `--color=never` in the pager.
+Over SSH, the pager leaves browser activation to the client terminal. In Ghostty use Shift+Cmd-click
+on macOS or Shift+Ctrl-click on Linux. In iTerm2 enable Cmd-click in Pointer preferences and use
+Option+Cmd-click if capture intercepts it. Press `m` to disable capture and use the terminal's usual gesture.
 
 OSC progress follows the scroll position, reaches 100% when the document fits or its end is visible,
 and clears on exit. Automatic mode recognises Ghostty, iTerm2, WezTerm, Windows Terminal and Konsole.
