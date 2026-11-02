@@ -13,4 +13,18 @@ class ReleaseVersionMapper(private val tagged: Boolean, private val explicitBump
         }
         return if (explicitBump) "$base-SNAPSHOT" else "${version.major}.${version.minor}.${version.patch + 1}-SNAPSHOT"
     }
+
+    companion object {
+        fun releaseVersion(tag: String, prerelease: Boolean?): String {
+            require(tag.startsWith("v")) { "Release tags must start with v: $tag" }
+            val version = GradleVersion(tag.removePrefix("v"), GradleVersion.CheckMode.Significant)
+            require(version.metadata == null && !version.stage?.name.equals("SNAPSHOT", ignoreCase = true)) {
+                "Release tags must contain a release or prerelease version: $tag"
+            }
+            require(prerelease == null || prerelease == (version.stage != null)) {
+                "The GitHub prerelease flag must match the release tag: $tag"
+            }
+            return version.toString()
+        }
+    }
 }

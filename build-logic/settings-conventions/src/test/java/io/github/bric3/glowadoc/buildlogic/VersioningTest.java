@@ -2,6 +2,7 @@
 package io.github.bric3.glowadoc.buildlogic;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.gradle.testkit.runner.GradleRunner;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,36 @@ class VersioningTest {
         git("-c", "user.name=Test", "-c", "user.email=test@example.org", "commit", "-m", "Change");
         assertVersion("0.1.1-SNAPSHOT");
         assertTrue(run("-Psemver.scope=minor", "-Psemver.tagPrefix=v").contains("VERSION=0.2.0-SNAPSHOT"));
+
+        assertTrue(runner("-PreleaseTag=v0.1.0").buildAndFail().getOutput().contains("must check out v0.1.0"));
+        git("tag", "v0.2.0");
+        assertTrue(run("-PreleaseTag=v0.2.0", "-PreleasePrerelease=false").contains("VERSION=0.2.0"));
+        assertTrue(run("-PreleaseTag=v0.2.0", "-PreleasePrerelease=false").contains("Reusing configuration cache"));
+        assertTrue(run("-PreleaseTag=v0.2.0", "-PreleasePrerelease=").contains("VERSION=0.2.0"));
+        git("tag", "v0.3.0-rc.1");
+        assertTrue(run("-PreleaseTag=v0.3.0-rc.1", "-PreleasePrerelease=true").contains("VERSION=0.3.0-rc.1"));
+        Files.writeString(directory.resolve("dirty.txt"), "changed");
+        assertTrue(runner("-PreleaseTag=v0.2.0").buildAndFail().getOutput().contains("require a clean checkout"));
+    }
+
+    @Test
+    void validatesReleaseTagsAndPrereleaseFlags() {
+        assertEquals("0.2.0", ReleaseVersionMapper.Companion.releaseVersion("v0.2.0", false));
+        assertEquals("0.2.0-rc.1", ReleaseVersionMapper.Companion.releaseVersion("v0.2.0-rc.1", true));
+        assertThrows(IllegalArgumentException.class, () -> ReleaseVersionMapper.Companion.releaseVersion("0.2.0", false));
+        assertThrows(IllegalArgumentException.class, () -> ReleaseVersionMapper.Companion.releaseVersion(
+                "v0.2.0-SNAPSHOT",
+                true
+        ));
+        assertThrows(IllegalArgumentException.class, () -> ReleaseVersionMapper.Companion.releaseVersion(
+                "v0.2.0+build",
+                false
+        ));
+        assertThrows(IllegalArgumentException.class, () -> ReleaseVersionMapper.Companion.releaseVersion("v0.2.0", true));
+        assertThrows(IllegalArgumentException.class, () -> ReleaseVersionMapper.Companion.releaseVersion(
+                "v0.2.0-rc.1",
+                false
+        ));
     }
 
     private void assertVersion(String version) {
@@ -68,6 +99,10 @@ class VersioningTest {
     }
 
     private String run(String... extra) {
+        return runner(extra).build().getOutput();
+    }
+
+    private GradleRunner runner(String... extra) {
         var args =
                 new ArrayList<>(List.of(
                         ":verifyVersion",
@@ -76,13 +111,7 @@ class VersioningTest {
                         "--stacktrace"
         ));
         args.addAll(Arrays.asList(extra));
-        return GradleRunner
-            .create()
-            .withProjectDir(directory.toFile())
-            .withPluginClasspath()
-            .withArguments(args)
-            .build()
-            .getOutput();
+        return GradleRunner.create().withProjectDir(directory.toFile()).withPluginClasspath().withArguments(args);
     }
 
     private String git(String... args) throws Exception {

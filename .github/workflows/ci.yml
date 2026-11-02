@@ -8,7 +8,7 @@ permissions:
   contents: read
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   build:
     strategy:
@@ -40,6 +40,17 @@ jobs:
           selected_java=$(sed -n 's/^glow-adoc timing java: //p' glowadoc-cli-jvm/build/aot-check.log)
           aot_cache=$(sed -n 's/^glow-adoc timing aot-cache: //p' glowadoc-cli-jvm/build/aot-check.log)
           "$selected_java" --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=required -XX:AOTCache="$aot_cache" -jar "$installed_jar" --no-cache --no-pager --color=always fixtures/showcase.adoc
+      - name: Upload tested application classes and resources
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && matrix.os == 'ubuntu-24.04'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: glowadoc-tested-classes
+          path: |
+            **/build/classes/java/main/
+            **/build/resources/main/
+            glowadoc-cli-jvm/build/classes/java/bootstrap/
+          if-no-files-found: error
+          retention-days: 7
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
@@ -66,3 +77,56 @@ jobs:
       - run: ./gradlew :glowadoc-diagrams-merman:test
         env:
           GLOW_TEST_MERMAN: ${{ runner.temp }}/merman-cli-x86_64-unknown-linux-gnu/merman-cli
+  draft:
+    needs: [build, merman]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '27'
+      - uses: jbangdev/setup-jbang@cc28889678db839e29433f42f9ff25f148b6d8de
+      - name: Verify release lifecycle
+        run: jbang tools/Release.java --self-test
+      - name: Select newest draft release
+        id: draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: jbang tools/Release.java select
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        if: steps.draft.outputs.id != ''
+      - name: Download tested application classes and resources
+        if: steps.draft.outputs.id != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: glowadoc-tested-classes
+          path: .
+      - name: Package tested classes with the draft version
+        if: steps.draft.outputs.id != ''
+        env:
+          RELEASE_TAG: ${{ steps.draft.outputs.tag }}
+          ORG_GRADLE_PROJECT_releaseTag: ${{ steps.draft.outputs.tag }}
+          ORG_GRADLE_PROJECT_releasePrerelease: ${{ steps.draft.outputs.prerelease }}
+        run: |
+          git tag --no-sign "$RELEASE_TAG" "$GITHUB_SHA"
+          ./gradlew :glowadoc-cli-jvm:releaseArtifacts -x compileJava -x :glowadoc-cli-jvm:compileBootstrapJava
+      - name: Update and verify selected draft release
+        if: steps.draft.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.draft.outputs.id }}
+          RELEASE_TAG: ${{ steps.draft.outputs.tag }}
+        run: jbang tools/Release.java draft glowadoc-cli-jvm/build/release

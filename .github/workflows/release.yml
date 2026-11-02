@@ -2,8 +2,6 @@
 
 name: Release
 on:
-  push:
-    branches: [master]
   release:
     types: [published]
   workflow_dispatch:
@@ -19,15 +17,17 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release:
-    if: github.event_name != 'release' || !github.event.release.prerelease
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write
+    env:
+      ORG_GRADLE_PROJECT_releaseTag: ${{ github.event.release.tag_name || inputs.tag }}
+      ORG_GRADLE_PROJECT_releasePrerelease: ${{ github.event_name == 'release' && toJSON(github.event.release.prerelease) || '' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag || github.sha }}
+          ref: refs/tags/${{ github.event.release.tag_name || inputs.tag }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
@@ -40,13 +40,7 @@ jobs:
         run: ./gradlew checkAll :glowadoc-cli-jvm:releaseArtifacts
       - name: Verify release lifecycle
         run: jbang tools/Release.java --self-test
-      - name: Update snapshot draft
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: jbang tools/Release.java snapshot glowadoc-cli-jvm/build/release
-      - name: Replace snapshot assets with final build
-        if: github.event_name != 'push'
+      - name: Update and verify published release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}

@@ -81,12 +81,21 @@ tests and `jbang tools/Release.java --self-test` for release lifecycle checks.
 The settings convention `glowadoc.versioning` applies Javier's Semver plugin. Untagged repositories build
 `0.1.0-SNAPSHOT`. A clean `v0.1.0` checkout builds `0.1.0`; subsequent commits build `0.1.1-SNAPSHOT`.
 Select a minor bump with `-Psemver.scope=minor -Psemver.tagPrefix=v`.
-Builds do not create or push tags.
+Gradle builds do not create or push tags.
 
-Every successful master release build creates or updates the upcoming version's draft, target commit,
-snapshot jars and checksums. Human release notes are preserved. Publish the draft to create its release
-tag and trigger a final build from that tag. Final jars and checksums replace snapshot downloads after
-successful uploads. Snapshot assets remain public while that build runs.
+Create a draft release with its intended version tag, such as `v0.1.0` or `v0.2.0-rc.1` for a prerelease.
+Keep that tag uncreated until publication. After the Linux, macOS and Merman CI jobs pass, master refreshes
+the newest draft. If there is no draft, the refresh is skipped.
+
+CI preserves the title, release notes and prerelease flag, updates the target commit, and packages the
+tested application classes and resources with the draft version. It creates the tag only in its private
+checkout. `-PreleaseTag=TAG` selects that exact version and requires a clean checkout at the tag;
+`-PreleasePrerelease=true|false` checks that the GitHub prerelease flag matches the version.
+
+The two versioned jars and their checksums replace previous glow-adoc assets after successful uploads.
+CI verifies the target commit and uploaded assets. Publish the draft to create its release tag and trigger
+another checked build from that tag, which refreshes the published assets. Release and prerelease tags
+are supported; snapshot tags and build metadata are rejected.
 
 Retry final uploads through the Release workflow's manual dispatch with the published tag.
 `./gradlew :glowadoc-cli-jvm:releaseArtifacts` stages jars and version metadata under `glowadoc-cli-jvm/build/release`.

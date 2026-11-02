@@ -15,6 +15,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -24,7 +25,7 @@ import java.util.Properties;
 import java.util.jar.JarFile;
 
 /**
- * Maintains the master draft and replaces snapshot assets after publication.
+ * Refreshes the newest draft with tested artifacts and updates published releases.
  */
 public class Release {
     private final String repository;
@@ -44,8 +45,30 @@ public class Release {
             selfTest();
             return;
         }
-        if (args.length != 2 || !List.of("snapshot", "final").contains(args[0])) {
-            throw new IllegalArgumentException("Usage: Release.java snapshot|final ARTIFACT_DIRECTORY");
+        var publisher = new Release(System.getenv("GITHUB_REPOSITORY"), System.getenv("GH_TOKEN"));
+        if (args.length == 1 && args[0].equals("select")) {
+            JsonObject draft = publisher.selectDraft(System.getenv("GITHUB_SHA"));
+            if (draft != null) {
+                String tag = draft.get("tag_name").getAsString();
+                if (!tag.matches("v[0-9][0-9A-Za-z.-]*")) {
+                    throw new IllegalArgumentException("Invalid draft tag: " + tag);
+                }
+                Files.writeString(
+                        Path.of(System.getenv("GITHUB_OUTPUT")),
+                        String.join(
+                                "\n",
+                                "id=" + draft.get("id").getAsLong(),
+                                "tag=" + tag,
+                                "prerelease=" + draft.get("prerelease").getAsBoolean(),
+                                ""
+                        ),
+                        StandardOpenOption.APPEND
+                );
+            }
+            return;
+        }
+        if (args.length != 2 || !List.of("draft", "final").contains(args[0])) {
+            throw new IllegalArgumentException("Usage: Release.java select | draft|final ARTIFACT_DIRECTORY");
         }
         var metadata = new Properties();
         Path directory = Path.of(args[1]);
@@ -53,12 +76,14 @@ public class Release {
             metadata.load(input);
         }
         String version = metadata.getProperty("version");
-        boolean snapshot = args[0].equals("snapshot");
-        if (version == null || !version.matches("\\d+\\.\\d+\\.\\d+" + (snapshot ? "-SNAPSHOT" : ""))) {
+        boolean draft = args[0].equals("draft");
+        if (version == null
+                || !version.matches("\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?")
+                || version.endsWith("-SNAPSHOT")) {
             throw new IllegalArgumentException("Unexpected " + args[0] + " version: " + version);
         }
-        String tag = "v" + version.replace("-SNAPSHOT", "");
-        if (!snapshot && !tag.equals(System.getenv("RELEASE_TAG"))) {
+        String tag = "v" + version;
+        if (!tag.equals(System.getenv("RELEASE_TAG"))) {
             throw new IllegalArgumentException("Release tag does not match artifact version");
         }
         var files = new ArrayList<>(List.of(
@@ -87,58 +112,68 @@ public class Release {
         Path checksumFile = directory.resolve("checksums-" + version + ".txt");
         Files.writeString(checksumFile, checksums);
         files.add(checksumFile);
-        new Release(System.getenv("GITHUB_REPOSITORY"), System.getenv("GH_TOKEN"))
-            .update(
-                    snapshot,
-                    tag,
-                    System.getenv("GITHUB_SHA"),
-                    files,
-                    Files.readString(Path.of("docs/RELEASE-NOTES.md"))
-            );
+        long id = draft
+                ? Long.parseLong(System.getenv("RELEASE_ID"))
+                : publisher.request("GET", "releases/tags/" + tag, null).getAsJsonObject().get("id").getAsLong();
+        publisher.update(draft, id, tag, System.getenv("GITHUB_SHA"), files);
     }
 
-    void update(boolean snapshot, String tag, String sha, List<Path> files, String notes) throws Exception {
-        if (snapshot
-                && !sha.equals(request("GET", "commits/master", null).getAsJsonObject().get("sha").getAsString())) {
-            System.out.println("Skipping superseded master build");
-            return;
+    JsonObject selectDraft(String sha) throws Exception {
+        if (!currentMaster(sha)) {
+            return null;
         }
-        JsonObject release = null;
-        for (int page = 1; release == null; page++) {
+        JsonObject selected = null;
+        for (int page = 1; ; page++) {
             var batch = request("GET", "releases?per_page=100&page=" + page, null).getAsJsonArray();
-            for (var candidate : batch) {
-                if (candidate.getAsJsonObject().get("tag_name").getAsString().equals(tag)) {
-                    release = candidate.getAsJsonObject();
+            for (var item : batch) {
+                var candidate = item.getAsJsonObject();
+                String created = candidate.get("created_at").getAsString();
+                if (candidate.get("draft").getAsBoolean()
+                        && (selected == null || created.compareTo(selected.get("created_at").getAsString()) > 0)) {
+                    selected = candidate;
                 }
             }
             if (batch.size() < 100) {
                 break;
             }
         }
-        if (snapshot && release != null && !release.get("draft").getAsBoolean()) {
+        if (selected == null) {
+            System.out.println("No draft release to refresh");
+        }
+        return selected;
+    }
+
+    private boolean currentMaster(String sha) throws Exception {
+        if (!sha.equals(request("GET", "commits/master", null).getAsJsonObject().get("sha").getAsString())) {
+            System.out.println("Skipping superseded master build");
+            return false;
+        }
+        return true;
+    }
+
+    void update(boolean draft, long id, String tag, String sha, List<Path> files) throws Exception {
+        if (draft && !currentMaster(sha)) {
+            return;
+        }
+        var release = request("GET", "releases/" + id, null).getAsJsonObject();
+        if (!release.get("tag_name").getAsString().equals(tag)) {
+            throw new IllegalStateException("Release tag changed during the build");
+        }
+        if (draft && !release.get("draft").getAsBoolean()) {
             System.out.println("Release is already public; keeping final assets");
             return;
         }
-        if (!snapshot && (release == null || release.get("draft").getAsBoolean())) {
+        if (!draft && release.get("draft").getAsBoolean()) {
             throw new IllegalStateException("Expected a published release for " + tag);
         }
-        if (snapshot) {
+        if (draft) {
             var body = new JsonObject();
-            body.addProperty("tag_name", tag);
             body.addProperty("target_commitish", sha);
-            if (release == null) {
-                body.addProperty("draft", true);
-                body.addProperty("name", tag);
-                body.addProperty("body", notes);
-                release = request("POST", "releases", body).getAsJsonObject();
-            } else {
-                release = request("PATCH", "releases/" + release.get("id").getAsLong(), body).getAsJsonObject();
-            }
+            request("PATCH", "releases/" + id, body);
         }
-        long id = release.get("id").getAsLong();
         for (Path file : files) {
             var current = request("GET", "releases/" + id, null).getAsJsonObject();
-            if (snapshot && !current.get("draft").getAsBoolean()) {
+            if (draft && !current.get("draft").getAsBoolean()) {
                 return;
             }
             for (var asset : assets(id)) {
@@ -148,19 +183,33 @@ public class Release {
             }
             upload(id, file);
         }
-        if (!snapshot) {
-            // Snapshot downloads remain available until every final upload succeeds.
-            String version = tag.substring(1);
-            var obsolete = List.of(
-                    "glow-adoc-" + version + "-SNAPSHOT.jar",
-                    "glow-adoc-" + version + "-SNAPSHOT-app.jar",
-                    "checksums-" + version + "-SNAPSHOT.txt"
-            );
-            for (var asset : assets(id)) {
-                if (obsolete.contains(asset.getAsJsonObject().get("name").getAsString())) {
-                    request("DELETE", "releases/assets/" + asset.getAsJsonObject().get("id").getAsLong(), null);
-                }
+        var current = request("GET", "releases/" + id, null).getAsJsonObject();
+        if (draft && !current.get("draft").getAsBoolean()) {
+            return;
+        }
+        // Keep previous downloads until every new upload succeeds.
+        var expected = files
+            .stream()
+            .map(file -> file.getFileName().toString())
+            .toList();
+        for (var asset : assets(id)) {
+            String name = asset.getAsJsonObject().get("name").getAsString();
+            if (!expected.contains(name)
+                    && (name.startsWith("glow-adoc-") && name.endsWith(".jar")
+                    || name.startsWith("checksums-") && name.endsWith(".txt"))) {
+                request("DELETE", "releases/assets/" + asset.getAsJsonObject().get("id").getAsLong(), null);
             }
+        }
+        current = request("GET", "releases/" + id, null).getAsJsonObject();
+        var uploaded = new ArrayList<String>();
+        for (var asset : assets(id)) {
+            uploaded.add(asset.getAsJsonObject().get("name").getAsString());
+        }
+        if (current.get("draft").getAsBoolean() != draft
+                || !tag.equals(current.get("tag_name").getAsString())
+                || draft && !sha.equals(current.get("target_commitish").getAsString())
+                || !uploaded.containsAll(expected)) {
+            throw new IllegalStateException("Release target or artifact uploads were not updated");
         }
     }
 
@@ -224,45 +273,70 @@ public class Release {
 
     static void selfTest() throws Exception {
         var fake = new Fake();
-        var snapshot = List.of(
-                Path.of("glow-adoc-0.1.0-SNAPSHOT.jar"),
-                Path.of("glow-adoc-0.1.0-SNAPSHOT-app.jar"),
-                Path.of("checksums-0.1.0-SNAPSHOT.txt")
-        );
-        var finals =
-                List.of(
-                        Path.of("glow-adoc-0.1.0.jar"),
-                        Path.of("glow-adoc-0.1.0-app.jar"),
-                        Path.of("checksums-0.1.0.txt")
-        );
-        fake.update(true, "v0.1.0", "head", snapshot, "notes");
-        if (!fake.draft || !fake.names.contains("glow-adoc-0.1.0-SNAPSHOT.jar")) {
-            throw new AssertionError();
+        if (fake.selectDraft("head") != null) {
+            throw new AssertionError("Selected a release when no draft exists");
         }
-        fake.body = "human notes";
-        fake.update(true, "v0.1.0", "head", snapshot, "replacement notes");
-        if (!fake.body.equals("human notes")) {
-            throw new AssertionError("Lost notes");
+        fake.exists = true;
+        for (int i = 0; i < 100; i++) {
+            fake.otherReleases.add(JsonParser.parseString("{id:2,draft:false,created_at:'2026-11-03T00:00:00Z'}"));
         }
-        fake.draft = false;
-        fake.update(true, "v0.1.0", "head", snapshot, "notes");
+        fake.otherReleases.add(JsonParser.parseString("{id:3,draft:true,created_at:'2026-11-01T00:00:00Z'}"));
+        if (fake.selectDraft("head").get("id").getAsLong() != 1 || fake.selectDraft("superseded") != null) {
+            throw new AssertionError("Selected the wrong draft or a superseded build");
+        }
+        var files = List.of(
+                Path.of("glow-adoc-0.2.0-rc.1.jar"),
+                Path.of("glow-adoc-0.2.0-rc.1-app.jar"),
+                Path.of("checksums-0.2.0-rc.1.txt")
+        );
+        fake.names.addAll(List.of("glow-adoc-0.1.0-SNAPSHOT.jar", "checksums-0.1.0-SNAPSHOT.txt", "notes.pdf"));
         fake.fail = true;
         try {
-            fake.update(false, "v0.1.0", "head", finals, "notes");
+            fake.update(true, 1, "v0.2.0-rc.1", "head", files);
             throw new AssertionError("Upload should fail");
         } catch (java.io.IOException expected) {
             if (!fake.names.contains("glow-adoc-0.1.0-SNAPSHOT.jar")) {
-                throw new AssertionError("Lost snapshot on failure");
+                throw new AssertionError("Lost previous artifacts on failure");
             }
         }
         fake.fail = false;
-        fake.update(false, "v0.1.0", "head", finals, "notes");
-        fake.update(false, "v0.1.0", "head", finals, "notes");
-        if (!fake.names.equals(finals
+        fake.update(true, 1, "v0.2.0-rc.1", "head", files);
+        fake.update(true, 1, "v0.2.0-rc.1", "head", files);
+        if (!fake.body.equals("human notes")
+                || !fake.name.equals("Human title")
+                || !fake.prerelease
+                || !fake.target.equals("head")
+                || fake.names.size() != 4
+                || !fake.names.contains("notes.pdf")) {
+            throw new AssertionError("Lost draft metadata or left incorrect assets");
+        }
+        fake.ignoreUploads = true;
+        try {
+            fake.update(true, 1, "v0.2.0-rc.1", "head", files);
+            throw new AssertionError("Missing uploads should fail verification");
+        } catch (IllegalStateException expected) {
+            if (!expected.getMessage().contains("artifact uploads")) {
+                throw expected;
+            }
+        }
+        fake.ignoreUploads = false;
+        fake.draft = false;
+        fake.update(true, 1, "v0.2.0-rc.1", "head", files);
+        fake.update(false, 1, "v0.2.0-rc.1", "head", files);
+        fake.update(false, 1, "v0.2.0-rc.1", "head", files);
+        if (!fake.names.containsAll(files
             .stream()
             .map(file -> file.getFileName().toString())
             .toList())) {
-            throw new AssertionError("Retry left incorrect assets");
+            throw new AssertionError("Retry left missing assets");
+        }
+        try {
+            fake.update(false, 1, "v0.3.0", "head", files);
+            throw new AssertionError("A changed tag should fail");
+        } catch (IllegalStateException expected) {
+            if (!expected.getMessage().contains("tag changed")) {
+                throw expected;
+            }
         }
         System.out.println("Release lifecycle checks passed");
     }
@@ -271,8 +345,13 @@ public class Release {
         boolean exists;
         boolean draft = true;
         boolean fail;
-        String body = "notes";
+        boolean ignoreUploads;
+        boolean prerelease = true;
+        String body = "human notes";
+        String name = "Human title";
+        String target = "old";
         final List<String> names = new ArrayList<>();
+        final JsonArray otherReleases = new JsonArray();
 
         Fake() {
             super("example/glow-adoc", "unused");
@@ -280,16 +359,28 @@ public class Release {
 
         @Override
         JsonElement request(String method, String path, JsonObject payload) {
-            var release = JsonParser.parseString("{id:1,tag_name:'v0.1.0'}").getAsJsonObject();
+            var release =
+                    JsonParser
+                .parseString("{id:1,tag_name:'v0.2.0-rc.1',created_at:'2026-11-02T00:00:00Z'}")
+                .getAsJsonObject();
             release.addProperty("draft", draft);
             release.addProperty("body", body);
+            release.addProperty("name", name);
+            release.addProperty("prerelease", prerelease);
+            release.addProperty("target_commitish", target);
             if (path.equals("commits/master")) {
                 return JsonParser.parseString("{sha:'head'}");
             }
             if (path.startsWith("releases?")) {
-                var result = new JsonArray();
+                var all = new JsonArray();
+                all.addAll(otherReleases);
                 if (exists) {
-                    result.add(release);
+                    all.add(release);
+                }
+                var result = new JsonArray();
+                int start = (Integer.parseInt(path.substring(path.lastIndexOf('=') + 1)) - 1) * 100;
+                for (int i = start; i < Math.min(start + 100, all.size()); i++) {
+                    result.add(all.get(i));
                 }
                 return result;
             }
@@ -308,10 +399,19 @@ public class Release {
                 names.removeIf(name -> name.hashCode() == assetId);
             }
             if (method.equals("POST")) {
-                exists = true;
+                throw new AssertionError("Release creation is not allowed");
             }
             if (payload != null && payload.has("body")) {
                 body = payload.get("body").getAsString();
+            }
+            if (payload != null && payload.has("name")) {
+                name = payload.get("name").getAsString();
+            }
+            if (payload != null && payload.has("prerelease")) {
+                prerelease = payload.get("prerelease").getAsBoolean();
+            }
+            if (payload != null && payload.has("target_commitish")) {
+                target = payload.get("target_commitish").getAsString();
             }
             return release;
         }
@@ -321,7 +421,9 @@ public class Release {
             if (fail) {
                 throw new java.io.IOException("Simulated failed upload");
             }
-            names.add(file.getFileName().toString());
+            if (!ignoreUploads) {
+                names.add(file.getFileName().toString());
+            }
         }
     }
 }
