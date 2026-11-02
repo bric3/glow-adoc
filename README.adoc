@@ -2,40 +2,47 @@
 
 = glow-adoc
 
-Read AsciiDoc in a terminal. Includes a pager, syntax highlighting, tables, collapsible blocks,
-terminal colours and Kitty graphics. Uses AsciidoctorJ; requires Java 27+.
+glow-adoc makes AsciiDoc comfortable to read in your terminal, with a searchable pager,
+highlighted code, aligned tables, colourful admonitions and collapsible sections.
+
+* Search as you type, follow clickable links and navigate with the keyboard or mouse.
+* Read with automatic light/dark themes and text that wraps at 120 columns by default.
+* View local images through Kitty graphics, including over SSH, and render PlantUML diagrams.
+* Open files or stdin, or write formatted text directly to stdout.
+
+Built with https://github.com/asciidoctor/asciidoctorj[AsciidoctorJ] for parsing,
+https://github.com/tamboui/tamboui[TamboUI] for the pager,
+https://github.com/roastedroot/lumis4j[Lumis4J] for highlighting and
+https://github.com/plantuml/plantuml[PlantUML] for diagrams.
+Mermaid support uses optional https://github.com/Latias94/merman[Merman]: `brew install merman-cli`.
 
 == Install
 
-Build from source with Java 27:
+The pager runs on macOS and Linux with Java 27+. A Nerd Font enables the default icons.
+
+=== Homebrew
+
+The formula will be published in https://github.com/bric3/homebrew-bric3[bric3/bric3]:
 
 [source,sh]
 ----
-./gradlew checkAll :cli-jvm:install
+brew install bric3/bric3/glow-adoc
+----
+
+=== From source
+
+From a checkout, with Java 27 installed:
+
+[source,sh]
+----
+./gradlew :cli-jvm:install
 export PATH="$HOME/.local/bin:$PATH"
 ----
 
-Installation replaces `~/.local/bin/glow-adoc`. The launcher uses the first available manager:
-mise, SDKMAN!'s current candidate, asdf-vm, jenv, then jabba. Otherwise it runs `java` on PATH.
-The selected runtime must be Java 27+; the Java bootstrap reports older versions. The launcher
-does not probe versions, search other installations or download a JDK.
+Installation pretrains a local AOT cache and writes `~/.local/bin/glow-adoc`.
+Use `:cli-jvm:installWithoutAot` to skip training.
 
-Installation trains a local AOT cache with the bundled link:fixtures/aot/README.adoc[training corpus]
-before copying the executable. To skip training:
-
-[source,sh]
-----
-./gradlew :cli-jvm:installWithoutAot
-----
-
-Skipping training leaves any existing compatible cache available to the launcher.
-The cache serves other AsciiDoc files with the same executable and runtime. It requires retraining
-after application or JDK changes. New documents still need parsing; see link:docs/PERFORMANCE.adoc[performance].
-
-A link:packaging/homebrew/glow-adoc.rb[Homebrew formula template] is supplied for future releases.
-Fill in its repository, version and checksum before use. Native Image remains experimental.
-
-== Usage
+== Read
 
 [source,sh]
 ----
@@ -43,84 +50,41 @@ glow-adoc document.adoc
 glow-adoc --width=100 --center=true document.adoc
 glow-adoc --no-pager --color=never document.adoc
 cat document.adoc | glow-adoc -
-glow-adoc -a image-assets="$PWD/static/assets" content/posts/post.adoc
-glow-adoc --help
 ----
 
-A terminal opens the pager. Text wraps at 120 columns by default, limited by narrower terminals.
-Redirected output uses the same 120-column default.
-`--no-pager` selects direct output; `--width` changes the content width.
-The regular jar also supports `java -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc`.
+Press `/` to search, `n/N` to cycle matches, Tab/Enter to toggle sections and `q` to quit.
+Press `m` to switch between mouse controls and terminal text selection.
 
-== Pager
+== Configure
 
-Use arrows or `j/k` to scroll, Space/Page Down and `b`/Page Up to page, `g/G` for start/end.
-Left/right scroll wide code and tables. Press `q` or Ctrl-C to quit.
+Use CLI options or TOML settings. CLI values override project settings, which override user settings.
+User settings live in `~/.config/glow-adoc/config.toml`, or under `$XDG_CONFIG_HOME`.
+Project lookup starts beside the document and searches parents, checking `.glow-adoc.local.toml`
+before `.glow-adoc.toml` at each level. It stops at the first match; stdin uses the working directory.
 
-`/` highlights literal matches while typing. The nearest match is selected, with ties favouring
-the match above. Enter keeps it, Escape restores the reading position, and `n/N` cycle occurrences.
+[cols="2,2,3",options="header"]
+|===
+|CLI example |TOML equivalent |Effect
+|`--no-pager` |`pager = false` |Write directly to stdout.
+|`--width=100`, `--center=true` |`width = 100`, `center = true` |Set the reading width and centre the content.
+|`--theme=dark`, `--color=always` |`theme = "dark"`, `color = "always"` |Override automatic appearance detection.
+|`--icons=unicode`, `--callouts=circle` |`icons = "unicode"`, `callouts = "circle"` |Choose icons and numbered code markers.
+|`--images=auto`, `--image-dim=false` |`images = "auto"`, `image-dim = false` |Display supported images at full brightness.
+|`--mouse=false`, `--progress=never` |`mouse = false`, `progress = "never"` |Control mouse capture and the terminal progress indicator.
+|`--page-background=true` |`page-background = true` |Fill the page background.
+|`--table-stripes=false` |`table-stripes = false` |Disable alternating table backgrounds.
+|`--table-frame=all`, `--table-grid=rows` |`table-frame = "all"`, `table-grid = "rows"` |Choose outer and internal table borders.
+|`--table-section-borders=heavy` |`table-section-borders = "heavy"` |Emphasise header and footer separators.
+|`--shortcodes=show` |`shortcodes = "show"` |Show Hugo shortcode tags, which are hidden by default.
+|`-a image-assets=assets` |`[attributes]` with `image-assets = "assets"` |Supply attributes referenced by the document.
+|`--image-root=static` |`image-roots = ["static"]` |Allow images from an additional directory.
+|`--config=settings.toml` |CLI only. |Read an explicit settings file.
+|`--no-cache`, `--timings`, `--train-aot` |CLI only. |Bypass disk caches, inspect startup timings or retrain AOT.
+|===
 
-Tab/Shift-Tab focus collapsible headers; Enter or a click toggles them.
-The mouse wheel scrolls three lines. Press `m` to toggle mouse capture.
-Use Shift-drag for native selection in terminals that support it, or `--mouse=false`.
+Run `glow-adoc --help` or read the link:docs/REFERENCE.adoc[CLI reference] and
+link:docs/config.toml[complete TOML example] for all values, defaults and path rules.
 
-== Project settings
-
-Place `.glow-adoc.local.toml` or `.glow-adoc.toml` at the project root:
-
-[source,toml]
-----
-image-roots = ["static"]
-
-[attributes]
-image-assets = "assets"
-----
-
-Discovery starts beside the document and searches parents, trying the local file first at each level.
-The first file overrides user settings; CLI values win. Stdin uses the working directory.
-See link:docs/REFERENCE.adoc[the reference] for paths, precedence and options.
-
-== Images and diagrams
-
-PNG/JPEG images use Kitty graphics in supported terminals. Image data travels through the terminal
-connection, including SSH; the terminal does not need access to image files.
-An absolute directory supplied through `-a` also allows image reads from that directory.
-Other external image directories need `--image-root` or `image-roots`.
-
-PlantUML's MIT distribution is embedded; ditaa is unavailable.
-Mermaid uses an optional, separately installed Merman:
-
-[source,sh]
-----
-brew install merman-cli
-# Alternative:
-cargo binstall merman-cli
-----
-
-Platform archives are available from https://github.com/Latias94/merman/releases[Merman releases].
-Verify checksums. Integration tests use Merman 0.8.0; Gradle never installs it.
-Missing renderers retain diagram source.
-
-== Startup and troubleshooting
-
-Text appears before syntax highlighting and diagram rendering complete. Visible diagrams render in
-the background. Images upload once and are reused while scrolling.
-Unchanged files skip JRuby through a private conversion cache. Completed highlights are also reused
-across launches. `--no-cache` bypasses both disk caches.
-The default install task trains the bundled AOT corpus. To retrain an existing installation:
-
-[source,sh]
-----
-glow-adoc --train-aot
-glow-adoc --timings document.adoc
-----
-
-Matching caches load automatically through the executable launcher.
-See link:docs/PERFORMANCE.adoc[performance] and link:docs/TROUBLESHOOTING.adoc[troubleshooting].
-
-== Development and licence
-
-Read link:CONTRIBUTING.md[Contributing], link:ARCHITECTURE.md[Architecture],
-link:docs/VERIFICATION.adoc[Verification], and link:docs/QUALITY.adoc[quality checks and optimisation review].
-Project source uses link:LICENSE[MPL 2.0]. Dependencies retain their
-link:THIRD-PARTY.md[licences and notices].
+See link:docs/TROUBLESHOOTING.adoc[troubleshooting], link:docs/PERFORMANCE.adoc[performance] and
+link:CONTRIBUTING.md[contributing]. Source code uses link:LICENSE[MPL 2.0];
+dependencies retain their link:THIRD-PARTY.md[licences].
