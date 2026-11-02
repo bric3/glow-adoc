@@ -123,8 +123,32 @@ jobs:
         run: |
           git tag --no-sign "$RELEASE_TAG" "$GITHUB_SHA"
           ./gradlew :glowadoc-cli-jvm:releaseArtifacts -x compileJava -x :glowadoc-cli-jvm:compileBootstrapJava
-      - name: Update and verify selected draft release
+      - name: Check draft before updating
         if: steps.draft.outputs.id != ''
+        id: current
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          RELEASE_ID: ${{ steps.draft.outputs.id }}
+          RELEASE_TAG: ${{ steps.draft.outputs.tag }}
+          PRERELEASE: ${{ steps.draft.outputs.prerelease }}
+        with:
+          script: |
+            const {data: branch} = await github.rest.repos.getBranch({...context.repo, branch: 'master'});
+            const {data: draft} = await github.rest.repos.getRelease({
+              ...context.repo, release_id: Number(process.env.RELEASE_ID)
+            });
+            const {data: refs} = await github.rest.git.listMatchingRefs({
+              ...context.repo, ref: `tags/${process.env.RELEASE_TAG}`
+            });
+            if (branch.commit.sha !== context.sha || !draft.draft ||
+                draft.tag_name !== process.env.RELEASE_TAG ||
+                String(draft.prerelease) !== process.env.PRERELEASE ||
+                refs.some(r => r.ref === `refs/tags/${process.env.RELEASE_TAG}`)) {
+              return core.notice('Build, draft or tag changed; skipped draft update.');
+            }
+            core.setOutput('ready', 'true');
+      - name: Update and verify selected draft release
+        if: steps.current.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_ID: ${{ steps.draft.outputs.id }}

@@ -47,7 +47,7 @@ public class Release {
         }
         var publisher = new Release(System.getenv("GITHUB_REPOSITORY"), System.getenv("GH_TOKEN"));
         if (args.length == 1 && args[0].equals("select")) {
-            JsonObject draft = publisher.selectDraft(System.getenv("GITHUB_SHA"));
+            JsonObject draft = publisher.selectDraft();
             if (draft != null) {
                 String tag = draft.get("tag_name").getAsString();
                 if (!tag.matches("v[0-9][0-9A-Za-z.-]*")) {
@@ -118,10 +118,7 @@ public class Release {
         publisher.update(draft, id, tag, System.getenv("GITHUB_SHA"), files);
     }
 
-    JsonObject selectDraft(String sha) throws Exception {
-        if (!currentMaster(sha)) {
-            return null;
-        }
+    JsonObject selectDraft() throws Exception {
         JsonObject selected = null;
         for (int page = 1; ; page++) {
             var batch = request("GET", "releases?per_page=100&page=" + page, null).getAsJsonArray();
@@ -143,18 +140,7 @@ public class Release {
         return selected;
     }
 
-    private boolean currentMaster(String sha) throws Exception {
-        if (!sha.equals(request("GET", "commits/master", null).getAsJsonObject().get("sha").getAsString())) {
-            System.out.println("Skipping superseded master build");
-            return false;
-        }
-        return true;
-    }
-
     void update(boolean draft, long id, String tag, String sha, List<Path> files) throws Exception {
-        if (draft && !currentMaster(sha)) {
-            return;
-        }
         var release = request("GET", "releases/" + id, null).getAsJsonObject();
         if (!release.get("tag_name").getAsString().equals(tag)) {
             throw new IllegalStateException("Release tag changed during the build");
@@ -273,7 +259,7 @@ public class Release {
 
     static void selfTest() throws Exception {
         var fake = new Fake();
-        if (fake.selectDraft("head") != null) {
+        if (fake.selectDraft() != null) {
             throw new AssertionError("Selected a release when no draft exists");
         }
         fake.exists = true;
@@ -281,8 +267,8 @@ public class Release {
             fake.otherReleases.add(JsonParser.parseString("{id:2,draft:false,created_at:'2026-11-03T00:00:00Z'}"));
         }
         fake.otherReleases.add(JsonParser.parseString("{id:3,draft:true,created_at:'2026-11-01T00:00:00Z'}"));
-        if (fake.selectDraft("head").get("id").getAsLong() != 1 || fake.selectDraft("superseded") != null) {
-            throw new AssertionError("Selected the wrong draft or a superseded build");
+        if (fake.selectDraft().get("id").getAsLong() != 1) {
+            throw new AssertionError("Selected the wrong draft");
         }
         var files = List.of(
                 Path.of("glow-adoc-0.2.0-rc.1.jar"),
@@ -368,9 +354,6 @@ public class Release {
             release.addProperty("name", name);
             release.addProperty("prerelease", prerelease);
             release.addProperty("target_commitish", target);
-            if (path.equals("commits/master")) {
-                return JsonParser.parseString("{sha:'head'}");
-            }
             if (path.startsWith("releases?")) {
                 var all = new JsonArray();
                 all.addAll(otherReleases);
