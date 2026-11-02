@@ -81,7 +81,7 @@ public final class LumisHighlighter implements Highlighter {
 
     static List<Span> decode(String ansi) {
         var spans = new ArrayList<Span>();
-        var matcher = Pattern.compile("\\[([0-9;]*)m").matcher(ansi);
+        var matcher = Pattern.compile("\u001B\\[([0-9;]*)m").matcher(ansi);
         Style style = Style.PLAIN;
         int start = 0;
         while (matcher.find()) {

@@ -229,7 +229,7 @@ class RichContentTest {
                     "image::{image-assets}/graph.png[]",
                     directory,
                     false,
-                    Map.of("image-assets", "]52;c;payload")
+                    Map.of("image-assets", "\u001B]52;c;payload\u0007")
             );
             var target =
                     all(controls.blocks())
@@ -237,7 +237,7 @@ class RichContentTest {
                 .findFirst()
                 .orElseThrow()
                 .target();
-            assertFalse(target.contains(""), target);
+            assertFalse(target.contains("\u001B"), target);
             assertTrue(target.contains("^[]52;c;payload"), target);
             var again = reader.read("image:{image-assets}/graph.png[]", directory);
             assertFalse(

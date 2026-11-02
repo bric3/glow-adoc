@@ -183,7 +183,7 @@ public class Benchmark {
     }
 
     private static void measureScrolling(Process process, Path transcript, int run) throws Exception {
-        process.getOutputStream().write("_Gi=2147483000;OK\\".getBytes(StandardCharsets.UTF_8));
+        process.getOutputStream().write("\u001B_Gi=2147483000;OK\u001B\\".getBytes(StandardCharsets.UTF_8));
         process.getOutputStream().flush();
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
         while (!Files.readString(transcript).contains("a=p,i=") && !Files.readString(transcript).contains("a=T,t=d")) {
@@ -201,7 +201,7 @@ public class Benchmark {
             long begin = System.nanoTime();
             process.getOutputStream().write('j');
             process.getOutputStream().flush();
-            while (!Files.readString(transcript).substring(offset).contains("[?2026l")) {
+            while (!Files.readString(transcript).substring(offset).contains("\u001B[?2026l")) {
                 if (!process.isAlive() || System.nanoTime() - begin > TimeUnit.SECONDS.toNanos(10)) {
                     throw new IllegalStateException("Scroll frame timed out");
                 }

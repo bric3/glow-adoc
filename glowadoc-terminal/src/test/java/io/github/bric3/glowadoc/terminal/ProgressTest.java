@@ -26,7 +26,10 @@ class ProgressTest {
             progress.update(50, 120, 20);
             progress.update(200, 120, 20);
         }
-        assertEquals("]9;4;1;0]9;4;1;50]9;4;1;100]9;4;0", output.toString());
+        assertEquals(
+                "\u001B]9;4;1;0\u0007\u001B]9;4;1;50\u0007\u001B]9;4;1;100\u0007\u001B]9;4;0\u0007",
+                output.toString()
+        );
     }
 
     @Test

@@ -40,7 +40,7 @@ class LinkOpenerTest {
                             "javascript:alert(1)",
                             "https://",
                             "https://example.org/has space",
-                            "https://example.org/"
+                            "https://example.org/\u001B"
             )) {
                 opener.open(target);
                 assertEquals("Cannot open this link", diagnostic(opener));

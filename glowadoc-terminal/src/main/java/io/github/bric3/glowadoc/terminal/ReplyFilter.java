@@ -28,17 +28,17 @@ public final class ReplyFilter {
             }
             pending.appendCodePoint(cp);
             String value = pending.toString();
-            boolean csi = value.startsWith("[");
-            boolean string = value.startsWith("]") || value.startsWith("_");
+            boolean csi = value.startsWith("\u001B[");
+            boolean string = value.startsWith("\u001B]") || value.startsWith("\u001B_");
             if ((csi && value.length() > 2 && cp >= 64 && cp <= 126)
-                    || (string && (cp == 7 || value.endsWith("\\")))
+                    || (string && (cp == 7 || value.endsWith("\u001B\\")))
                     || (value.length() == 2 && !csi && !string)
                     || value.length() > 4096) {
-                if (value.startsWith("]")
-                        || value.startsWith("_G")
-                        || value.matches("\\[6;[0-9]+;[0-9]+t")
-                        || value.matches("\\[\\?2031;[0-4]\\$y")
-                        || value.matches("\\[\\?997(?:;[12])?n")) {
+                if (value.startsWith("\u001B]")
+                        || value.startsWith("\u001B_G")
+                        || value.matches("\u001B\\[6;[0-9]+;[0-9]+t")
+                        || value.matches("\u001B\\[\\?2031;[0-4]\\$y")
+                        || value.matches("\u001B\\[\\?997(?:;[12])?n")) {
                     reply.accept(value);
                 } else {
                     keys.accept(value.codePoints().toArray());
@@ -50,7 +50,7 @@ public final class ReplyFilter {
 
     public synchronized void expire() {
         if (!pending.isEmpty() && System.nanoTime() - started > 200_000_000L) {
-            if (!pending.toString().startsWith("]") && !pending.toString().startsWith("_")) {
+            if (!pending.toString().startsWith("\u001B]") && !pending.toString().startsWith("\u001B_")) {
                 keys.accept(pending.toString().codePoints().toArray());
             }
             pending.setLength(0);

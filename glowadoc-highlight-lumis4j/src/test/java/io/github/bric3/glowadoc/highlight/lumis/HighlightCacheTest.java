@@ -40,7 +40,12 @@ class HighlightCacheTest {
             cache.write("source", "java", Appearance.DARK, List.of(new Span("source", Style.PLAIN.colours(colour, ""))));
             assertNull(cache.read("source", "java", Appearance.DARK), colour);
         }
-        cache.write("source", "java", Appearance.DARK, List.of(new Span("source", Style.PLAIN.colours("[31m", ""))));
+        cache.write(
+                "source",
+                "java",
+                Appearance.DARK,
+                List.of(new Span("source", Style.PLAIN.colours("\u001B[31m", "")))
+        );
         assertNull(cache.read("source", "java", Appearance.DARK));
         cache.write(
                 "source",

@@ -126,7 +126,7 @@ class PackagedCliTest {
         var process = startPty(input.toString(), transcript, true, "--config", config.toString(), "--timings");
         try {
             await(process, transcript, "a=q,t=d,f=24");
-            process.getOutputStream().write("_Gi=2147483000;OK\\".getBytes());
+            process.getOutputStream().write("\u001B_Gi=2147483000;OK\u001B\\".getBytes());
             process.getOutputStream().flush();
             await(process, transcript, "timing first-frame:");
             assertTrue(screen(Files.readString(transcript)).contains("FIRST_TEXT"));
@@ -244,7 +244,7 @@ class PackagedCliTest {
         assertEquals(0, process.exitValue(), Files.readString(directory.resolve("errors")));
         assertTrue(output.contains("glow-adoc showcase"));
         assertTrue(output.contains("System.out.println"));
-        assertFalse(output.contains(""));
+        assertFalse(output.contains("\u001B"));
         Path executable = directory.resolve("reader with spaces.jar");
         Files.copy(Path.of(System.getProperty("glow.executable")), executable);
         assertTrue(executable.toFile().setExecutable(true));
@@ -323,13 +323,13 @@ class PackagedCliTest {
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(process.waitFor(30, TimeUnit.SECONDS));
             assertEquals(0, process.exitValue(), Files.readString(directory.resolve("admonition-errors")));
-            String text = output.replaceAll("\\[[0-9;]*m", "");
+            String text = output.replaceAll("\u001B\\[[0-9;]*m", "");
             assertTrue(text.startsWith("+-- ! CAUTION "), text);
             assertTrue(text.contains("Mind the gap."), text);
             if (colour) {
                 assertTrue(output.contains("48;2;210;153;34"), "CAUTION has an amber background");
             } else {
-                assertFalse(output.contains(""), "Monochrome output has no terminal controls");
+                assertFalse(output.contains("\u001B"), "Monochrome output has no terminal controls");
             }
         } finally {
             process.destroyForcibly();
@@ -451,12 +451,12 @@ class PackagedCliTest {
         );
         try {
             await(process, transcript, "Configured flamegraph");
-            process.getOutputStream().write("_Gi=2147483000;OK\\".getBytes());
+            process.getOutputStream().write("\u001B_Gi=2147483000;OK\u001B\\".getBytes());
             process.getOutputStream().flush();
             await(process, transcript, "a=p,i=");
             var upload = Pattern.compile("a=t,t=d,f=100,q=2,i=([0-9]+)").matcher(Files.readString(transcript));
             assertTrue(upload.find());
-            process.getOutputStream().write(("_Gi=" + upload.group(1) + ";ENOENT:evicted\\").getBytes());
+            process.getOutputStream().write(("\u001B_Gi=" + upload.group(1) + ";ENOENT:evicted\u001B\\").getBytes());
             process.getOutputStream().flush();
             await(process, transcript, "a=t,t=d,f=100", 2);
             assertFalse(
@@ -485,7 +485,7 @@ class PackagedCliTest {
                 process.getOutputStream().flush();
                 assertTrue(process.waitFor(10, TimeUnit.SECONDS), Files.readString(transcript));
                 assertEquals(0, process.exitValue(), Files.readString(transcript));
-                assertTrue(Files.readString(transcript).contains("[?1049l"), "Pager must leave alternate screen");
+                assertTrue(Files.readString(transcript).contains("\u001B[?1049l"), "Pager must leave alternate screen");
             });
         } finally {
             process.descendants().forEach(ProcessHandle::destroyForcibly);
@@ -534,7 +534,7 @@ class PackagedCliTest {
                 assertTrue(redraw.contains("48;2;45;51;59"), "Other match backgrounds");
             } else {
                 assertTrue(
-                        Pattern.compile("\\[[0-9;]*7[;m]").matcher(redraw).find(),
+                        Pattern.compile("\u001B\\[[0-9;]*7[;m]").matcher(redraw).find(),
                         "Monochrome matches use reverse video"
                 );
             }
@@ -551,7 +551,7 @@ class PackagedCliTest {
                     screen(Files.readString(transcript)).contains("HIDDEN_MATCH"),
                     "Search must reveal matches beyond the horizontal viewport"
             );
-            process.getOutputStream().write("".repeat(12).getBytes());
+            process.getOutputStream().write("\u007F".repeat(12).getBytes());
             process.getOutputStream().flush();
             awaitScreen(process, transcript, "First NEEDLE, another NEEDLE.");
             assertFalse(
@@ -656,13 +656,13 @@ class PackagedCliTest {
         try {
             await(process, transcript, "timing first-frame:");
             assertTrue(screen(Files.readString(transcript)).contains("FIRST_TEXT"));
-            process.getOutputStream().write("_Gi=2147483000;OK\\".getBytes());
+            process.getOutputStream().write("\u001B_Gi=2147483000;OK\u001B\\".getBytes());
             process.getOutputStream().flush();
             await(process, transcript, "timing first-image:");
             awaitScreen(process, transcript, "AFTER_BADGES");
             String output = Files.readString(transcript);
             assertTrue(output.indexOf("timing first-frame:") < output.indexOf("a=t,t=d,f=100"));
-            var position = Pattern.compile("\\[(\\d+);(\\d+)H_Ga=p").matcher(output);
+            var position = Pattern.compile("\u001B\\[(\\d+);(\\d+)H\u001B_Ga=p").matcher(output);
             assertTrue(position.find(), "SVG badge placement");
             int firstRow = Integer.parseInt(position.group(1));
             int firstColumn = Integer.parseInt(position.group(2));
@@ -677,16 +677,18 @@ class PackagedCliTest {
                 assertTrue(Integer.parseInt(position.group(2)) > firstColumn);
             }
             int beforeResize = Files.readString(transcript).length();
-            process.getOutputStream().write("[6;32;16t".getBytes());
+            process.getOutputStream().write("\u001B[6;32;16t".getBytes());
             process.getOutputStream().flush();
             assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
                 while (!Files.readString(transcript).substring(beforeResize).contains(",c=12")) {
                     Thread.sleep(10);
                 }
             });
-            process.getOutputStream().write(("[C".repeat(8) + "[<0;" + coordinates + "M[<0;" + coordinates + "m")
-                .getBytes()
-            );
+            process
+                .getOutputStream()
+                .write(("\u001B[C".repeat(8) + "\u001B[<0;" + coordinates + "M\u001B[<0;" + coordinates + "m")
+                    .getBytes()
+                );
             process.getOutputStream().flush();
             awaitScreen(process, transcript, "SSH:");
             assertTrue(Files.readString(transcript).contains("https://example.org/build"));
@@ -714,16 +716,19 @@ class PackagedCliTest {
                 await(process, transcript, "quit");
                 process
                     .getOutputStream()
-                    .write(("[?2031;2$y[?997;1n]11;rgb:1010/1010/1010\\" + "_Gi=2147483000;OK\\").getBytes());
+                    .write(("\u001B[?2031;2$y\u001B[?997;1n\u001B]11;rgb:1010/1010/1010\u001B\\"
+                            + "\u001B_Gi=2147483000;OK\u001B\\")
+                        .getBytes()
+                    );
                 process.getOutputStream().flush();
                 await(process, transcript, "a=p,i=");
-                await(process, transcript, "[?1003h");
-                await(process, transcript, "]9;4;1;100");
+                await(process, transcript, "\u001B[?1003h");
+                await(process, transcript, "\u001B]9;4;1;100\u0007");
                 String dimmed = Files.readString(transcript);
                 int uploads = dimmed.split("a=t,t=d,f=100", -1).length;
-                var position = Pattern.compile("\\[(\\d+);(\\d+)H_Ga=p").matcher(dimmed);
+                var position = Pattern.compile("\u001B\\[(\\d+);(\\d+)H\u001B_Ga=p").matcher(dimmed);
                 assertTrue(position.find(), "Image placement coordinates");
-                process.getOutputStream().write(("[<35;" + position.group(2) + ";" + position.group(1) + "M")
+                process.getOutputStream().write(("\u001B[<35;" + position.group(2) + ";" + position.group(1) + "M")
                     .getBytes()
                 );
                 process.getOutputStream().flush();
@@ -736,15 +741,15 @@ class PackagedCliTest {
                         Files.readString(transcript).split("a=t,t=d,f=100", -1).length > uploads,
                         "Hover uploads the original image once"
                 );
-                process.getOutputStream().write("[?997;2n]11;rgb:ffff/ffff/ffff\\".getBytes());
+                process.getOutputStream().write("\u001B[?997;2n\u001B]11;rgb:ffff/ffff/ffff\u001B\\".getBytes());
                 process.getOutputStream().flush();
                 await(process, transcript, "255;255;255");
                 process.getOutputStream().write('q');
                 process.getOutputStream().flush();
                 assertTrue(process.waitFor(10, TimeUnit.SECONDS));
                 assertEquals(0, process.exitValue(), Files.readString(transcript));
-                assertTrue(Files.readString(transcript).contains("]9;4;0"));
-                assertTrue(Files.readString(transcript).contains("[?2031l"), "Restore theme notification mode");
+                assertTrue(Files.readString(transcript).contains("\u001B]9;4;0\u0007"));
+                assertTrue(Files.readString(transcript).contains("\u001B[?2031l"), "Restore theme notification mode");
                 assertTrue(Files.readString(transcript).contains("a=d,d=I"), "Remove application-owned images");
             });
         } finally {
@@ -802,9 +807,9 @@ class PackagedCliTest {
         );
         try {
             await(process, transcript, "quit");
-            await(process, transcript, "[?1003h");
+            await(process, transcript, "\u001B[?1003h");
             int beforeHover = Files.readString(transcript).length();
-            process.getOutputStream().write("[<35;30;1M".getBytes());
+            process.getOutputStream().write("\u001B[<35;30;1M".getBytes());
             process.getOutputStream().flush();
             assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
                 while (!Files.readString(transcript).substring(beforeHover).contains("48;2;121;192;255")) {
@@ -812,15 +817,15 @@ class PackagedCliTest {
                 }
             });
             assertTrue(Files.readString(transcript).substring(beforeHover).contains("https://example.org/reference"));
-            process.getOutputStream().write("[<0;30;1M".getBytes());
+            process.getOutputStream().write("\u001B[<0;30;1M".getBytes());
             process.getOutputStream().flush();
             Thread.sleep(100);
             assertFalse(Files.readString(transcript).contains("SSH:"), "Press alone must not open links");
-            process.getOutputStream().write("[<32;31;1M[<0;30;1m".getBytes());
+            process.getOutputStream().write("\u001B[<32;31;1M\u001B[<0;30;1m".getBytes());
             process.getOutputStream().flush();
             Thread.sleep(100);
             assertFalse(Files.readString(transcript).contains("SSH:"), "Dragging must cancel link activation");
-            process.getOutputStream().write("[<0;30;1M[<0;30;1m".getBytes());
+            process.getOutputStream().write("\u001B[<0;30;1M\u001B[<0;30;1m".getBytes());
             process.getOutputStream().flush();
             awaitScreen(process, transcript, "SSH:");
             process.getOutputStream().write('q');
@@ -846,8 +851,8 @@ class PackagedCliTest {
                 startPty(document.toString(), transcript, false, "--color=" + colour, "--width=20", "--progress=never");
         try {
             await(process, transcript, "https://example.org/reference");
-            assertTrue(Files.readString(transcript).contains("]8;"));
-            assertTrue(Files.readString(transcript).contains("[?1006h"));
+            assertTrue(Files.readString(transcript).contains("\u001B]8;"));
+            assertTrue(Files.readString(transcript).contains("\u001B[?1006h"));
             process.getOutputStream().write("/LINK_LABEL".getBytes());
             process.getOutputStream().flush();
             awaitScreen(process, transcript, "1/1 matches");
@@ -855,7 +860,7 @@ class PackagedCliTest {
             process.getOutputStream().flush();
             assertTrue(process.waitFor(10, TimeUnit.SECONDS));
             assertEquals(0, process.exitValue(), Files.readString(transcript));
-            assertFalse(Files.readString(transcript).contains("]9;4;"));
+            assertFalse(Files.readString(transcript).contains("\u001B]9;4;"));
         } finally {
             process.descendants().forEach(ProcessHandle::destroyForcibly);
             process.destroyForcibly();
@@ -988,17 +993,17 @@ class PackagedCliTest {
             assertTrue(closedPosition.find());
             String closedTotal = closedPosition.group(1);
             // Click the second wrapped header row, then release at the same position.
-            process.getOutputStream().write("[<0;40;2M[<0;40;2m".getBytes());
+            process.getOutputStream().write("\u001B[<0;40;2M\u001B[<0;40;2m".getBytes());
             process.getOutputStream().flush();
             await(process, transcript, "OPEN_CLICK");
-            process.getOutputStream().write("[<65;40;10M".getBytes());
+            process.getOutputStream().write("\u001B[<65;40;10M".getBytes());
             process.getOutputStream().flush();
             awaitScreen(process, transcript, " 4/");
-            process.getOutputStream().write("[<64;40;10M".getBytes());
+            process.getOutputStream().write("\u001B[<64;40;10M".getBytes());
             process.getOutputStream().flush();
             awaitScreen(process, transcript, " 1/");
             assertTrue(screen(Files.readString(transcript)).contains("OPEN_CLICK"), "Release must not close the block");
-            process.getOutputStream().write("[?997;2n".getBytes());
+            process.getOutputStream().write("\u001B[?997;2n".getBytes());
             process.getOutputStream().flush();
             await(process, transcript, "36;41;47");
             assertTrue(
@@ -1008,7 +1013,7 @@ class PackagedCliTest {
             process.getOutputStream().write('j');
             process.getOutputStream().flush();
             awaitScreen(process, transcript, " 2/");
-            process.getOutputStream().write("[<0;40;1M[<0;40;1m".getBytes());
+            process.getOutputStream().write("\u001B[<0;40;1M\u001B[<0;40;1m".getBytes());
             process.getOutputStream().flush();
             awaitScreen(process, transcript, " 2/" + closedTotal + " ");
             assertTrue(
@@ -1021,8 +1026,8 @@ class PackagedCliTest {
             assertTrue(process.waitFor(10, TimeUnit.SECONDS));
             assertEquals(0, process.exitValue(), Files.readString(transcript));
             String output = Files.readString(transcript);
-            assertTrue(output.contains("[?1006h"), output);
-            assertTrue(output.contains("[?1006l"), output);
+            assertTrue(output.contains("\u001B[?1006h"), output);
+            assertTrue(output.contains("\u001B[?1006l"), output);
         } finally {
             process.descendants().forEach(ProcessHandle::destroyForcibly);
             process.destroyForcibly();
@@ -1038,7 +1043,7 @@ class PackagedCliTest {
         var process = startPty(document.toString(), transcript, false, "--mouse=false");
         try {
             await(process, transcript, "quit");
-            assertFalse(Files.readString(transcript).contains("[?1006h"));
+            assertFalse(Files.readString(transcript).contains("\u001B[?1006h"));
             process.getOutputStream().write("\t\r".getBytes());
             process.getOutputStream().flush();
             await(process, transcript, "KEYBOARD_OPEN_MARKER");
@@ -1107,17 +1112,17 @@ class PackagedCliTest {
         var process = startPty(document.toString(), transcript, false, "--mouse=false");
         try {
             await(process, transcript, "m mouse");
-            assertFalse(Files.readString(transcript).contains("[?1006h"));
+            assertFalse(Files.readString(transcript).contains("\u001B[?1006h"));
             process.getOutputStream().write('m');
             process.getOutputStream().flush();
-            await(process, transcript, "[?1006h");
+            await(process, transcript, "\u001B[?1006h");
             awaitScreen(process, transcript, "m select");
-            process.getOutputStream().write("[<0;8;1M[<0;8;1m".getBytes());
+            process.getOutputStream().write("\u001B[<0;8;1M\u001B[<0;8;1m".getBytes());
             process.getOutputStream().flush();
             awaitScreen(process, transcript, "SELECT_MODE");
             process.getOutputStream().write('m');
             process.getOutputStream().flush();
-            await(process, transcript, "[?1006l");
+            await(process, transcript, "\u001B[?1006l");
             awaitScreen(process, transcript, "m mouse");
             process.getOutputStream().write('q');
             process.getOutputStream().flush();
@@ -1162,8 +1167,8 @@ class PackagedCliTest {
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertTrue(process.waitFor(30, TimeUnit.SECONDS));
         assertEquals(0, process.exitValue());
-        assertTrue(output.contains("[0mordinary[0m"), output);
-        String plain = output.replaceAll("\\[[0-9;]*m", "");
+        assertTrue(output.contains("\u001B[0mordinary\u001B[0m"), output);
+        String plain = output.replaceAll("\u001B\\[[0-9;]*m", "");
         assertFalse(plain.contains("|") || plain.contains("+") || plain.contains("="), plain);
     }
 

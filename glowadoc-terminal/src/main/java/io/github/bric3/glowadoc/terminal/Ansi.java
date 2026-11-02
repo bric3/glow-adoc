@@ -57,36 +57,36 @@ public final class Ansi {
         for (var span : spans) {
             if (colour) {
                 var style = style(span.style(), true, truecolour);
-                out.append("[0m");
+                out.append("\u001B[0m");
                 if (span.style().bold()) {
-                    out.append("[1m");
+                    out.append("\u001B[1m");
                 }
                 if (span.style().italic()) {
-                    out.append("[3m");
+                    out.append("\u001B[3m");
                 }
                 if (span.style().underline()) {
-                    out.append("[4m");
+                    out.append("\u001B[4m");
                 }
                 if (span.style().strike()) {
-                    out.append("[9m");
+                    out.append("\u001B[9m");
                 }
                 style
                     .fg()
-                    .ifPresent(c -> out.append("[").append(c.toAnsiForeground()).append('m'));
+                    .ifPresent(c -> out.append("\u001B[").append(c.toAnsiForeground()).append('m'));
                 style
                     .bg()
-                    .ifPresent(c -> out.append("[").append(c.toAnsiBackground()).append('m'));
+                    .ifPresent(c -> out.append("\u001B[").append(c.toAnsiBackground()).append('m'));
                 if (Controls.safeLink(span.style().link())) {
-                    out.append("]8;;").append(span.style().link()).append("\\");
+                    out.append("\u001B]8;;").append(span.style().link()).append("\u001B\\");
                 }
             }
             out.append(Controls.visible(span.text()));
             if (colour && Controls.safeLink(span.style().link())) {
-                out.append("]8;;\\");
+                out.append("\u001B]8;;\u001B\\");
             }
         }
         if (colour) {
-            out.append("[0m");
+            out.append("\u001B[0m");
         }
         return out.toString();
     }

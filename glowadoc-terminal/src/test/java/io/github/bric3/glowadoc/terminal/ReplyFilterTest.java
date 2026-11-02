@@ -16,9 +16,9 @@ class ReplyFilterTest {
                 keys.appendCodePoint(cp);
             }
         });
-        filter.accept("j]11;rgb:ffff/".codePoints().toArray());
-        filter.accept("ffff/ffff\\[Aq".codePoints().toArray());
-        assertEquals("j[Aq", keys.toString());
+        filter.accept("j\u001B]11;rgb:ffff/".codePoints().toArray());
+        filter.accept("ffff/ffff\u001B\\\u001B[Aq".codePoints().toArray());
+        assertEquals("j\u001B[Aq", keys.toString());
         assertEquals(1, replies.size());
         assertEquals(255, TerminalSession.channel("ffff"));
         assertEquals(255, TerminalSession.channel("ff"));
@@ -29,7 +29,7 @@ class ReplyFilterTest {
     void preservesColourAndStripsUnsafeLinksInPlainOutput() {
         var span = new io.github.bric3.glowadoc.document.Span(
                 "hello",
-                io.github.bric3.glowadoc.document.Style.PLAIN.linked("https://example.org]52;x")
+                io.github.bric3.glowadoc.document.Style.PLAIN.linked("https://example.org\u001B]52;x")
         );
         assertFalse(Ansi.line(java.util.List.of(span), true, true).contains("]8;"));
         assertEquals("hello", Ansi.line(java.util.List.of(span), false, false));

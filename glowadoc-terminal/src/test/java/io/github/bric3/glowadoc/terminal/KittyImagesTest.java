@@ -81,7 +81,7 @@ class KittyImagesTest {
             var dim = new KittyImages.Placement(1, png, 0, 0, 2, 1, 0, 2.0, true);
             var original = new KittyImages.Placement(1, png, 0, 0, 2, 1, 0, 2.0);
             kitty.render(List.of(dim));
-            var payload = Pattern.compile("m=0;([A-Za-z0-9+/=]+)\\\\").matcher(output);
+            var payload = Pattern.compile("m=0;([A-Za-z0-9+/=]+)\u001B\\\\").matcher(output);
             assertTrue(payload.find());
             var decoded = ImageIO.read(new java.io.ByteArrayInputStream(Base64.getDecoder().decode(payload.group(1))));
             assertEquals(166, decoded.getRGB(0, 0) >>> 24);
@@ -145,7 +145,7 @@ class KittyImagesTest {
             assertTrue(output.toString().contains("a=t,t=d,f=100"));
             assertTrue(output.toString().contains("m=1;"));
             var payload = new StringBuilder();
-            var chunks = Pattern.compile("_G(?:a=t[^;]+)?m=[01];([A-Za-z0-9+/=]*)\\\\").matcher(output);
+            var chunks = Pattern.compile("\u001B_G(?:a=t[^;]+)?m=[01];([A-Za-z0-9+/=]*)\u001B\\\\").matcher(output);
             while (chunks.find()) {
                 payload.append(chunks.group(1));
             }

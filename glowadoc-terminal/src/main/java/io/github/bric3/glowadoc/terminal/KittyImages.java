@@ -131,7 +131,7 @@ public final class KittyImages implements AutoCloseable {
         if (desired.equals(previous) && !refresh) {
             return;
         }
-        backend.writeRaw("7");
+        backend.writeRaw("\u001B7");
         try {
             for (var old : previous.values()) {
                 var replacement = desired.get(old.id());
@@ -160,7 +160,7 @@ public final class KittyImages implements AutoCloseable {
                                 image.height(),
                                 Math.round((placement.cropRows() + placement.rows()) * pixelsPerRow)
                 );
-                backend.writeRaw("[" + (placement.row() + 1) + ";" + (placement.column() + 1) + "H");
+                backend.writeRaw("\u001B[" + (placement.row() + 1) + ";" + (placement.column() + 1) + "H");
                 command(
                         "a=p,i="
                         + image.id()
@@ -191,7 +191,7 @@ public final class KittyImages implements AutoCloseable {
                 iterator.remove();
             }
         } finally {
-            backend.writeRaw("8");
+            backend.writeRaw("\u001B8");
             backend.flush();
         }
     }
@@ -243,13 +243,13 @@ public final class KittyImages implements AutoCloseable {
         do {
             byte[] next = input.readNBytes(3072);
             backend.writeRaw(
-                    "_G"
+                    "\u001B_G"
                     + (first ? "a=t,t=d,f=100,q=2,i=" + id + "," : "")
                     + "m="
                     + (next.length == 0 ? 0 : 1)
                     + ";"
                     + Base64.getEncoder().encodeToString(chunk)
-                    + "\\"
+                    + "\u001B\\"
             );
             first = false;
             chunk = next;
@@ -263,7 +263,7 @@ public final class KittyImages implements AutoCloseable {
     }
 
     private void command(String controls) throws IOException {
-        backend.writeRaw("_G" + controls + ";\\");
+        backend.writeRaw("\u001B_G" + controls + ";\u001B\\");
     }
 
     @Override

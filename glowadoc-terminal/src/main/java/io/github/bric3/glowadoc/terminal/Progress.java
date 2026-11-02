@@ -32,7 +32,7 @@ public final class Progress implements AutoCloseable {
         int maximum = Math.max(0, rows - height);
         int percentage = maximum == 0 ? 100 : (int) (Math.clamp((long) top, 0, maximum) * 100 / maximum);
         if (enabled && previous != percentage) {
-            backend.writeRaw("]9;4;1;" + percentage + "");
+            backend.writeRaw("\u001B]9;4;1;" + percentage + "\u0007");
             backend.flush();
             previous = percentage;
         }
@@ -41,7 +41,7 @@ public final class Progress implements AutoCloseable {
     @Override
     public void close() throws IOException {
         if (enabled && previous >= 0) {
-            backend.writeRaw("]9;4;0");
+            backend.writeRaw("\u001B]9;4;0\u0007");
             backend.flush();
         }
     }

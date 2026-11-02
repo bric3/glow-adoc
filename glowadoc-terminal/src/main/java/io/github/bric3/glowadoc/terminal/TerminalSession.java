@@ -108,7 +108,7 @@ public final class TerminalSession implements AutoCloseable {
             button |= 16;
         }
         // Aesh retains the protocol's one-based coordinates.
-        return "[<"
+        return "\u001B[<"
                 + button
                 + ";"
                 + event.x()
@@ -148,7 +148,7 @@ public final class TerminalSession implements AutoCloseable {
     }
 
     public void start() {
-        connection.write("[16t[?2031$p_Gi=2147483000,s=1,v=1,a=q,t=d,f=24;AAAA\\");
+        connection.write("\u001B[16t\u001B[?2031$p\u001B_Gi=2147483000,s=1,v=1,a=q,t=d,f=24;AAAA\u001B\\");
         refresh();
     }
 
@@ -167,7 +167,7 @@ public final class TerminalSession implements AutoCloseable {
             deadline = 0;
         }
         if (automatic && now >= nextPoll && misses < 2 && (!notifications || nextPoll == 0)) {
-            connection.write("[?996n]10;?\\]11;?\\]4;0;?;7;?;8;?;15;?\\");
+            connection.write("\u001B[?996n\u001B]10;?\u001B\\\u001B]11;?\u001B\\\u001B]4;0;?;7;?;8;?;15;?\u001B\\");
             deadline = now + 200_000_000L;
             nextPoll = now + 2_000_000_000L;
         }
@@ -175,7 +175,7 @@ public final class TerminalSession implements AutoCloseable {
 
     private void reply(String value) {
         var missing = Pattern.compile("i=([0-9]+)(?:,p=[0-9]+)?;ENOENT").matcher(value);
-        if (value.startsWith("_G") && missing.find()) {
+        if (value.startsWith("\u001B_G") && missing.find()) {
             try {
                 missingImages.add(Integer.parseInt(missing.group(1)));
                 dirty = true;
@@ -183,7 +183,7 @@ public final class TerminalSession implements AutoCloseable {
                 /* Ignore IDs outside this client's range. */
             }
         }
-        var cell = Pattern.compile("\\[6;([0-9]{1,4});([0-9]{1,4})t").matcher(value);
+        var cell = Pattern.compile("\u001B\\[6;([0-9]{1,4});([0-9]{1,4})t").matcher(value);
         if (cell.matches()) {
             cellHeight = Math.max(1, Integer.parseInt(cell.group(1)));
             cellWidth = Math.max(1, Integer.parseInt(cell.group(2)));
@@ -193,14 +193,14 @@ public final class TerminalSession implements AutoCloseable {
             kitty = true;
             dirty = true;
         }
-        if (value.matches("\\[\\?2031;[12]\\$y")) {
+        if (value.matches("\u001B\\[\\?2031;[12]\\$y")) {
             notifications = true;
             if (value.contains(";2$y")) {
-                connection.write("[?2031h");
+                connection.write("\u001B[?2031h");
                 enabledNotifications = true;
             }
         }
-        if (value.startsWith("[?997") && automatic) {
+        if (value.startsWith("\u001B[?997") && automatic) {
             if (value.contains(";1n")) {
                 appearance = Appearance.DARK;
             }
@@ -211,7 +211,7 @@ public final class TerminalSession implements AutoCloseable {
             refresh();
         }
         var matcher = Pattern
-            .compile("](10|11|4);(?:(\\d+);)?rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})")
+            .compile("\u001B](10|11|4);(?:(\\d+);)?rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})")
             .matcher(value);
         if (matcher.find()) {
             int index = Integer.parseInt(matcher.group(1));
@@ -241,7 +241,7 @@ public final class TerminalSession implements AutoCloseable {
     public void close() throws IOException {
         try {
             if (enabledNotifications) {
-                connection.write("[?2031l");
+                connection.write("\u001B[?2031l");
             }
             backend.close();
         } finally {

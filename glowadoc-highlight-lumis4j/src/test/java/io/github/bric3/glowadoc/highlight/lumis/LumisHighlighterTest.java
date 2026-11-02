@@ -27,8 +27,8 @@ class LumisHighlighterTest {
 
     @Test
     void decodesOnlyStylingAndMakesControlsVisible() {
-        var spans = LumisHighlighter.decode("[38;2;255;0;0mred[0m plain]52;data");
+        var spans = LumisHighlighter.decode("\u001B[38;2;255;0;0mred\u001B[0m plain\u001B]52;data\u0007");
         assertEquals("#ff0000", spans.getFirst().style().foreground());
-        assertFalse(spans.toString().contains(""));
+        assertFalse(spans.toString().contains("\u001B"));
     }
 }

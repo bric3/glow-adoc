@@ -17,15 +17,15 @@ class AnsiTest {
                 new Span("removed", Style.PLAIN.struck())
         );
         String output = Ansi.line(spans, true, true);
-        assertTrue(output.contains("[9m"));
-        assertFalse(output.contains("[4m"));
+        assertTrue(output.contains("\u001B[9m"));
+        assertFalse(output.contains("\u001B[4m"));
         assertTrue(Ansi
             .style(Style.PLAIN.struck(), true, true)
             .effectiveModifiers()
             .contains(dev.tamboui.style.Modifier.CROSSED_OUT)
         );
         assertEquals("coderemoved", Ansi.line(spans, false, true));
-        assertTrue(Ansi.line(spans, true, false).contains("[48;5;"), Ansi.line(spans, true, false));
-        assertTrue(output.contains("[48;2;34;51;68m"), output);
+        assertTrue(Ansi.line(spans, true, false).contains("\u001B[48;5;"), Ansi.line(spans, true, false));
+        assertTrue(output.contains("\u001B[48;2;34;51;68m"), output);
     }
 }
