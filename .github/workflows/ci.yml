@@ -42,7 +42,7 @@ jobs:
           "$selected_java" --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=required -XX:AOTCache="$aot_cache" -jar "$installed_jar" --no-cache --no-pager --color=always fixtures/showcase.adoc
       - name: Upload tested application classes and resources
         if: github.event_name == 'push' && github.ref == 'refs/heads/master' && matrix.os == 'ubuntu-24.04'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: glowadoc-tested-classes
           path: |
@@ -51,7 +51,7 @@ jobs:
             glowadoc-cli-jvm/build/classes/java/bootstrap/
           if-no-files-found: error
           retention-days: 7
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: reports-${{ matrix.os }}
