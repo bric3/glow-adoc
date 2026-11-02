@@ -20,15 +20,15 @@ pin the complete graph and downloaded bytes.
 | TamboUI TUI 0.6.0          | `glowadoc-pager`             | Pager event loop and rendering; MIT.                                        |
 | TamboUI Aesh backend 0.6.0 | `glowadoc-terminal`          | Terminal connection; MIT.                                                   |
 | Aesh 3.18.6                | `glowadoc-cli-common`        | Command parsing; Apache-2.0.                                                |
-| TOMLJ 1.1.1                | `glowadoc-cli-common`        | Configuration parsing; Apache-2.0.                                          |
+| TOMLJ 2.2.0                | `glowadoc-cli-common`        | Configuration parsing; Apache-2.0.                                          |
 | Lumis4J 0.0.10             | `glowadoc-highlight-lumis4j` | Syntax highlighting; Apache-2.0, with upstream terms for bundled resources. |
-| PlantUML MIT 1.2026.6      | `glowadoc-diagrams-plantuml` | Embedded diagrams; MIT, with bundled-resource notices.                      |
+| PlantUML MIT 1.2026.9      | `glowadoc-diagrams-plantuml` | Embedded diagrams; MIT, with bundled-resource notices.                      |
 
 Use `net.sourceforge.plantuml:plantuml-mit`. Its feature set excludes ditaa.
 See [PlantUML's distributions](https://plantuml.com/download) and the
 [stored distribution notice](licenses/plantuml-mit.txt).
 
-## Transitive runtime dependencies
+## Transitive and bundled runtime components
 
 | Component                                       | Introduced by        | Purpose and published terms                                                                               |
 | ----------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -54,7 +54,7 @@ See [PlantUML's distributions](https://plantuml.com/download) and the
 | Chicory runtime, Wasm, WASI and logging         | Lumis4J and Prism    | Execute the bundled highlighter and Ruby parser; Apache-2.0.                                              |
 | TamboUI widgets and annotations                 | TamboUI TUI          | UI support; MIT.                                                                                          |
 | Aesh terminal and readline modules              | Aesh/TamboUI backend | Terminal input and capabilities; Apache-2.0.                                                              |
-| ANTLR runtime and Checker Qual                  | TOMLJ                | Parser runtime and annotations; BSD-3-Clause and MIT respectively.                                        |
+| ANTLR runtime 4.13.2 (bundled)                  | TOMLJ                | Relocated parser runtime; BSD-3-Clause. Original notice in `licenses/antlr4-BSD-3-Clause.txt`.            |
 
 `glowadoc-asciidoctor` constrains `jruby`, `jruby-base` and `jruby-stdlib` to the same version.
 These remain transitive dependencies of AsciidoctorJ. JRuby Prism's
@@ -62,6 +62,10 @@ These remain transitive dependencies of AsciidoctorJ. JRuby Prism's
 specifies EPL-2.0. Prism's [original MIT notice](https://github.com/ruby/prism/blob/5092bf7f65635bfe6e0a042f98b76fc1010f1378/LICENSE.md)
 is retained separately because its Maven jars omit the notice. Redline's
 [release licence](https://github.com/roastedroot/chicory-redline/blob/0.0.5/LICENSE) specifies Apache-2.0.
+
+TOMLJ 2.2.0 bundles ANTLR under `org.tomlj.internal.antlr` and no longer depends on Checker Qual.
+Its jar omits ANTLR's licence file, so the parser's
+[upstream notice](https://github.com/antlr/antlr4/blob/4.13.2/LICENSE.txt) is retained separately.
 
 ### Selected licence alternatives
 

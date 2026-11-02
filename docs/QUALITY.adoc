@@ -11,8 +11,8 @@ Project conventions live in `build-logic/conventions`; the Semver settings conve
 Gradle TestKit checks missing headers, Java and table formatting, executable directives,
 exclusions, idempotence and configuration-cache reuse.
 
-Java uses Prince of Space 2.3.0, four-space indentation and 120 columns, followed by TableTest
-formatter 1.1.2. TableTest 1.2.2 supplies readable parameter matrices; JUnit converters handle values
+Java uses Prince of Space 2.3.1, four-space indentation and 120 columns, followed by TableTest
+formatter 1.1.3. TableTest 1.2.2 supplies readable parameter matrices; JUnit converters handle values
 such as hexadecimal icon code points. Stateful process and PTY tests remain ordinary JUnit tests.
 Build tools and test libraries do not enter the runtime jar.
 

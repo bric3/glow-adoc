@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 //JAVA 27
-//DEPS com.google.code.gson:gson:2.13.2
+//DEPS com.google.code.gson:gson:2.15.0
 package io.github.bric3.glowadoc.tools;
 
 import com.google.gson.JsonArray;
