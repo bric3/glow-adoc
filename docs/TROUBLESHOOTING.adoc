@@ -70,5 +70,5 @@ The launcher supplies the Unsafe warning policy. For direct invocation:
 
 [source,sh]
 ----
-java --sun-misc-unsafe-memory-access=allow -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar FILE
+java --sun-misc-unsafe-memory-access=allow -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar FILE
 ----

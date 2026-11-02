@@ -9,18 +9,18 @@ tasks.register("checkAll") {
     group = "verification"
     description = "Run checks in all application modules."
     dependsOn(tasks.check)
-    dependsOn(gradle.includedBuild("build-logic").task(":check"))
-    dependsOn(gradle.includedBuild("quality").task(":test"))
+    dependsOn(gradle.includedBuild("glowadoc-build-logic").task(":check"))
+    dependsOn(gradle.includedBuild("glowadoc-quality").task(":test"))
     dependsOn(
-        ":cache:test",
-        ":cli-jvm:build",
-        ":cli:test",
-        ":asciidoctor:test",
-        ":highlight-lumis4j:test",
-        ":highlight:test",
-        ":render:test",
-        ":terminal:test",
-        ":pager:test",
-        ":diagrams:test",
+        ":glowadoc-cache:test",
+        ":glowadoc-cli-jvm:build",
+        ":glowadoc-cli:test",
+        ":glowadoc-asciidoctor:test",
+        ":glowadoc-highlight-lumis4j:test",
+        ":glowadoc-highlight:test",
+        ":glowadoc-render:test",
+        ":glowadoc-terminal:test",
+        ":glowadoc-pager:test",
+        ":glowadoc-diagrams:test",
     )
 }

@@ -35,12 +35,12 @@ From a checkout, with Java 27 installed:
 
 [source,sh]
 ----
-./gradlew :cli-jvm:install
+./gradlew :glowadoc-cli-jvm:install
 export PATH="$HOME/.local/bin:$PATH"
 ----
 
 Installation pretrains a local AOT cache and writes `~/.local/bin/glow-adoc`.
-Use `:cli-jvm:installWithoutAot` to skip training.
+Use `:glowadoc-cli-jvm:installWithoutAot` to skip training.
 
 == Read
 

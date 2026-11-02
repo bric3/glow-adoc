@@ -37,17 +37,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - uses: jbangdev/setup-jbang@cc28889678db839e29433f42f9ff25f148b6d8de
       - name: Build and verify artifacts
-        run: ./gradlew checkAll :cli-jvm:releaseArtifacts
+        run: ./gradlew checkAll :glowadoc-cli-jvm:releaseArtifacts
       - name: Verify release lifecycle
         run: jbang tools/Release.java --self-test
       - name: Update snapshot draft
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: jbang tools/Release.java snapshot cli-jvm/build/release
+        run: jbang tools/Release.java snapshot glowadoc-cli-jvm/build/release
       - name: Replace snapshot assets with final build
         if: github.event_name != 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
-        run: jbang tools/Release.java final cli-jvm/build/release
+        run: jbang tools/Release.java final glowadoc-cli-jvm/build/release

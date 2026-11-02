@@ -77,8 +77,8 @@ explicit `AOTMode=required` launch also passed. Configuration-cache reuse comple
 
 [source,sh]
 ----
-jbang --java 27 --cp cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar tools/LayoutBenchmark.java -prof gc
-jbang --java 27 tools/Benchmark.java --runs 20 --pty --empty-cache -- java --sun-misc-unsafe-memory-access=allow -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --images=never fixtures/showcase.adoc
+jbang --java 27 --cp glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar tools/LayoutBenchmark.java -prof gc
+jbang --java 27 tools/Benchmark.java --runs 20 --pty --empty-cache -- java --sun-misc-unsafe-memory-access=allow -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --images=never fixtures/showcase.adoc
 ----
 
 == SVG decision

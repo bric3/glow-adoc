@@ -9,12 +9,12 @@ Read [Architecture](ARCHITECTURE.md) before changing module boundaries.
 
 ```sh
 ./gradlew checkAll
-./gradlew :cli-jvm:shadowJar :cli-jvm:executableJar
-./gradlew :cli-jvm:install
+./gradlew :glowadoc-cli-jvm:shadowJar :glowadoc-cli-jvm:executableJar
+./gradlew :glowadoc-cli-jvm:install
 ```
 
 Run focused module tests while iterating. Enable the optional Mermaid integration with
-`GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :diagrams:test`. Builds must not install Merman.
+`GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :glowadoc-diagrams:test`. Builds must not install Merman.
 
 PTY tests verify events and protocol output. Check appearance, fonts, graphics, cancellation and
 restoration separately in a real terminal. Include SSH checks when changing transport behaviour.
@@ -26,11 +26,11 @@ Use four-space indentation and 120 columns. Spotless runs Prince of Space follow
 formatter for Java, and ktlint's IntelliJ style for Kotlin. Apply formatting explicitly:
 
 ```sh
-./gradlew spotlessApply :build-logic:spotlessApply
+./gradlew spotlessApply :glowadoc-build-logic:spotlessApply
 ```
 
 `checkAll` checks formatting and MPL-2.0 SPDX headers in application, bootstrap, build and tool sources.
-Yumi Licenser owns headers; `applyLicenses` and `:build-logic:applyLicenses` insert missing headers
+Yumi Licenser owns headers; `applyLicenses` and `:glowadoc-build-logic:applyLicenses` insert missing headers
 while preserving shebangs and JBang directives. Fixtures, generated files and upstream notices are excluded.
 
 Prefer TableTest for input/output matrices. Use argument converters for domain values; ordinary JUnit
@@ -51,11 +51,11 @@ Use Conventional Commits. Commit, push and publication require explicit authoris
 Verify both jars. Test installation with a temporary home:
 
 ```sh
-./gradlew -Duser.home="$PWD/cli-jvm/build/install-check" :cli-jvm:install
-./cli-jvm/build/install-check/.local/bin/glow-adoc --version
+./gradlew -Duser.home="$PWD/glowadoc-cli-jvm/build/install-check" :glowadoc-cli-jvm:install
+./glowadoc-cli-jvm/build/install-check/.local/bin/glow-adoc --version
 ```
 
-AOT training uses the executable launcher's selected JDK: `./gradlew :cli-jvm:aotTrain`.
+AOT training uses the executable launcher's selected JDK: `./gradlew :glowadoc-cli-jvm:aotTrain`.
 `install` trains before installation; `installWithoutAot` skips training. Native Image requires a separate runtime smoke test.
 
 Dependency changes require licence review, updated locks and verified checksums:
@@ -85,6 +85,6 @@ tag and trigger a final build from that tag. Final jars and checksums replace sn
 successful uploads. Snapshot assets remain public while that build runs.
 
 Retry final uploads through the Release workflow's manual dispatch with the published tag.
-`./gradlew :cli-jvm:releaseArtifacts` stages jars and version metadata under `cli-jvm/build/release`.
+`./gradlew :glowadoc-cli-jvm:releaseArtifacts` stages jars and version metadata under `glowadoc-cli-jvm/build/release`.
 Keep GitHub release immutability disabled for this publish-then-replace process.
 Complete the Homebrew template's release fields before distribution.

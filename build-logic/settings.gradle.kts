@@ -2,7 +2,7 @@
 
 pluginManagement {
     includeBuild("quality") {
-        name = "quality"
+        name = "glowadoc-quality"
     }
     repositories {
         gradlePluginPortal()
@@ -20,4 +20,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "glow-adoc-build-logic"
+rootProject.name = "glowadoc-build-logic"

@@ -62,13 +62,13 @@ Pre-train locally before installation:
 
 [source,sh]
 ----
-./gradlew :cli-jvm:install
+./gradlew :glowadoc-cli-jvm:install
 ----
 
 The task trains a staged executable named `glow-adoc`, then installs it with its original timestamp.
 The JVM permits relocation when the filename and timestamp match. The launcher validates the full
 executable bytes, filename and runtime before selecting that cache; its directory is not part of the key.
-`:cli-jvm:installWithoutAot` copies the executable without training. An existing compatible cache
+`:glowadoc-cli-jvm:installWithoutAot` copies the executable without training. An existing compatible cache
 can still be selected at runtime.
 
 To train an existing installation:
@@ -86,8 +86,8 @@ extracts the listed files into a private temporary directory and removes them af
 Training does not read an external document or user/project configuration. It bypasses both document caches
 and does not open a pager or execute diagram programs. `--train-aot FILE` selects a custom workload.
 
-`./gradlew :cli-jvm:aotTrain` prepares the staged executable and local cache without installing.
-A later `:cli-jvm:installWithoutAot` can reuse them with the same runtime and JVM options.
+`./gradlew :glowadoc-cli-jvm:aotTrain` prepares the staged executable and local cache without installing.
+A later `:glowadoc-cli-jvm:installWithoutAot` can reuse them with the same runtime and JVM options.
 
 A trained AOT cache can serve other documents: the document argument is not part of its identity.
 It does not preconvert other files or retain an AsciidoctorJ engine between CLI processes.
@@ -121,8 +121,8 @@ For direct Java invocation, train and load an explicitly named cache with the sa
 
 [source,sh]
 ----
-java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTCacheOutput=glow-adoc.aot -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --no-cache --no-pager --color=always fixtures/showcase.adoc
-java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=auto -XX:AOTCache=glow-adoc.aot -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc
+java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTCacheOutput=glow-adoc.aot -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --no-cache --no-pager --color=always fixtures/showcase.adoc
+java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=auto -XX:AOTCache=glow-adoc.aot -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc
 ----
 
 == Reproduce measurements
@@ -136,7 +136,7 @@ jbang --java 27 tools/Benchmark.java --runs 20 --pty -- glow-adoc document.adoc
 jbang --java 27 tools/Benchmark.java --runs 20 --stages -- glow-adoc --timings document.adoc
 jbang --java 27 tools/Benchmark.java --runs 20 --pty --empty-cache -- glow-adoc document.adoc
 jbang --java 27 tools/Benchmark.java --runs 20 --scroll -- glow-adoc -a image-assets="$PWD/static/assets" content/posts/post.adoc
-jbang --java 27 tools/StartupMatrix.java /path/to/java cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc
+jbang --java 27 tools/StartupMatrix.java /path/to/java glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc
 ----
 
 `--pty` measures process start to the first status line in an 80 x 24 pseudo-terminal.
@@ -199,7 +199,7 @@ Start async-profiler with the JVM to include startup work. Select the library fo
 ----
 java --sun-misc-unsafe-memory-access=allow \
   -agentpath:/path/to/libasyncProfiler.dylib=start,event=cpu,interval=1ms,collapsed,file=cpu.collapsed \
-  -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar \
+  -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar \
   --no-pager --color=always document.adoc
 ----
 

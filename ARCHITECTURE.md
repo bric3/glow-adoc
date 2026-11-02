@@ -7,20 +7,20 @@ terminal rows, and direct output or the pager displays them.
 
 ## Ownership
 
-| Module            | Responsibility                                                           |
-| ----------------- | ------------------------------------------------------------------------ |
-| document          | Immutable blocks, spans, styles, appearance and safe text/link handling  |
-| cache             | Private bounded entries, integrity checks and packaged artifact identity |
-| asciidoctor       | AsciidoctorJ, includes, shortcodes and conversion                        |
-| highlight         | Highlighter contract and deferred, cached highlighting                   |
-| highlight-lumis4j | Lumis4J, ANSI style decoding and persisted highlight spans               |
-| render            | Wrapping, tables, decoration and stable block positions                  |
-| terminal          | Aesh connection, replies, colours, ANSI and Kitty graphics               |
-| pager             | TamboUI events, viewport, folding, search and placements                 |
-| diagrams          | Embedded MIT PlantUML and bounded Merman processes                       |
-| cli               | Arguments, configuration and assembly                                    |
-| cli-jvm           | Bootstrap, jars, launcher, install and AOT                               |
-| cli-native        | Experimental complete-application Native Image                           |
+| Module                     | Responsibility                                                           |
+| -------------------------- | ------------------------------------------------------------------------ |
+| glowadoc-document          | Immutable blocks, spans, styles, appearance and safe text/link handling  |
+| glowadoc-cache             | Private bounded entries, integrity checks and packaged artifact identity |
+| glowadoc-asciidoctor       | AsciidoctorJ, includes, shortcodes and conversion                        |
+| glowadoc-highlight         | Highlighter contract and deferred, cached highlighting                   |
+| glowadoc-highlight-lumis4j | Lumis4J, ANSI style decoding and persisted highlight spans               |
+| glowadoc-render            | Wrapping, tables, decoration and stable block positions                  |
+| glowadoc-terminal          | Aesh connection, replies, colours, ANSI and Kitty graphics               |
+| glowadoc-pager             | TamboUI events, viewport, folding, search and placements                 |
+| glowadoc-diagrams          | Embedded MIT PlantUML and bounded Merman processes                       |
+| glowadoc-cli               | Arguments, configuration and assembly                                    |
+| glowadoc-cli-jvm           | Bootstrap, jars, launcher, install and AOT                               |
+| glowadoc-cli-native        | Experimental complete-application Native Image                           |
 
 The model has no parser, terminal or UI dependency. Concrete implementation types stay inside adapters.
 
@@ -37,12 +37,12 @@ The pager retains folding and viewport state during reflow.
 Packaged file reads retain normalised converter XML in a private disk cache. Source, attributes,
 shortcode policy, application bytes and runtime context validate each entry. Includes and temporal
 substitutions bypass caching. A hit uses the secure XML parser and leaves JRuby uninitialised.
-The CLI selects cache directories. `asciidoctor` owns conversion keys and XML;
-`cache` owns private files, checksums and the shared packaged artifact hash.
+The CLI selects cache directories. `glowadoc-asciidoctor` owns conversion keys and XML;
+`glowadoc-cache` owns private files, checksums and the shared packaged artifact hash.
 
 The first pager frame uses source text. A serial background worker highlights requested blocks,
 caches results by source/language/appearance and requests reflow. Closing cancels queued work;
-an active task releases its highlighter when it finishes. `highlight-lumis4j` also persists validated
+an active task releases its highlighter when it finishes. `glowadoc-highlight-lumis4j` also persists validated
 spans by source/language/appearance and artifact identity. A disk hit leaves the Wasm engine uninitialised.
 Literal code splits at line endings; prose retains grapheme-aware wrapping.
 Detected YAML front matter uses literal rows and a horizontal separator. Layout adds external-link

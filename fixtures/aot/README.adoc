@@ -17,7 +17,7 @@ the CLI. Add every required include or local asset to that list.
 |`diagrams.adoc` |Diagram source and a local SVG image.
 |===
 
-Train the bundled corpus with `glow-adoc --train-aot`, or run `./gradlew :cli-jvm:install` from the
+Train the bundled corpus with `glow-adoc --train-aot`, or run `./gradlew :glowadoc-cli-jvm:install` from the
 project root to train before installing. Training uses direct output and application defaults.
 It does not open a pager, execute diagram programs or fetch remote resources.
 The source examples are data; they are never executed.

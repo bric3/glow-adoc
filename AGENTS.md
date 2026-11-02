@@ -15,12 +15,13 @@
 
 - Preserve existing work. Commit or push only when explicitly requested for this repository.
 - Use `io.github.bric3.glowadoc` as the base package for owned Java and Kotlin types, including tests, build logic and tools.
-- Read [Architecture](ARCHITECTURE.md) before changing boundaries. Keep AsciidoctorJ in `asciidoctor`, Lumis4J in `highlight-lumis4j`, and terminal/UI types in their adapters.
+- Prefix subproject and included build names with `glowadoc-`. Name application module directories after their projects.
+- Read [Architecture](ARCHITECTURE.md) before changing boundaries. Keep AsciidoctorJ in `glowadoc-asciidoctor`, Lumis4J in `glowadoc-highlight-lumis4j`, and terminal/UI types in their adapters.
 - Put behaviour with its data and knowledge. Prefer existing APIs and narrow dependencies; avoid speculative abstractions.
 - Use four-space indentation and 120 columns. Spotless runs Prince of Space, then the TableTest formatter, for Java and ktlint IntelliJ style for Kotlin. Honour `.editorconfig`.
 - Prefer TableTest for input/output matrices, using argument converters when useful. Keep ordinary JUnit tests for lifecycle and asynchronous scenarios.
 - Cover behavioural changes with observable tests before editing production code. Measure hot paths and cold start before retaining performance changes.
-- Run `./gradlew spotlessApply :build-logic:spotlessApply` to format and `./gradlew checkAll` to check formatting, SPDX headers and tests. Use `applyLicenses` to add owned headers; preserve shebangs and JBang directives.
+- Run `./gradlew spotlessApply :glowadoc-build-logic:spotlessApply` to format and `./gradlew checkAll` to check formatting, SPDX headers and tests. Use `applyLicenses` to add owned headers; preserve shebangs and JBang directives.
 - Expand control-flow blocks. Separate methods and logical groups. Comment non-obvious reasons.
 - Use international English and ASCII punctuation in prose; preserve meaningful Unicode in code and tests.
 - Use Java or Kotlin with JBang for non-trivial maintenance scripts. Simple shell discovery/build commands are allowed.

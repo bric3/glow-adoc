@@ -2,9 +2,11 @@
 
 pluginManagement {
     includeBuild("build-logic/quality") {
-        name = "quality"
+        name = "glowadoc-quality"
     }
-    includeBuild("build-logic")
+    includeBuild("build-logic") {
+        name = "glowadoc-build-logic"
+    }
 }
 
 plugins {
@@ -21,16 +23,16 @@ dependencyResolutionManagement {
 rootProject.name = "glow-adoc"
 
 include(
-    "cache",
-    "document",
-    "asciidoctor",
-    "highlight",
-    "highlight-lumis4j",
-    "render",
-    "terminal",
-    "pager",
-    "diagrams",
-    "cli",
-    "cli-jvm",
-    "cli-native",
+    "glowadoc-cache",
+    "glowadoc-document",
+    "glowadoc-asciidoctor",
+    "glowadoc-highlight",
+    "glowadoc-highlight-lumis4j",
+    "glowadoc-render",
+    "glowadoc-terminal",
+    "glowadoc-pager",
+    "glowadoc-diagrams",
+    "glowadoc-cli",
+    "glowadoc-cli-jvm",
+    "glowadoc-cli-native",
 )

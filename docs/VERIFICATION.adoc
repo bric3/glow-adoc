@@ -7,7 +7,7 @@
 [source,sh]
 ----
 ./gradlew checkAll
-GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :diagrams:test
+GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :glowadoc-diagrams:test
 ----
 
 The second command enables an optional integration with a separately reviewed executable.

@@ -17,4 +17,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "glow-adoc-quality"
+rootProject.name = "glowadoc-quality"
