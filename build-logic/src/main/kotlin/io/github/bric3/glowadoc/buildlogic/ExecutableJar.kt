@@ -15,7 +15,10 @@ import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.util.HexFormat
 
-/** Jardiff's separate shell-prefixed archive technique, with quoted executable paths. */
+/**
+ * Prepends a POSIX launcher to a copy of the shaded jar.
+ * The JVM locates the ZIP directory from the end of the file, allowing jar entries to follow the script.
+ */
 @CacheableTask
 abstract class ExecutableJar : DefaultTask() {
     @get:InputFile

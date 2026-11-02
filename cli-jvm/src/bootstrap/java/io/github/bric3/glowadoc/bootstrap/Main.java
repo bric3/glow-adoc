@@ -4,7 +4,9 @@ package io.github.bric3.glowadoc.bootstrap;
 import java.lang.reflect.InvocationTargetException;
 
 /**
- * Dependency-free bootstrap, following jardiff's compatibility launcher technique.
+ * Reports the Java 27 requirement before loading application classes.
+ * This bootstrap targets Java 8 so older JVMs can print the error. Reflection defers loading
+ * the application's newer bytecode until the version check passes.
  */
 public final class Main {
     private Main() {
