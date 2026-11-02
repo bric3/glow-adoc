@@ -27,6 +27,12 @@ public final class TerminalSession implements AutoCloseable {
     private volatile Appearance appearance = Appearance.DARK;
     private volatile boolean dirty = true;
     private volatile boolean kitty;
+    private volatile boolean focused = true;
+
+    public boolean focused() {
+        return focused;
+    }
+
     private final Queue<Integer> missingImages = new ConcurrentLinkedQueue<>();
 
     public List<Integer> takeMissingImages() {
@@ -61,29 +67,29 @@ public final class TerminalSession implements AutoCloseable {
         // Aesh consumes mouse reports before stdin; return them to TamboUI's input decoder.
         connection.setMouseHandler(
                 event -> keys.accept(mouseSequence(event).codePoints().toArray()));
-        connection.setThemeChangeHandler(
-                theme -> {
-                    lastReply = System.nanoTime();
-                    if (automatic) {
-                        Appearance next =
-                                theme.toString().equalsIgnoreCase("light")
-                                        ? Appearance.LIGHT
-                                        : Appearance.DARK;
-                        if (appearance != next) {
-                            appearance = next;
-                            dirty = true;
-                        }
-                        if (System.nanoTime() > deadline) {
-                            refresh();
-                        }
-                    }
-                });
-        connection.setFocusHandler(
-                focused -> {
-                    if (focused) {
-                        refresh();
-                    }
-                });
+        connection.setThemeChangeHandler(theme -> {
+            lastReply = System.nanoTime();
+            if (automatic) {
+                Appearance next =
+                        theme.toString().equalsIgnoreCase("light")
+                                ? Appearance.LIGHT
+                                : Appearance.DARK;
+                if (appearance != next) {
+                    appearance = next;
+                    dirty = true;
+                }
+                if (System.nanoTime() > deadline) {
+                    refresh();
+                }
+            }
+        });
+        connection.setFocusHandler(focused -> {
+            this.focused = focused;
+            dirty = true;
+            if (focused) {
+                refresh();
+            }
+        });
     }
 
     public AeshBackend backend() {

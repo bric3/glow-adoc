@@ -6,6 +6,8 @@ Requires Java 27+. Read AsciiDoc through an embedded pager or direct text output
 
 - Styled tables, quotes, admonitions, callouts and collapsible blocks.
 - Live search, mouse controls and terminal appearance detection.
+- Reading-position OSC progress, cached dark-mode image dimming and hover restoration.
+- Numbered callout pills, distinct admonition colours and reflowed linked references.
 - Progressive syntax highlighting and reusable Kitty image placements.
 - CLI attributes, project configuration and explicit image directories.
 - Local AOT training with a bundled, self-contained corpus through `glow-adoc --train-aot`, or a custom FILE.

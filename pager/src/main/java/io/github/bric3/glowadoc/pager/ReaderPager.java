@@ -25,6 +25,7 @@ import io.github.bric3.glowadoc.render.Palette;
 import io.github.bric3.glowadoc.render.RenderedLine;
 import io.github.bric3.glowadoc.terminal.Ansi;
 import io.github.bric3.glowadoc.terminal.KittyImages;
+import io.github.bric3.glowadoc.terminal.Progress;
 import io.github.bric3.glowadoc.terminal.TerminalSession;
 
 import java.nio.file.Path;
@@ -49,6 +50,13 @@ public final class ReaderPager {
     private final boolean center;
     private final boolean pageBackground;
     private boolean mouse;
+    private final String progressMode;
+    private final boolean imageDim;
+    private boolean hoverTracking;
+    private int pointerX = -1;
+    private int pointerY = -1;
+    private int hoveredImage = -1;
+    private List<KittyImages.Placement> visibleImages = List.of();
     private int contentMargin;
     private final Set<Integer> toggled = new HashSet<>();
     private int focused = -1;
@@ -89,6 +97,8 @@ public final class ReaderPager {
             boolean center,
             boolean pageBackground,
             boolean mouse,
+            String progressMode,
+            boolean imageDim,
             DeferredHighlighter highlighter,
             Consumer<String> milestone) {
         this.document = document;
@@ -101,6 +111,8 @@ public final class ReaderPager {
         this.center = center;
         this.pageBackground = pageBackground;
         this.mouse = mouse;
+        this.progressMode = progressMode;
+        this.imageDim = imageDim;
         this.highlighter = highlighter;
         this.milestone = milestone;
     }
@@ -114,7 +126,8 @@ public final class ReaderPager {
                             .mouseCapture(mouse)
                             .build();
             try (var runner = TuiRunner.create(config);
-                    var kitty = new KittyImages(session.backend())) {
+                    var kitty = new KittyImages(session.backend());
+                    var progress = new Progress(session.backend(), progressMode, System.getenv())) {
                 activeRunner = runner;
                 session.start();
                 runner.run(
@@ -199,15 +212,23 @@ public final class ReaderPager {
                                         if (mouse) {
                                             session.backend().disableMouseCapture();
                                         } else {
-                                            session.backend().enableMouseCapture();
+                                            session.backend().enableMouseCapture(hoverTracking);
                                         }
                                         mouse = !mouse;
+                                        pointerX = pointerY = -1;
                                     } catch (java.io.IOException e) {
                                         message = "Mouse capture unavailable";
                                     }
                                 }
                                 redraw = true;
                             } else if (mouse && event instanceof MouseEvent pointer) {
+                                pointerX = pointer.x();
+                                pointerY = pointer.y();
+                                int hovered = hoveredImage(visibleImages, pointerX, pointerY);
+                                if (hoverTracking && hovered != hoveredImage) {
+                                    hoveredImage = hovered;
+                                    redraw = true;
+                                }
                                 if (pointer.kind() == MouseEventKind.SCROLL_UP) {
                                     top -= 3;
                                     redraw = true;
@@ -232,12 +253,12 @@ public final class ReaderPager {
                             top = clampTop(top);
                             return redraw;
                         },
-                        frame -> draw(frame, session, kitty));
+                        frame -> draw(frame, session, kitty, progress));
             }
         }
     }
 
-    private void draw(Frame frame, TerminalSession session, KittyImages kitty) {
+    private void draw(Frame frame, TerminalSession session, KittyImages kitty, Progress progress) {
         int available = Math.max(1, frame.width() - 1);
         var area = ContentArea.within(frame.width(), requestedWidth, center);
         int nextWidth = area.width();
@@ -293,6 +314,18 @@ public final class ReaderPager {
             rebuilt = prepareImages(session);
         }
         top = clampTop(top);
+        boolean tracking = imageDim && images && session.kitty() && appearance == Appearance.DARK;
+        if (tracking != hoverTracking) {
+            hoverTracking = tracking;
+            if (mouse) {
+                try {
+                    session.backend().disableMouseCapture();
+                    session.backend().enableMouseCapture(tracking);
+                } catch (java.io.IOException e) {
+                    message = "Mouse motion unavailable";
+                }
+            }
+        }
         if (rebuilt) {
             kitty.refreshPlacements();
             search.update(search.query(), lines, top, left);
@@ -435,31 +468,53 @@ public final class ReaderPager {
                                             count));
                         }
                     }
+                    visibleImages = List.copyOf(placements);
+                    hoveredImage =
+                            session.focused()
+                                    ? hoveredImage(visibleImages, pointerX, pointerY)
+                                    : -1;
+                    if (hoverTracking && mouse) {
+                        placements.replaceAll(placement ->
+                                new KittyImages.Placement(
+                                        placement.id(),
+                                        placement.path(),
+                                        placement.row(),
+                                        placement.column(),
+                                        placement.columns(),
+                                        placement.rows(),
+                                        placement.cropRows(),
+                                        placement.totalRows(),
+                                        placement.id() != hoveredImage));
+                    }
                     kitty.render(placements);
                     if (firstImage && !placements.isEmpty()) {
                         firstImage = false;
                         milestone.accept("first-image");
                     }
                 };
-        activeRunner.runLater(
-                () -> {
-                    if (firstFrame) {
-                        firstFrame = false;
-                        milestone.accept("first-frame");
-                        if (highlighter != null) {
-                            highlighter.start();
-                        }
-                    }
-                    if (!images || !session.kitty()) {
-                        return;
-                    }
-                    requestVisibleDiagrams();
-                    try {
-                        pendingImages.draw();
-                    } catch (java.io.IOException e) {
-                        message = "Image unavailable";
-                    }
-                });
+        activeRunner.runLater(() -> {
+            if (firstFrame) {
+                firstFrame = false;
+                milestone.accept("first-frame");
+                if (highlighter != null) {
+                    highlighter.start();
+                }
+            }
+            try {
+                progress.update(top, lines.size(), height);
+            } catch (java.io.IOException e) {
+                message = "Terminal progress unavailable";
+            }
+            if (!images || !session.kitty()) {
+                return;
+            }
+            requestVisibleDiagrams();
+            try {
+                pendingImages.draw();
+            } catch (java.io.IOException e) {
+                message = "Image unavailable";
+            }
+        });
     }
 
     @FunctionalInterface
@@ -468,6 +523,18 @@ public final class ReaderPager {
     }
 
     private ImageDraw pendingImages = () -> {};
+
+    static int hoveredImage(List<KittyImages.Placement> placements, int x, int y) {
+        for (var placement : placements) {
+            if (x >= placement.column()
+                    && x < placement.column() + placement.columns()
+                    && y >= placement.row()
+                    && y < placement.row() + placement.rows()) {
+                return placement.id();
+            }
+        }
+        return -1;
+    }
 
     private void requestVisibleDiagrams() {
         int previous = -1;

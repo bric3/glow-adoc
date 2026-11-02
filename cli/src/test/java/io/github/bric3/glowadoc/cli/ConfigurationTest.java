@@ -72,16 +72,23 @@ class ConfigurationTest {
         assertEquals("nerd", defaults.icons());
         assertFalse(defaults.pageBackground());
         assertTrue(defaults.mouse());
+        assertEquals("auto", defaults.progress());
+        assertTrue(defaults.imageDim());
+        assertEquals("pill", defaults.callouts());
         assertEquals("auto", defaults.tableFrame());
         assertEquals("auto", defaults.tableGrid());
         Files.writeString(
                 config,
                 "page-background = true\n"
                         + "mouse = false\n"
+                        + "progress = 'never'\nimage-dim = false\ncallouts = 'circle'\n"
                         + "table-frame = 'ends'\n"
                         + "table-grid = 'rows'\n"
                         + "table-section-borders = 'heavy'\n");
         var settings = Configuration.load(config);
+        assertEquals("never", settings.progress());
+        assertFalse(settings.imageDim());
+        assertEquals("circle", settings.callouts());
         assertTrue(settings.pageBackground());
         assertFalse(settings.mouse());
         assertEquals("ends", settings.tableFrame());
@@ -128,7 +135,7 @@ class ConfigurationTest {
     @Test
     void usesDefaultsWhenConfigurationIsAbsentAndReportsInvalidNearestFiles() throws Exception {
         Path absentUser = directory.resolve("absent.toml");
-        assertEquals(0, Configuration.load(null, directory, absentUser).width());
+        assertEquals(120, Configuration.load(null, directory, absentUser).width());
         Path config = directory.resolve(".glow-adoc.local.toml");
         Files.writeString(config, "width = 'broken'\n");
         Files.writeString(directory.resolve(".glow-adoc.toml"), "width = 20\n");

@@ -36,6 +36,7 @@ public final class TerminalConverter extends StringConverter {
                                         case "strong" -> "strong";
                                         case "emphasis" -> "em";
                                         case "monospaced" -> "code";
+                                        case "superscript" -> "sup";
                                         default -> "span";
                                     },
                                     text);
@@ -65,7 +66,7 @@ public final class TerminalConverter extends StringConverter {
                                 + "\">"
                                 + escape(String.valueOf(node.getAttribute("alt", "image")))
                                 + "</inline-image>";
-                case "inline_break" -> text + "\n";
+                case "inline_break" -> text + "<br/>";
                 case "inline_callout" -> "<callout number=\"" + escape(text) + "\"/>";
                 case "inline_footnote" -> "[" + text + "]";
                 default -> text;

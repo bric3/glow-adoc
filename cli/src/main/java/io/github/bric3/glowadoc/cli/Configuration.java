@@ -32,11 +32,16 @@ public record Configuration(
         String tableGrid,
         String tableSectionBorders,
         Map<String, String> attributes,
-        List<Path> imageRoots) {
+        List<Path> imageRoots,
+        String progress,
+        boolean imageDim,
+        String callouts) {
+    static final int DEFAULT_WIDTH = 120;
+
     private static final Configuration DEFAULTS =
             new Configuration(
                     true,
-                    0,
+                    DEFAULT_WIDTH,
                     "auto",
                     "auto",
                     "auto",
@@ -51,7 +56,10 @@ public record Configuration(
                     "auto",
                     "thin",
                     Map.of(),
-                    List.of());
+                    List.of(),
+                    "auto",
+                    true,
+                    "pill");
 
     public Configuration {
         attributes = Map.copyOf(attributes);
@@ -125,7 +133,10 @@ public record Configuration(
                         "table-grid",
                         "table-section-borders",
                         "attributes",
-                        "image-roots");
+                        "image-roots",
+                        "progress",
+                        "image-dim",
+                        "callouts");
         for (String key : toml.keySet()) {
             if (!allowed.contains(key)) {
                 throw new IllegalArgumentException("Unknown configuration key: " + key);
@@ -204,7 +215,16 @@ public record Configuration(
                         "table-section-borders",
                         Set.of("thin", "heavy")),
                 attributes,
-                roots);
+                roots,
+                choice(
+                        toml.getString("progress", defaults::progress),
+                        "progress",
+                        Set.of("auto", "always", "never")),
+                toml.getBoolean("image-dim", defaults::imageDim),
+                choice(
+                        toml.getString("callouts", defaults::callouts),
+                        "callouts",
+                        Set.of("pill", "circle", "ascii")));
     }
 
     static Map<String, String> attributes(Map<String, String> defaults, List<String> options) {

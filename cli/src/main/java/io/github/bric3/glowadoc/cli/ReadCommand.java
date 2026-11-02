@@ -56,7 +56,9 @@ public final class ReadCommand implements Command<CommandInvocation> {
             description = "Bypass conversion and syntax highlighting disk caches")
     boolean noCache;
 
-    @Option(description = "Output width in terminal cells (1-1000)")
+    @Option(
+            description =
+                    "Output width in terminal cells (1-1000; default 120, limited by terminal)")
     Integer width;
 
     @Option(name = "color", description = "auto, always or never")
@@ -87,6 +89,15 @@ public final class ReadCommand implements Command<CommandInvocation> {
 
     @Option(description = "true or false: enable pager mouse input (default true)")
     String mouse;
+
+    @Option(description = "auto, always or never: terminal reading progress")
+    String progress;
+
+    @Option(name = "image-dim", description = "true or false: dim dark-mode images until hovered")
+    String imageDim;
+
+    @Option(description = "pill, circle or ascii source callouts (default pill)")
+    String callouts;
 
     @Option(name = "table-frame", description = "auto, all, sides, ends or none")
     String tableFrame;
@@ -225,6 +236,22 @@ public final class ReadCommand implements Command<CommandInvocation> {
                             tableFrame == null ? settings.tableFrame() : tableFrame,
                             "table-frame",
                             Set.of("auto", "all", "sides", "ends", "none"));
+            String selectedProgress =
+                    Configuration.choice(
+                            progress == null ? settings.progress() : progress,
+                            "progress",
+                            Set.of("auto", "always", "never"));
+            boolean selectedImageDim =
+                    imageDim == null
+                            ? settings.imageDim()
+                            : Boolean.parseBoolean(
+                                    Configuration.choice(
+                                            imageDim, "image-dim", Set.of("true", "false")));
+            String selectedCallouts =
+                    Configuration.choice(
+                            callouts == null ? settings.callouts() : callouts,
+                            "callouts",
+                            Set.of("pill", "circle", "ascii"));
             String selectedGrid =
                     Configuration.choice(
                             tableGrid == null ? settings.tableGrid() : tableGrid,
@@ -309,7 +336,8 @@ public final class ReadCommand implements Command<CommandInvocation> {
                                         selectedPageBackground,
                                         selectedFrame,
                                         selectedGrid,
-                                        selectedSectionBorders));
+                                        selectedSectionBorders,
+                                        useColour ? selectedCallouts : "ascii"));
                 if (pager) {
                     new ReaderPager(
                                     document,
@@ -322,6 +350,8 @@ public final class ReadCommand implements Command<CommandInvocation> {
                                     selectedCenter,
                                     selectedPageBackground,
                                     selectedMouse,
+                                    selectedProgress,
+                                    selectedImageDim,
                                     highlighter instanceof DeferredHighlighter deferred
                                             ? deferred
                                             : null,
@@ -331,7 +361,9 @@ public final class ReadCommand implements Command<CommandInvocation> {
                     int viewport =
                             stdoutTty
                                     ? terminalWidth()
-                                    : (selectedWidth > 0 ? selectedWidth + 1 : 81);
+                                    : (selectedWidth > 0
+                                            ? selectedWidth + 1
+                                            : Configuration.DEFAULT_WIDTH + 1);
                     var area = ContentArea.within(viewport, selectedWidth, selectedCenter);
                     int contentWidth = area.width();
                     String margin = " ".repeat(area.margin());
@@ -380,9 +412,9 @@ public final class ReadCommand implements Command<CommandInvocation> {
     private static int terminalWidth() {
         try (var terminal = TerminalBuilder.builder().system(true).build()) {
             int columns = terminal.getSize().getWidth();
-            return columns > 0 ? columns : 81;
+            return columns > 0 ? columns : Configuration.DEFAULT_WIDTH + 1;
         } catch (Exception e) {
-            return 81;
+            return Configuration.DEFAULT_WIDTH + 1;
         }
     }
 }

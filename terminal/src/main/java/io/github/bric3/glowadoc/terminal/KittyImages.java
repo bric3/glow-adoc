@@ -4,6 +4,8 @@ package io.github.bric3.glowadoc.terminal;
 
 import dev.tamboui.terminal.Backend;
 
+import java.awt.AlphaComposite;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -26,7 +28,10 @@ public final class KittyImages implements AutoCloseable {
     private final Backend backend;
     private final long budget;
     private int nextId = 1 + new SecureRandom().nextInt(1_000_000_000);
-    private final Map<Path, Image> images = new LinkedHashMap<>(16, .75f, true);
+
+    private record ImageKey(Path path, boolean dim) {}
+
+    private final Map<ImageKey, Image> images = new LinkedHashMap<>(16, .75f, true);
     private Map<Integer, Placement> previous = Map.of();
     private long resident;
     private boolean refresh;
@@ -57,7 +62,24 @@ public final class KittyImages implements AutoCloseable {
             int columns,
             int rows,
             int cropRows,
-            int totalRows) {}
+            int totalRows,
+            boolean dim) {
+        public Placement(
+                int id,
+                Path path,
+                int row,
+                int column,
+                int columns,
+                int rows,
+                int cropRows,
+                int totalRows) {
+            this(id, path, row, column, columns, rows, cropRows, totalRows, false);
+        }
+
+        private ImageKey key() {
+            return new ImageKey(path, dim);
+        }
+    }
 
     private record Image(int id, int width, int height) {
         long bytes() {
@@ -111,8 +133,8 @@ public final class KittyImages implements AutoCloseable {
         try {
             for (var old : previous.values()) {
                 var replacement = desired.get(old.id());
-                if (replacement == null || !replacement.path().equals(old.path())) {
-                    var image = images.get(old.path());
+                if (replacement == null || !replacement.key().equals(old.key())) {
+                    var image = images.get(old.key());
                     if (image != null) {
                         command("a=d,d=i,i=" + image.id() + ",p=" + old.id() + ",q=2");
                     }
@@ -122,10 +144,10 @@ public final class KittyImages implements AutoCloseable {
                 if (placement.equals(previous.get(placement.id())) && !refresh) {
                     continue;
                 }
-                Image image = images.get(placement.path());
+                Image image = images.get(placement.key());
                 if (image == null) {
-                    image = upload(placement.path());
-                    images.put(placement.path(), image);
+                    image = upload(placement.key());
+                    images.put(placement.key(), image);
                     resident += image.bytes();
                 }
                 int y =
@@ -162,8 +184,8 @@ public final class KittyImages implements AutoCloseable {
             }
             previous = Map.copyOf(desired);
             refresh = false;
-            Set<Path> visible =
-                    placements.stream().map(Placement::path).collect(Collectors.toSet());
+            Set<ImageKey> visible =
+                    placements.stream().map(Placement::key).collect(Collectors.toSet());
             var iterator = images.entrySet().iterator();
             while (resident > budget && iterator.hasNext()) {
                 var entry = iterator.next();
@@ -181,8 +203,8 @@ public final class KittyImages implements AutoCloseable {
         }
     }
 
-    private Image upload(Path path) throws IOException {
-        try (var stream = ImageIO.createImageInputStream(path.toFile())) {
+    private Image upload(ImageKey key) throws IOException {
+        try (var stream = ImageIO.createImageInputStream(key.path().toFile())) {
             var readers = ImageIO.getImageReaders(stream);
             if (!readers.hasNext()) {
                 throw new IOException("Unsupported image format");
@@ -192,13 +214,28 @@ public final class KittyImages implements AutoCloseable {
                 reader.setInput(stream);
                 var image = new Image(nextId++, reader.getWidth(0), reader.getHeight(0));
                 checkDimensions(image.width(), image.height());
-                if (reader.getFormatName().equalsIgnoreCase("png")) {
-                    try (var png = Files.newInputStream(path)) {
+                if (!key.dim() && reader.getFormatName().equalsIgnoreCase("png")) {
+                    try (var png = Files.newInputStream(key.path())) {
                         transmit(image.id(), png);
                     }
                 } else {
                     var png = new ByteArrayOutputStream();
-                    ImageIO.write(reader.read(0), "png", png);
+                    var pixels = reader.read(0);
+                    if (key.dim()) {
+                        var dimmed =
+                                new BufferedImage(
+                                        image.width(), image.height(), BufferedImage.TYPE_INT_ARGB);
+                        var graphics = dimmed.createGraphics();
+                        try {
+                            graphics.setComposite(
+                                    AlphaComposite.getInstance(AlphaComposite.SRC, .65f));
+                            graphics.drawImage(pixels, 0, 0, null);
+                        } finally {
+                            graphics.dispose();
+                        }
+                        pixels = dimmed;
+                    }
+                    ImageIO.write(pixels, "png", png);
                     try (var input = new ByteArrayInputStream(png.toByteArray())) {
                         transmit(image.id(), input);
                     }

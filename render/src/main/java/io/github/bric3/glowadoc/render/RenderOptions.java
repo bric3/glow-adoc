@@ -8,7 +8,25 @@ public record RenderOptions(
         boolean pageBackground,
         String tableFrame,
         String tableGrid,
-        String tableSectionBorders) {
+        String tableSectionBorders,
+        String callouts) {
+    public RenderOptions(
+            String icons,
+            boolean tableStripes,
+            boolean pageBackground,
+            String tableFrame,
+            String tableGrid,
+            String tableSectionBorders) {
+        this(
+                icons,
+                tableStripes,
+                pageBackground,
+                tableFrame,
+                tableGrid,
+                tableSectionBorders,
+                "pill");
+    }
+
     public RenderOptions(String icons, boolean tableStripes) {
         this(icons, tableStripes, false, "auto", "auto", "thin");
     }

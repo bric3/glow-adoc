@@ -506,3 +506,25 @@ This supports deferring highlighting; it does not establish an exact CPU attribu
 |===
 
 No daemon, dependency upgrade, parser replacement or unsafe verification flags are required for the implemented changes.
+
+== Image dimming and renderer checks
+
+Dark-mode dimming decodes and encodes pixels once per retained image variant, after the first text flush.
+`--image-dim=false` preserves direct PNG transmission. Hover and scrolling reuse uploaded variants;
+the cache budget includes both originals and dimmed images.
+
+Three fresh-process PTY runs of a large PNG followed by paragraphs produced these smoke measurements:
+
+[cols="2,1,1,1",options="header"]
+|===
+|Mode |Median first frame |Scroll p95 range |Scroll pixel uploads
+|Before changes |622 ms |3.0-3.8 ms |0
+|Dimming enabled |850 ms |2.9-3.9 ms |0
+|Dimming disabled |649 ms |3.0-4.2 ms |0
+|===
+
+The public text fixture, with conversion caching disabled, measured 2705 ms before and 1483 ms after
+at the median of five runs. These are sequential smoke samples with warm filesystem caches; early
+baseline runs overlapped build verification. They establish neither a startup speedup nor an isolated
+regression. Dimming adds first-display pixel processing, while scrolling continues to reuse uploads.
+See link:benchmarks/rendering-smoke.csv[raw samples]. Real-terminal appearance needs a separate check.

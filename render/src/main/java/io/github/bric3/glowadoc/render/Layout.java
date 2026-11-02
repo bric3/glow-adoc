@@ -52,27 +52,25 @@ public final class Layout {
         // The pager paints its canvas with queried terminal colours.
         if (options.pageBackground() && !interactive) {
             var palette = Palette.forAppearance(appearance);
-            lines.replaceAll(
-                    line -> {
-                        var spans = new ArrayList<Span>();
-                        for (Span span : line.spans()) {
-                            spans.add(
-                                    new Span(
-                                            span.text(),
-                                            span.style()
-                                                    .colours(
-                                                            span.style().foreground(),
-                                                            span.style().background().isEmpty()
-                                                                    ? palette.canvas()
-                                                                    : span.style().background())));
-                        }
-                        spans.add(
-                                new Span(
-                                        " ".repeat(Math.max(0, width - TextLayout.width(spans))),
-                                        Style.PLAIN.colours("", palette.canvas())));
-                        return new RenderedLine(
-                                spans, line.blockIndex(), line.asset(), line.disclosure());
-                    });
+            lines.replaceAll(line -> {
+                var spans = new ArrayList<Span>();
+                for (Span span : line.spans()) {
+                    spans.add(
+                            new Span(
+                                    span.text(),
+                                    span.style()
+                                            .colours(
+                                                    span.style().foreground(),
+                                                    span.style().background().isEmpty()
+                                                            ? palette.canvas()
+                                                            : span.style().background())));
+                }
+                spans.add(
+                        new Span(
+                                " ".repeat(Math.max(0, width - TextLayout.width(spans))),
+                                Style.PLAIN.colours("", palette.canvas())));
+                return new RenderedLine(spans, line.blockIndex(), line.asset(), line.disclosure());
+            });
         }
         return lines;
     }
@@ -85,22 +83,89 @@ public final class Layout {
     }
 
     private List<Span> theme(List<Span> spans, Palette palette) {
-        return spans.stream()
-                .map(
-                        s ->
-                                !s.callout().isEmpty()
-                                        ? new Span(
-                                                callout(s.callout()),
-                                                s.style().bolded().colours(palette.accent(), ""))
-                                        : s.style().code()
-                                                ? new Span(
-                                                        s.text(),
-                                                        s.style()
-                                                                .colours(
-                                                                        palette.accent(),
-                                                                        palette.stripe()))
-                                                : s)
-                .toList();
+        var themed = new ArrayList<Span>();
+        for (Span span : spans) {
+            if (!span.callout().isEmpty()) {
+                if (options.callouts().equals("pill") && !options.ascii()) {
+                    // Keep each pill atomic when prose wraps, including its rounded ends.
+                    if (options.icons().equals("nerd")) {
+                        themed.add(
+                                new Span(
+                                        "\ue0b6",
+                                        Style.PLAIN.colours(palette.accent(), ""),
+                                        span.callout()));
+                    }
+                    themed.add(
+                            new Span(
+                                    " " + span.callout() + " ",
+                                    Style.PLAIN
+                                            .bolded()
+                                            .colours(palette.canvas(), palette.accent()),
+                                    span.callout()));
+                    if (options.icons().equals("nerd")) {
+                        themed.add(
+                                new Span(
+                                        "\ue0b4",
+                                        Style.PLAIN.colours(palette.accent(), ""),
+                                        span.callout()));
+                    }
+                } else {
+                    themed.add(
+                            new Span(
+                                    callout(span.callout()),
+                                    span.style().bolded().colours(palette.accent(), ""),
+                                    span.callout()));
+                }
+            } else if (span.style().code()) {
+                themed.add(
+                        new Span(
+                                span.text(),
+                                span.style().colours(palette.accent(), palette.stripe())));
+            } else {
+                themed.add(span);
+            }
+        }
+        return themed;
+    }
+
+    private List<Span> source(Block block, Palette palette, Appearance appearance) {
+        var themed = theme(block.spans(), palette);
+        var highlighted =
+                highlighter.highlight(
+                        themed.stream().map(Span::text).collect(Collectors.joining()),
+                        block.language(),
+                        appearance);
+        if (themed.stream().noneMatch(span -> !span.callout().isEmpty())) {
+            return highlighted;
+        }
+
+        // Syntax spans can split a callout; restore its colours after highlighting the whole
+        // source.
+        var restored = new ArrayList<Span>();
+        int index = 0;
+        int position = 0;
+        for (Span syntax : highlighted) {
+            int offset = 0;
+            while (offset < syntax.text().length()) {
+                while (position == themed.get(index).text().length()) {
+                    index++;
+                    position = 0;
+                }
+                Span original = themed.get(index);
+                int count =
+                        Math.min(
+                                syntax.text().length() - offset,
+                                original.text().length() - position);
+                restored.add(
+                        new Span(
+                                syntax.text().substring(offset, offset + count),
+                                original.callout().isEmpty() ? syntax.style() : original.style(),
+                                original.callout()));
+                offset += count;
+                position += count;
+            }
+        }
+        return restored;
     }
 
     private List<RenderedLine> render(
@@ -171,24 +236,14 @@ public final class Layout {
             }
         }
         List<Span> spans =
-                source
-                        ? highlighter.highlight(
-                                theme(block.spans(), palette).stream()
-                                        .map(Span::text)
-                                        .collect(Collectors.joining()),
-                                block.language(),
-                                appearance)
-                        : theme(block.spans(), palette);
+                source ? source(block, palette, appearance) : theme(block.spans(), palette);
         if (block.kind() == Block.Kind.HEADING) {
             spans =
                     spans.stream()
-                            .map(
-                                    s ->
-                                            new Span(
-                                                    s.text(),
-                                                    s.style()
-                                                            .bolded()
-                                                            .colours(palette.accent(), "")))
+                            .map(s ->
+                                    new Span(
+                                            s.text(),
+                                            s.style().bolded().colours(palette.accent(), "")))
                             .toList();
         }
         if (block.kind() == Block.Kind.IMAGE) {
@@ -241,13 +296,12 @@ public final class Layout {
                                 : theme(block.format().titleSpans(), palette);
                 caption =
                         caption.stream()
-                                .map(
-                                        span ->
-                                                new Span(
-                                                        span.text(),
-                                                        block.kind() == Block.Kind.CODE
-                                                                ? span.style().italicised()
-                                                                : span.style().bolded()))
+                                .map(span ->
+                                        new Span(
+                                                span.text(),
+                                                block.kind() == Block.Kind.CODE
+                                                        ? span.style().italicised()
+                                                        : span.style().bolded()))
                                 .toList();
                 if (inlineCaption) {
                     var captionRows = TextLayout.wrap(caption, inner - 2, false);
@@ -376,10 +430,11 @@ public final class Layout {
         }
         if (options.icons().equals("nerd")) {
             return switch (kind) {
-                case "tip" -> "\uf0eb";
-                case "warning", "caution" -> "\uf071";
-                case "important" -> "\uf06a";
-                default -> "\uf05a";
+                case "tip" -> "\uf400";
+                case "warning" -> "\uf421";
+                case "caution" -> Character.toString(0xf0238);
+                case "important" -> "\uf50a";
+                default -> "\uf129";
             };
         }
         return switch (kind) {
@@ -390,7 +445,7 @@ public final class Layout {
     }
 
     private String callout(String number) {
-        if (!options.ascii() && number.matches("[1-9]|10")) {
+        if (!options.ascii() && !options.callouts().equals("ascii") && number.matches("[1-9]|10")) {
             return Character.toString(0x2775 + Integer.parseInt(number));
         }
         return "(" + number + ")";

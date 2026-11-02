@@ -26,13 +26,83 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 class LayoutTest {
+    @Test
+    void syntaxHighlightingPreservesPillColoursInSourceBlocks() {
+        var syntaxStyle = Style.PLAIN.colours("#ff0000", "#111111");
+        var highlighted =
+                new Layout((text, language, appearance) ->
+                        text.codePoints()
+                                .mapToObj(cp -> new Span(Character.toString(cp), syntaxStyle))
+                                .toList());
+        var source =
+                new Block(
+                        Block.Kind.CODE,
+                        "",
+                        List.of(new Span("value "), Span.callout("12")),
+                        List.of(),
+                        "java",
+                        "");
+        for (Appearance appearance : Appearance.values()) {
+            var palette = Palette.forAppearance(appearance);
+            var spans =
+                    highlighted
+                            .render(new Document(List.of(source), Path.of(".")), 40, appearance)
+                            .stream()
+                            .flatMap(line -> line.spans().stream())
+                            .toList();
+            assertTrue(
+                    spans.stream()
+                            .anyMatch(span ->
+                                    span.text().contains("12")
+                                            && span.style().foreground().equals(palette.canvas())
+                                            && span.style().background().equals(palette.accent())),
+                    spans.toString());
+            for (String cap : List.of("\ue0b6", "\ue0b4")) {
+                assertTrue(
+                        spans.stream()
+                                .anyMatch(span ->
+                                        span.text().equals(cap)
+                                                && span.style()
+                                                        .foreground()
+                                                        .equals(palette.accent())
+                                                && span.style()
+                                                        .background()
+                                                        .equals(palette.surface())),
+                        spans.toString());
+            }
+        }
+    }
+
+    @Test
+    void pillsUseRegularNumbersAndWrapTogether() {
+        var spans = List.of(new Span("prefix "), Span.callout("123"), new Span(" rest"));
+        var doc =
+                new Document(
+                        List.of(new Block(Block.Kind.PARAGRAPH, "", spans, List.of(), "", "")),
+                        Path.of("."));
+        var rows = layout.render(doc, 10, Appearance.DARK);
+        assertTrue(
+                rows.stream().anyMatch(row -> row.text().contains("\ue0b6 123 \ue0b4")),
+                rows.toString());
+        assertTrue(rows.stream().allMatch(row -> CharWidth.of(row.text()) <= 10));
+        for (var appearance : Appearance.values()) {
+            var palette = Palette.forAppearance(appearance);
+            assertEquals(
+                    5,
+                    java.util.stream.Stream.of("note", "tip", "important", "warning", "caution")
+                            .map(palette::admonition)
+                            .distinct()
+                            .count());
+        }
+    }
+
     @ParameterizedTest
     @CsvSource({
         "LIGHT, note, #ffffff",
-        "LIGHT, tip, #000000",
-        "LIGHT, important, #000000",
-        "LIGHT, warning, #000000",
-        "LIGHT, caution, #000000",
+        "LIGHT, tip, #ffffff",
+        "LIGHT, important, #ffffff",
+        "LIGHT, warning, #ffffff",
+        "LIGHT, caution, #ffffff",
         "DARK, note, #000000",
         "DARK, tip, #000000",
         "DARK, important, #000000",
@@ -56,20 +126,20 @@ class LayoutTest {
                         .toList();
         String icon =
                 switch (kind) {
-                    case "tip" -> "\uf0eb";
-                    case "warning", "caution" -> "\uf071";
-                    case "important" -> "\uf06a";
-                    default -> "\uf05a";
+                    case "tip" -> "\uf400";
+                    case "warning" -> "\uf421";
+                    case "caution" -> Character.toString(0xf0238);
+                    case "important" -> "\uf50a";
+                    default -> "\uf129";
                 };
         String title = icon + " " + kind.toUpperCase(Locale.ROOT);
         assertEquals(
                 " " + title + " ", label.stream().map(Span::text).collect(Collectors.joining()));
         assertTrue(
                 label.stream()
-                        .allMatch(
-                                span ->
-                                        span.style().bold()
-                                                && span.style().foreground().equals(foreground)));
+                        .allMatch(span ->
+                                span.style().bold()
+                                        && span.style().foreground().equals(foreground)));
         assertTrue(header.text().startsWith("┌── " + title + " "));
         assertEquals("body", lines.get(1).text().substring(2, 6));
         assertTrue(
@@ -98,14 +168,13 @@ class LayoutTest {
                         .filter(line -> line.text().contains("CAUTION"))
                         .findFirst()
                         .orElseThrow();
-        assertTrue(label.text().startsWith("│ │ ┌── \uf071 CAUTION "), label.text());
+        assertTrue(label.text().startsWith("│ │ ┌── 󰈸 CAUTION "), label.text());
         assertTrue(
                 label.spans().stream()
-                        .anyMatch(
-                                span ->
-                                        span.text().contains("CAUTION")
-                                                && span.style().background().equals("#c69026")
-                                                && span.style().foreground().equals("#000000")));
+                        .anyMatch(span ->
+                                span.text().contains("CAUTION")
+                                        && span.style().background().equals("#d29922")
+                                        && span.style().foreground().equals("#000000")));
         assertTrue(lines.stream().allMatch(line -> CharWidth.of(line.text()) <= 44));
     }
 
@@ -130,7 +199,7 @@ class LayoutTest {
         String title =
                 lines.stream()
                         .flatMap(line -> line.spans().stream())
-                        .filter(span -> span.style().background().equals("#c69026"))
+                        .filter(span -> span.style().background().equals("#bc8cff"))
                         .map(Span::text)
                         .collect(Collectors.joining())
                         .replace(" ", "");
@@ -163,9 +232,13 @@ class LayoutTest {
         Block item = new Block(Block.Kind.ITEM, "", markers, List.of(), "", "");
         var doc = new Document(List.of(source, container(Block.Kind.LIST, item)), Path.of("."));
         String text =
-                layout.render(doc, 60, Appearance.DARK).stream()
-                        .map(RenderedLine::text)
-                        .collect(Collectors.joining("\n"));
+                new Layout(
+                                (s, l, a) -> List.of(new Span(s)),
+                                new RenderOptions(
+                                        "nerd", true, false, "auto", "auto", "thin", "circle"))
+                        .render(doc, 60, Appearance.DARK).stream()
+                                .map(RenderedLine::text)
+                                .collect(Collectors.joining("\n"));
         assertEquals(2, text.chars().filter(c -> c == '❶').count(), text);
         assertEquals(2, text.chars().filter(c -> c == '❿').count(), text);
         assertEquals(2, text.split("\\(11\\)", -1).length - 1, text);
@@ -218,16 +291,12 @@ class LayoutTest {
                         .allMatch(span -> span.style().background().isEmpty()));
         assertTrue(
                 spans.stream()
-                        .anyMatch(
-                                span ->
-                                        span.text().equals("a")
-                                                && !span.style().background().isEmpty()));
+                        .anyMatch(span ->
+                                span.text().equals("a") && !span.style().background().isEmpty()));
         assertTrue(
                 spans.stream()
-                        .anyMatch(
-                                span ->
-                                        span.text().equals("b")
-                                                && !span.style().background().isEmpty()));
+                        .anyMatch(span ->
+                                span.text().equals("b") && !span.style().background().isEmpty()));
     }
 
     @Test
@@ -355,10 +424,8 @@ class LayoutTest {
         assertTrue(
                 lines.stream()
                         .filter(l -> !l.text().isEmpty())
-                        .allMatch(
-                                l ->
-                                        CharWidth.of(l.text())
-                                                == CharWidth.of(lines.getFirst().text())));
+                        .allMatch(l ->
+                                CharWidth.of(l.text()) == CharWidth.of(lines.getFirst().text())));
     }
 
     @Test

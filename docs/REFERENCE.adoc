@@ -12,13 +12,16 @@ Direct output also supports Windows. Exit status is zero on success and non-zero
 |Option |Default |Meaning
 |`--no-pager` |off |Write directly to stdout.
 |`--no-cache` |off |Bypass reading and writing conversion and syntax highlighting disk caches.
-|`--width N` |terminal |Content width, 1-1000 cells. Redirected output defaults to 80.
+|`--width N` |120 |Content width, 1-1000 cells, limited by terminal width.
 |`--center true/false` |false |Centre width-limited content.
 |`--color auto/always/never` |auto |Auto respects NO_COLOR and TERM=dumb.
 |`--theme auto/light/dark` |auto |Follow terminal appearance, or fix the theme.
 |`--images auto/never` |auto |Use graphics when the terminal answers the capability query.
 |`--icons nerd/unicode/ascii` |nerd |Select glyphs. Font support is not detected.
 |`--mouse true/false` |true |Capture clicks and wheel events.
+|`--progress auto/always/never` |auto |Show OSC 9;4 reading position on recognised terminals.
+|`--image-dim true/false` |true |Dim dark-mode images until hovered in mouse mode.
+|`--callouts pill/circle/ascii` |pill |Select numbered callout markers.
 |`--page-background true/false` |false |Fill ordinary text and margins.
 |`--table-stripes true/false` |true |Alternate cell backgrounds.
 |`--table-frame auto/all/sides/ends/none` |auto |Select outer table borders.
@@ -68,9 +71,18 @@ The standard `imagesdir` attribute prefixes relative image targets. Remote image
 == Rendering
 
 Text wraps to the content width; the final terminal column is reserved. Code scrolls horizontally.
+Detected YAML front matter stays in a literal YAML block, preserving indentation and line boundaries.
 Table cells wrap; structures wider than the viewport remain scrollable. Auto borders follow AsciiDoc frame/grid attributes.
-Source titles use italic text inside the top border. Callouts use ❶ through ❿, then parenthesised numbers;
-ASCII mode uses parenthesised numbers throughout.
+Source titles use italic text inside the top border. Callout pills use regular numbers on a contrasting
+background, with rounded ends in Nerd mode. Circle mode uses ❶ through ❿, then parenthesised numbers.
+ASCII glyphs and unstyled output use parenthesised numbers throughout.
+
+Soft source line breaks reflow with surrounding prose. Explicit breaks, `hardbreaks`, verse and code retain
+their line boundaries. Superscript references use bracketed labels such as `[1]`, preserving their links.
+Admonitions use blue for NOTE, green for TIP, purple for IMPORTANT, red for WARNING and amber for CAUTION.
+Nerd mode uses `nf-fa-info` for NOTE, `nf-oct-light_bulb` for TIP,
+`nf-oct-report` for IMPORTANT, `nf-oct-alert` for WARNING and `nf-md-fire` for CAUTION.
+Unicode and ASCII alternatives remain available. Compare alternatives with `./tools/admonition-demo.sh`.
 
 Hugo `{{< ... >}}` and `{{% ... %}}` tags are hidden while their contents remain.
 Generic `{{ ... }}`, code/literal examples and escaped tags are preserved. Templates are not executed.
@@ -80,6 +92,20 @@ Scripts, styles and executable elements are discarded. Arbitrary CSS is unsuppor
 
 Direct output expands disclosures and retains image descriptions. The pager displays block images and standalone
 `image:` macros graphically when supported. Images mixed into running text retain placeholders.
+In dark mouse mode, images use 65% opacity until hovered. Light mode, selection mode (`m`) and
+`--image-dim=false` show original images. Hover requires mouse motion reporting. Image variants are
+cached; scrolling reuses uploaded pixels. Theme changes update both text and images.
+
+Links use OSC 8. The terminal handles modifier clicks, including over SSH; glow-adoc does not launch
+a browser. iTerm2 uses Cmd-click when enabled in Pointer preferences. In Ghostty, use its configured
+link-opening modifier with Shift to bypass application mouse capture: Shift+Cmd-click on macOS,
+or Shift+Ctrl-click on Linux. In iTerm2, Option temporarily bypasses mouse reporting; use Option+Cmd-click
+if Cmd-click is captured. Press `m` to
+disable capture if a terminal intercepts the gesture. Links remain available with `--color=never` in the pager.
+
+OSC progress follows the scroll position, reaches 100% when the document fits or its end is visible,
+and clears on exit. Automatic mode recognises Ghostty, iTerm2, WezTerm, Windows Terminal and Konsole.
+It disables progress inside tmux/screen; `always` forces emission. Direct output never emits progress.
 
 == Environment
 

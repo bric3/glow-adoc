@@ -25,6 +25,7 @@ attributes, application-byte changes, includes, time-dependent substitutions, pr
 corrupt XML, external entities and unavailable storage.
 
 PTY checks cover keys/mouse, search, folding, themes, images and terminal restoration.
+They also verify monochrome OSC 8 links, OSC 9;4 cleanup and image hover uploads.
 Version-policy tests use temporary Git repositories and check configuration-cache invalidation after tags and commits.
 `jbang tools/Release.java --self-test` checks draft updates, published-release protection, upload failure and retry.
 Image tests assert unchanged frames emit no commands, scrolling reuses uploaded pixels,

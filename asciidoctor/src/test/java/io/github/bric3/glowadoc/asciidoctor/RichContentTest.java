@@ -20,6 +20,58 @@ import java.util.stream.Stream;
 
 class RichContentTest {
     @Test
+    void reflowsProseAndLinkedSuperscriptsButPreservesExplicitBreaks() {
+        try (var reader = new AsciiDocReader()) {
+            var paragraphs =
+                    reader.read(
+                                    """
+                                    https://example.org/runtime[Runtime 27] arrives in September
+                                    with an _updated_ API.
+
+                                    The constant
+                                    https://example.org/one[^1^]
+                                    https://example.org/two[^2^]
+                                    https://example.org/three[^3^]
+                                    fits an integer.
+
+                                    first +
+                                    second
+
+                                    [%hardbreaks]
+                                    third
+                                    fourth
+
+                                    [verse]
+                                    ____
+                                    fifth
+                                    sixth
+                                    ____
+
+                                    ++++
+                                    <p>HTML
+                                    <a href="https://example.org/reference"><sup>4</sup></a><br>next</p>
+                                    ++++
+                                    """,
+                                    directory)
+                            .blocks();
+            assertEquals(
+                    "Runtime 27 arrives in September with an updated API.",
+                    paragraphs.get(0).text());
+            assertEquals("The constant [1] [2] [3] fits an integer.", paragraphs.get(1).text());
+            assertEquals(
+                    List.of("[1]", "[2]", "[3]"),
+                    paragraphs.get(1).spans().stream()
+                            .filter(s -> !s.style().link().isEmpty())
+                            .map(s -> s.text())
+                            .toList());
+            assertEquals("first\nsecond", paragraphs.get(2).text());
+            assertEquals("third\nfourth", paragraphs.get(3).text());
+            assertEquals("fifth\nsixth", paragraphs.get(4).text());
+            assertEquals("HTML [4]\nnext", paragraphs.get(5).text());
+        }
+    }
+
+    @Test
     void preservesCalloutNumbersAndLiteralCode() {
         StringBuilder source =
                 new StringBuilder(
@@ -175,10 +227,9 @@ class RichContentTest {
             var again = reader.read("image:{image-assets}/graph.png[]", directory);
             assertFalse(
                     all(again.blocks())
-                            .anyMatch(
-                                    block ->
-                                            block.target().contains("assets/graph.png")
-                                                    && !block.target().contains("{image-assets}")),
+                            .anyMatch(block ->
+                                    block.target().contains("assets/graph.png")
+                                            && !block.target().contains("{image-assets}")),
                     "Attributes must not leak between reads");
         }
     }
@@ -251,16 +302,14 @@ class RichContentTest {
                             .anyMatch(s -> s.style().strike()));
             assertTrue(
                     blocks.stream()
-                            .anyMatch(
-                                    b ->
-                                            b.kind() == Block.Kind.ADMONITION
-                                                    && b.format().variant().equals("warning")));
+                            .anyMatch(b ->
+                                    b.kind() == Block.Kind.ADMONITION
+                                            && b.format().variant().equals("warning")));
             assertTrue(
                     blocks.stream()
-                            .anyMatch(
-                                    b ->
-                                            b.kind() == Block.Kind.CELL
-                                                    && b.format().alignment().equals("right")));
+                            .anyMatch(b ->
+                                    b.kind() == Block.Kind.CELL
+                                            && b.format().alignment().equals("right")));
             assertTrue(
                     blocks.stream()
                             .filter(b -> b.kind() == Block.Kind.CELL)
@@ -268,10 +317,9 @@ class RichContentTest {
                             .anyMatch(span -> span.style().bold()));
             assertTrue(
                     blocks.stream()
-                            .anyMatch(
-                                    b ->
-                                            b.kind() == Block.Kind.ROW
-                                                    && b.format().variant().equals("header")));
+                            .anyMatch(b ->
+                                    b.kind() == Block.Kind.ROW
+                                            && b.format().variant().equals("header")));
         }
     }
 
@@ -308,11 +356,10 @@ class RichContentTest {
             assertTrue(text.contains("  <source>"), text);
             assertTrue(
                     blocks.stream()
-                            .anyMatch(
-                                    b ->
-                                            b.kind() == Block.Kind.DETAILS
-                                                    && b.format().title().equals("HTML details")
-                                                    && b.format().open()));
+                            .anyMatch(b ->
+                                    b.kind() == Block.Kind.DETAILS
+                                            && b.format().title().equals("HTML details")
+                                            && b.format().open()));
             assertTrue(
                     blocks.stream()
                             .flatMap(b -> b.spans().stream())

@@ -3,10 +3,13 @@
 # User file: $XDG_CONFIG_HOME/glow-adoc/config.toml or ~/.config/glow-adoc/config.toml.
 # Project file: .glow-adoc.local.toml or .glow-adoc.toml; nearest directory wins.
 pager = true
-width = 0 # 0: terminal width; redirected output defaults to 80.
+width = 120 # Limited by terminal width. Set 0 to use the full terminal width.
 center = false
 icons = "nerd" # nerd, unicode, ascii; no font detection.
 mouse = true # Press m to toggle capture; Shift-drag can select natively.
+progress = "auto" # auto, always, never; OSC 9;4 reading position, pager only.
+image-dim = true # Dark-mode images use 65% opacity; hover restores full opacity.
+callouts = "pill" # pill, circle, ascii; pills use regular numbers.
 page-background = false
 table-stripes = true
 table-frame = "auto" # auto, all, sides, ends, none.

@@ -29,6 +29,24 @@ class ConversionCacheTest {
     }
 
     @Test
+    void cacheHitsPreserveYamlFrontMatterWithoutDuplicatingIt() {
+        var cache =
+                new ConversionCache(
+                        directory.resolve("post.adoc"), directory.resolve("cache"), "front-matter");
+        String source = "---\ntitle: Title\ntags:\n  - java\n---\n\nBody\n";
+        var stages = new ArrayList<String>();
+        try (var first = new AsciiDocReader(cache, ignored -> {})) {
+            var expected = first.read(source, directory);
+            try (var next = new AsciiDocReader(cache, stages::add)) {
+                assertEquals(expected, next.read(source, directory));
+                assertEquals(2, expected.blocks().size());
+                assertEquals("yaml", expected.blocks().getFirst().language());
+            }
+        }
+        assertEquals(List.of("conversion-cache-hit"), stages);
+    }
+
+    @Test
     void reusesConvertedContentWithoutInitialisingJruby() throws Exception {
         Path input = directory.resolve("post.adoc");
         var cache = new ConversionCache(input, directory.resolve("cache"), "implementation");

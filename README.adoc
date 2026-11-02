@@ -47,7 +47,8 @@ glow-adoc -a image-assets="$PWD/static/assets" content/posts/post.adoc
 glow-adoc --help
 ----
 
-A terminal opens the pager. Redirected output is text, 80 columns by default.
+A terminal opens the pager. Text wraps at 120 columns by default, limited by narrower terminals.
+Redirected output uses the same 120-column default.
 `--no-pager` selects direct output; `--width` changes the content width.
 The regular jar also supports `java -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc`.
 

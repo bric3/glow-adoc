@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
 final class TextLayout {
     private static final Pattern GRAPHEME = Pattern.compile("\\X");
 
-    private record Cell(String text, Style style) {}
+    private record Cell(String text, Style style, String callout) {}
 
     private TextLayout() {}
 
@@ -23,14 +23,20 @@ final class TextLayout {
     }
 
     static void append(List<Span> spans, String text, Style style) {
+        append(spans, text, style, "");
+    }
+
+    private static void append(List<Span> spans, String text, Style style, String callout) {
         if (text.isEmpty()) {
             return;
         }
-        if (!spans.isEmpty() && spans.getLast().style().equals(style)) {
+        if (!spans.isEmpty()
+                && spans.getLast().style().equals(style)
+                && spans.getLast().callout().equals(callout)) {
             Span last = spans.removeLast();
-            spans.add(new Span(last.text() + text, style));
+            spans.add(new Span(last.text() + text, style, callout));
         } else {
-            spans.add(new Span(text, style));
+            spans.add(new Span(text, style, callout));
         }
     }
 
@@ -43,7 +49,7 @@ final class TextLayout {
         for (Span span : spans) {
             var matcher = GRAPHEME.matcher(span.text().replace("\t", "    "));
             while (matcher.find()) {
-                cells.add(new Cell(matcher.group(), span.style()));
+                cells.add(new Cell(matcher.group(), span.style(), span.callout()));
             }
         }
         var lines = new ArrayList<List<Span>>();
@@ -59,10 +65,13 @@ final class TextLayout {
                 continue;
             }
             int end = at + 1;
-            boolean space = cell.text().isBlank();
+            boolean space = cell.callout().isEmpty() && cell.text().isBlank();
             while (end < cells.size()
                     && !cells.get(end).text().contains("\n")
-                    && cells.get(end).text().isBlank() == space) {
+                    && (cell.callout().isEmpty()
+                            ? cells.get(end).callout().isEmpty()
+                                    && cells.get(end).text().isBlank() == space
+                            : cell.callout().equals(cells.get(end).callout()))) {
                 end++;
             }
             int wordWidth = 0;
@@ -84,10 +93,10 @@ final class TextLayout {
                     line = new ArrayList<>();
                     used = 0;
                 }
-                if (used == 0 && next.text().isBlank()) {
+                if (used == 0 && next.callout().isEmpty() && next.text().isBlank()) {
                     continue;
                 }
-                append(line, next.text(), next.style());
+                append(line, next.text(), next.style(), next.callout());
                 used += size;
             }
         }
@@ -119,6 +128,9 @@ final class TextLayout {
 
     private static void trim(List<Span> line) {
         while (!line.isEmpty()) {
+            if (!line.getLast().callout().isEmpty()) {
+                return;
+            }
             Span last = line.removeLast();
             String text = last.text().stripTrailing();
             if (!text.isEmpty()) {

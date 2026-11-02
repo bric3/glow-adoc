@@ -37,6 +37,37 @@ class PackagedCliTest {
     private final String java = Path.of(System.getProperty("java.home"), "bin/java").toString();
 
     @Test
+    void defaultsTo120ColumnsAndKeepsYamlFrontMatterLiteral() throws Exception {
+        var process =
+                new ProcessBuilder(
+                                java,
+                                "-jar",
+                                System.getProperty("glow.jar"),
+                                "--no-pager",
+                                "--color=never",
+                                "--icons=ascii",
+                                "-")
+                        .redirectError(directory.resolve("width-errors").toFile())
+                        .start();
+        process.getOutputStream()
+                .write(
+                        ("---\ntitle: An _unchanged_ title\ntags:\n  - java\n---\n\n"
+                                        + "word ".repeat(80)
+                                        + "\n")
+                                .getBytes(StandardCharsets.UTF_8));
+        process.getOutputStream().close();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+        assertEquals(0, process.exitValue(), Files.readString(directory.resolve("width-errors")));
+        assertTrue(output.contains("| title: An _unchanged_ title"), output);
+        assertTrue(output.contains("|   - java"), output);
+        var prose = output.lines().filter(line -> line.startsWith("word")).toList();
+        assertEquals(4, prose.size(), output);
+        assertTrue(prose.stream().allMatch(line -> line.length() <= 120));
+        assertTrue(prose.stream().anyMatch(line -> line.length() > 80));
+    }
+
+    @Test
     void persistentHighlightsAvoidLoadingWasmAndPreserveOutput() throws Exception {
         Path input = directory.resolve("highlighted.adoc");
         Files.writeString(input, "[source,java]\n----\nclass Example { int answer = 42; }\n----\n");
@@ -203,24 +234,18 @@ class PackagedCliTest {
             assertTrue(jar.getEntry("META-INF/third-party/plantuml-mit.txt") != null);
             assertTrue(
                     jar.stream()
-                            .anyMatch(
-                                    entry ->
-                                            entry.getName()
-                                                    .startsWith(
-                                                            "META-INF/third-party/jruby-stdlib-")));
+                            .anyMatch(entry ->
+                                    entry.getName()
+                                            .startsWith("META-INF/third-party/jruby-stdlib-")));
             assertTrue(
                     jar.stream()
-                            .anyMatch(
-                                    entry ->
-                                            entry.getName()
-                                                    .startsWith(
-                                                            "META-INF/third-party/joda-time-")));
+                            .anyMatch(entry ->
+                                    entry.getName().startsWith("META-INF/third-party/joda-time-")));
             assertFalse(
                     jar.stream()
-                            .anyMatch(
-                                    entry ->
-                                            entry.getName().startsWith("META-INF/third-party/")
-                                                    && entry.getName().endsWith(".class")));
+                            .anyMatch(entry ->
+                                    entry.getName().startsWith("META-INF/third-party/")
+                                            && entry.getName().endsWith(".class")));
         }
     }
 
@@ -328,7 +353,7 @@ class PackagedCliTest {
             assertTrue(text.startsWith("+-- ! CAUTION "), text);
             assertTrue(text.contains("Mind the gap."), text);
             if (colour) {
-                assertTrue(output.contains("48;2;198;144;38"), "CAUTION has an orange background");
+                assertTrue(output.contains("48;2;210;153;34"), "CAUTION has an amber background");
             } else {
                 assertFalse(
                         output.contains("\u001b"), "Monochrome output has no terminal controls");
@@ -638,7 +663,13 @@ class PackagedCliTest {
         Path document = directory.resolve("image.adoc");
         Files.writeString(document, "= Image\n\nimage::picture.png[]\n");
         Path transcript = directory.resolve("graphics-transcript");
-        var process = startPty(document.toString(), transcript, true, "--page-background=true");
+        var process =
+                startPty(
+                        document.toString(),
+                        transcript,
+                        true,
+                        "--page-background=true",
+                        "--progress=always");
         try {
             assertTimeoutPreemptively(
                     Duration.ofSeconds(30),
@@ -651,6 +682,33 @@ class PackagedCliTest {
                                                 .getBytes());
                         process.getOutputStream().flush();
                         await(process, transcript, "a=p,i=");
+                        await(process, transcript, "\u001b[?1003h");
+                        await(process, transcript, "\u001b]9;4;1;100\u0007");
+                        String dimmed = Files.readString(transcript);
+                        int uploads = dimmed.split("a=t,t=d,f=100", -1).length;
+                        var position =
+                                Pattern.compile("\u001b\\[(\\d+);(\\d+)H\u001b_Ga=p")
+                                        .matcher(dimmed);
+                        assertTrue(position.find(), "Image placement coordinates");
+                        process.getOutputStream()
+                                .write(
+                                        ("\u001b[<35;"
+                                                        + position.group(2)
+                                                        + ";"
+                                                        + position.group(1)
+                                                        + "M")
+                                                .getBytes());
+                        process.getOutputStream().flush();
+                        long hoverDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                        while (Files.readString(transcript).split("a=t,t=d,f=100", -1).length
+                                        == uploads
+                                && System.nanoTime() < hoverDeadline) {
+                            Thread.sleep(20);
+                        }
+                        assertTrue(
+                                Files.readString(transcript).split("a=t,t=d,f=100", -1).length
+                                        > uploads,
+                                "Hover uploads the original image once");
                         process.getOutputStream()
                                 .write(
                                         "\u001b[?997;2n\u001b]11;rgb:ffff/ffff/ffff\u001b\\"
@@ -661,6 +719,7 @@ class PackagedCliTest {
                         process.getOutputStream().flush();
                         assertTrue(process.waitFor(10, TimeUnit.SECONDS));
                         assertEquals(0, process.exitValue(), Files.readString(transcript));
+                        assertTrue(Files.readString(transcript).contains("\u001b]9;4;0\u0007"));
                         assertTrue(
                                 Files.readString(transcript).contains("\u001b[?2031l"),
                                 "Restore theme notification mode");
@@ -701,6 +760,39 @@ class PackagedCliTest {
         builder.environment().put("COLORTERM", "truecolor");
         builder.environment().remove("NO_COLOR");
         return builder.start();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"always", "never"})
+    void pagerPreservesHyperlinksWithMouseCaptureAndSearch(String colour) throws Exception {
+        Path document = directory.resolve("hyperlink.adoc");
+        Files.writeString(
+                document, "https://example.org/reference[LINK_LABEL across a wrapped line]\n");
+        Path transcript = directory.resolve("hyperlink-transcript");
+        var process =
+                startPty(
+                        document.toString(),
+                        transcript,
+                        false,
+                        "--color=" + colour,
+                        "--width=20",
+                        "--progress=never");
+        try {
+            await(process, transcript, "https://example.org/reference");
+            assertTrue(Files.readString(transcript).contains("\u001b]8;"));
+            assertTrue(Files.readString(transcript).contains("\u001b[?1006h"));
+            process.getOutputStream().write("/LINK_LABEL".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "1/1 matches");
+            process.getOutputStream().write(3);
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+            assertFalse(Files.readString(transcript).contains("\u001b]9;4;"));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
     }
 
     @Test

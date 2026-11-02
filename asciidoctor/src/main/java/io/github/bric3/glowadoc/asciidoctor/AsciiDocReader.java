@@ -131,6 +131,10 @@ public final class AsciiDocReader implements AutoCloseable {
         try {
             this.showShortcodes = showShortcodes;
             includeRoot = baseDirectory.toRealPath();
+            int frontMatterEnd = frontMatterEnd(source);
+            String frontMatter =
+                    Controls.visible(
+                            source.substring(source.startsWith("\ufeff") ? 1 : 0, frontMatterEnd));
             String key =
                     cache == null
                             ? null
@@ -138,7 +142,7 @@ public final class AsciiDocReader implements AutoCloseable {
             String cached = cache == null ? null : cache.read(key);
             if (cached != null) {
                 try {
-                    Document document = parse(cached, baseDirectory);
+                    Document document = parse(cached, baseDirectory, frontMatter);
                     milestone.accept("conversion-cache-hit");
                     return document;
                 } catch (Exception ignored) {
@@ -156,7 +160,10 @@ public final class AsciiDocReader implements AutoCloseable {
             String xml =
                     engine().convert(
                                     Controls.visible(
-                                            showShortcodes ? source : Shortcodes.hide(source)),
+                                            showShortcodes
+                                                    ? source.substring(frontMatterEnd)
+                                                    : Shortcodes.hide(
+                                                            source.substring(frontMatterEnd))),
                                     Options.builder()
                                             .backend("glow-terminal")
                                             .safe(SafeMode.SAFE)
@@ -165,7 +172,7 @@ public final class AsciiDocReader implements AutoCloseable {
                                             .attributes(conversionAttributes.build())
                                             .build());
             xml = HtmlContent.normalise(xml);
-            Document document = parse(xml, baseDirectory);
+            Document document = parse(xml, baseDirectory, frontMatter);
             // Includes can change independently of the top-level source and attributes.
             if (cache != null && !includesUsed) {
                 cache.write(key, xml);
@@ -176,7 +183,29 @@ public final class AsciiDocReader implements AutoCloseable {
         }
     }
 
-    private static Document parse(String xml, Path baseDirectory) throws Exception {
+    private static int frontMatterEnd(String source) {
+        int start = source.startsWith("\ufeff") ? 1 : 0;
+        int end = source.indexOf('\n', start);
+        if (end < 0 || !source.substring(start, end).stripTrailing().equals("---")) {
+            return start;
+        }
+        start = end + 1;
+        while (start < source.length()) {
+            end = source.indexOf('\n', start);
+            if (end < 0) {
+                end = source.length();
+            }
+            String line = source.substring(start, end).stripTrailing();
+            if (line.equals("---") || line.equals("...")) {
+                return end > start && source.charAt(end - 1) == '\r' ? end - 1 : end;
+            }
+            start = end + 1;
+        }
+        return source.startsWith("\ufeff") ? 1 : 0;
+    }
+
+    private static Document parse(String xml, Path baseDirectory, String frontMatter)
+            throws Exception {
         var factory = DocumentBuilderFactory.newInstance();
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
@@ -184,7 +213,18 @@ public final class AsciiDocReader implements AutoCloseable {
         var builder = factory.newDocumentBuilder();
         builder.setErrorHandler(new DefaultHandler());
         var root = builder.parse(new InputSource(new StringReader(xml))).getDocumentElement();
-        return new Document(blocks(root), baseDirectory);
+        var blocks = blocks(root);
+        if (!frontMatter.isEmpty()) {
+            blocks.addFirst(
+                    new Block(
+                            Block.Kind.CODE,
+                            "",
+                            List.of(new Span(frontMatter)),
+                            List.of(),
+                            "yaml",
+                            ""));
+        }
+        return new Document(blocks, baseDirectory);
     }
 
     private static List<Block> blocks(Element parent) {
@@ -269,13 +309,17 @@ public final class AsciiDocReader implements AutoCloseable {
     }
 
     private static boolean inline(Element element) {
-        return List.of("strong", "em", "code", "link", "span", "strike", "callout")
+        return List.of("strong", "em", "code", "link", "span", "strike", "callout", "br")
                 .contains(element.getTagName());
     }
 
     private static void inlines(Element element, Style style, List<Span> spans) {
         for (Node node = element.getFirstChild(); node != null; node = node.getNextSibling()) {
             if (node instanceof Element child && inline(child)) {
+                if (child.getTagName().equals("br")) {
+                    spans.add(new Span("\n", style));
+                    continue;
+                }
                 if (child.getTagName().equals("callout")) {
                     spans.add(Span.callout(child.getAttribute("number")));
                     continue;

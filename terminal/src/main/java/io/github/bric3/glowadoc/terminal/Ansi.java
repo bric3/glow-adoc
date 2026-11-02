@@ -15,6 +15,9 @@ public final class Ansi {
 
     public static dev.tamboui.style.Style style(Style span, boolean colour, boolean truecolour) {
         var result = dev.tamboui.style.Style.EMPTY;
+        if (Controls.safeLink(span.link())) {
+            result = result.hyperlink(span.link());
+        }
         if (!colour) {
             return result;
         }
@@ -35,9 +38,6 @@ public final class Ansi {
         }
         if (!span.background().isBlank()) {
             result = result.bg(color(span.background(), truecolour));
-        }
-        if (Controls.safeLink(span.link())) {
-            result = result.hyperlink(span.link());
         }
         return result;
     }
@@ -73,17 +73,11 @@ public final class Ansi {
                     out.append("\u001b[9m");
                 }
                 style.fg()
-                        .ifPresent(
-                                c ->
-                                        out.append("\u001b[")
-                                                .append(c.toAnsiForeground())
-                                                .append('m'));
+                        .ifPresent(c ->
+                                out.append("\u001b[").append(c.toAnsiForeground()).append('m'));
                 style.bg()
-                        .ifPresent(
-                                c ->
-                                        out.append("\u001b[")
-                                                .append(c.toAnsiBackground())
-                                                .append('m'));
+                        .ifPresent(c ->
+                                out.append("\u001b[").append(c.toAnsiBackground()).append('m'));
                 if (Controls.safeLink(span.style().link())) {
                     out.append("\u001b]8;;").append(span.style().link()).append("\u001b\\");
                 }

@@ -30,10 +30,12 @@ public record Palette(
     }
 
     public String admonition(String kind) {
+        boolean light = foreground.equals("#24292f");
         return switch (kind) {
-            case "tip" -> "#2f9e44";
-            case "warning" -> "#e5534b";
-            case "important", "caution" -> "#c69026";
+            case "tip" -> light ? "#1a7f37" : "#3fb950";
+            case "important" -> light ? "#8250df" : "#bc8cff";
+            case "warning" -> light ? "#cf222e" : "#ff7b72";
+            case "caution" -> light ? "#9a6700" : "#d29922";
             default -> accent;
         };
     }

@@ -18,6 +18,50 @@ class AsciiDocReaderTest {
     @TempDir Path directory;
 
     @Test
+    void preservesYamlFrontMatterAsLiteralSourceAndReflowsTheBody() {
+        String yaml =
+                """
+                ---
+                title: "An _unchanged_ title"
+                tags:
+                  - java
+                  - terminal
+                summary: |
+                  First line.
+                  Second line with {attributes} and {{< shortcode >}}.
+                ---\
+                """;
+        try (var reader = new AsciiDocReader()) {
+            var document =
+                    reader.read(
+                            yaml + "\n\n= Heading\n\nA paragraph\nwith a soft break.\n", directory);
+            var frontMatter = document.blocks().getFirst();
+            assertEquals(Block.Kind.CODE, frontMatter.kind());
+            assertEquals("yaml", frontMatter.language());
+            assertEquals(yaml, frontMatter.text());
+            assertEquals("Heading", document.blocks().get(1).text());
+            assertEquals("A paragraph with a soft break.", document.blocks().get(2).text());
+            var crlf =
+                    reader.read("\ufeff" + yaml.replace("\n", "\r\n") + "\r\n\r\nBody", directory);
+            assertEquals(yaml, crlf.blocks().getFirst().text());
+            var terminated = reader.read("---\ntitle: Title\n...", directory);
+            assertEquals("---\ntitle: Title\n...", terminated.blocks().getFirst().text());
+        }
+    }
+
+    @Test
+    void requiresClosedFrontMatterAtTheStartOfTheDocument() {
+        try (var reader = new AsciiDocReader()) {
+            for (String source :
+                    new String[] {"---\ntitle: Unclosed\n", "Paragraph\n\n---\ntitle: Body\n---"}) {
+                assertTrue(
+                        reader.read(source, directory).blocks().stream()
+                                .noneMatch(block -> block.language().equals("yaml")));
+            }
+        }
+    }
+
+    @Test
     void convertsBlocksAndNestedInlineStyles() {
         try (var reader = new AsciiDocReader()) {
             var document =
@@ -34,11 +78,10 @@ class AsciiDocReaderTest {
             assertEquals("A bold nested & <literal> link.", paragraph.text());
             assertTrue(
                     paragraph.spans().stream()
-                            .anyMatch(
-                                    s ->
-                                            s.text().equals("nested")
-                                                    && s.style().italic()
-                                                    && s.style().bold()));
+                            .anyMatch(s ->
+                                    s.text().equals("nested")
+                                            && s.style().italic()
+                                            && s.style().bold()));
             assertEquals("a < b && b > c", document.blocks().get(2).text());
         }
     }
@@ -63,18 +106,15 @@ class AsciiDocReaderTest {
             assertEquals(Block.Kind.LIST, doc.blocks().getFirst().kind());
             assertTrue(
                     doc.blocks().stream()
-                            .anyMatch(
-                                    b ->
-                                            b.kind() == Block.Kind.TABLE
-                                                    && b.children().getFirst().children().size()
-                                                            == 2));
+                            .anyMatch(b ->
+                                    b.kind() == Block.Kind.TABLE
+                                            && b.children().getFirst().children().size() == 2));
             assertTrue(
                     doc.blocks().stream()
-                            .anyMatch(
-                                    b ->
-                                            b.kind() == Block.Kind.DIAGRAM
-                                                    && b.language().equals("mermaid")
-                                                    && b.text().contains("A --> B")));
+                            .anyMatch(b ->
+                                    b.kind() == Block.Kind.DIAGRAM
+                                            && b.language().equals("mermaid")
+                                            && b.text().contains("A --> B")));
         }
     }
 

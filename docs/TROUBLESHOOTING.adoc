@@ -40,6 +40,16 @@ Retrain after updates; do not copy caches between incompatible builds.
 Press `m` to disable capture, or use `--mouse=false`.
 With capture enabled, Shift-drag selects text in terminals that provide that override.
 
+Links use the terminal's modifier click. Enable Cmd-click in iTerm2's Pointer preferences.
+In Ghostty mouse mode, use Shift+Cmd-click on macOS or Shift+Ctrl-click on Linux.
+Cmd-click alone is forwarded to the application as an ordinary click.
+In iTerm2, Option+Cmd-click bypasses capture. Press `m` to disable capture altogether.
+The terminal opens OSC 8 links locally even when the reader runs over SSH.
+
+Dark-mode images use 65% opacity in mouse mode; hover restores full opacity.
+Use `--image-dim=false` to keep original brightness. Hover needs terminal mouse motion reports.
+Reading-position progress uses OSC 9;4; `--progress=never` disables it.
+
 == Colours and glyphs
 
 Press `r` to query colours again. Fix appearance with `--theme=light` or `--theme=dark`.

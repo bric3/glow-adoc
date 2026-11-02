@@ -9,8 +9,11 @@ import org.jsoup.nodes.TextNode;
 import org.jsoup.parser.Parser;
 
 import java.util.Set;
+import java.util.regex.Pattern;
 
 final class HtmlContent {
+    private static final Pattern SOFT_BREAK = Pattern.compile("[ \\t]*\\r?\\n[ \\t]*");
+
     private HtmlContent() {}
 
     static String convert(String html) {
@@ -36,7 +39,19 @@ final class HtmlContent {
                 if (inheritedStrike) {
                     out.append("<strike>");
                 }
-                out.append(escape(text.getWholeText()));
+                boolean literal =
+                        parent instanceof Element element
+                                && element.closest("source, verse, diagram, pre, code") != null;
+                String value =
+                        literal
+                                ? text.getWholeText()
+                                : SOFT_BREAK.matcher(text.getWholeText()).replaceAll(" ");
+                if (!literal
+                        && text.previousSibling() instanceof Element previous
+                        && previous.normalName().equals("br")) {
+                    value = value.stripLeading();
+                }
+                out.append(escape(value));
                 if (inheritedStrike) {
                     out.append("</strike>");
                 }
@@ -78,13 +93,17 @@ final class HtmlContent {
                 }
             }
             if (name.equals("br")) {
-                out.append("\n");
+                out.append("<br/>");
                 out.append(nodes(element));
                 continue;
             }
             if (name.equals("img")) {
                 out.append(escape("[image: " + element.attr("alt") + "]"));
                 out.append(nodes(element));
+                continue;
+            }
+            if (name.equals("sup")) {
+                out.append("<span>[").append(nodes(element)).append("]</span>");
                 continue;
             }
             if (!Set.of(
