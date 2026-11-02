@@ -2,6 +2,7 @@
 
 [versions]
 asciidoctor = "3.0.1"
+jruby = { strictly = "10.1.2.0" }
 aesh = "3.18.6"
 tamboui = "0.6.0"
 lumis = "0.0.10"
@@ -18,6 +19,9 @@ ktlint = "1.8.0"
 
 [libraries]
 asciidoctor = { module = "org.asciidoctor:asciidoctorj", version.ref = "asciidoctor" }
+jruby-runtime = { module = "org.jruby:jruby", version.ref = "jruby" }
+jruby-base = { module = "org.jruby:jruby-base", version.ref = "jruby" }
+jruby-stdlib = { module = "org.jruby:jruby-stdlib", version.ref = "jruby" }
 aesh = { module = "org.aesh:aesh", version.ref = "aesh" }
 aesh-processor = { module = "org.aesh:aesh-processor", version.ref = "aesh" }
 tamboui-tui = { module = "dev.tamboui:tamboui-tui", version.ref = "tamboui" }

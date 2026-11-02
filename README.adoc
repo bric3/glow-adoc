@@ -14,7 +14,8 @@ highlighted code, aligned tables, colourful admonitions and collapsible sections
 * View local images through Kitty graphics, including over SSH, and render PlantUML diagrams.
 * Open files or stdin, or write formatted text directly to stdout.
 
-Built with https://github.com/asciidoctor/asciidoctorj[AsciidoctorJ] for parsing,
+Built with https://github.com/asciidoctor/asciidoctorj[AsciidoctorJ] on
+https://github.com/jruby/jruby[JRuby] for parsing,
 https://github.com/tamboui/tamboui[TamboUI] for the pager,
 https://github.com/roastedroot/lumis4j[Lumis4J] for highlighting and
 https://github.com/plantuml/plantuml[PlantUML] for diagrams.

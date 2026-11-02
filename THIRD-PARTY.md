@@ -32,35 +32,46 @@ See [PlantUML's distributions](https://plantuml.com/download) and the
 | Component                                       | Introduced by        | Purpose and published terms                                                                               |
 | ----------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------- |
 | AsciidoctorJ API                                | AsciidoctorJ         | Converter interfaces; Apache-2.0.                                                                         |
-| JRuby runtime 9.4.14.0                          | AsciidoctorJ         | Run the Ruby Asciidoctor engine; EPL-2.0 selected from the upstream alternatives.                         |
+| JRuby runtime 10.1.2.0                          | AsciidoctorJ         | Run the Ruby Asciidoctor engine; EPL-2.0 selected from the upstream alternatives.                         |
+| JRuby Prism 2.0.4                               | JRuby                | Integrate the Prism parser; EPL-2.0.                                                                      |
+| Prism parser API and Wasm 0.0.4                 | JRuby Prism          | Parse Ruby source; MIT. Original notice in `licenses/prism-MIT.txt`.                                      |
+| Redline runtime and native bridge 0.0.5         | Prism Wasm           | Execute the parser through Chicory and JFFI; Apache-2.0.                                                  |
+| FastDoubleParser 2.0.1                          | JRuby base           | Parse floating-point numbers; MIT, with component notices.                                                |
 | Ruby standard library and bundled gems          | JRuby                | Ruby libraries; Ruby/BSD and component-specific terms in the packaged notices.                            |
 | JZlib 1.1.5                                     | JRuby base           | Ruby zlib/gzip implementation; BSD.                                                                       |
 | CRaC API 1.5.0                                  | JRuby base           | JRuby checkpoint/restore integration; BSD-2-Clause.                                                       |
-| Joda-Time 2.12.7                                | JRuby base           | Ruby `Time`, `Date` and time-zone handling; Apache-2.0.                                                   |
+| Joda-Time 2.14.0                                | JRuby base           | Ruby `Time`, `Date` and time-zone handling; Apache-2.0.                                                   |
 | JiteScript 0.4.1                                | JRuby base           | Generate JVM bytecode for Ruby execution, including dynamic scopes; Apache-2.0.                           |
 | ASM modules                                     | JRuby and JNR        | JVM bytecode support; BSD-3-Clause.                                                                       |
-| JNR POSIX 3.1.20                                | JRuby                | POSIX integration; EPL-2.0 selected from the upstream alternatives.                                       |
+| JNR POSIX 3.2.4                                 | JRuby                | POSIX integration; EPL-2.0 selected from the upstream alternatives.                                       |
 | JNR FFI, constants, sockets and network helpers | JRuby/JNR            | Native runtime integration; Apache-2.0.                                                                   |
-| JFFI 1.3.13                                     | JNR FFI              | Native calls; Apache-2.0 selected from the upstream alternatives, with component-specific native notices. |
+| JFFI 1.4.3                                      | JNR FFI              | Native calls; Apache-2.0 selected from the upstream alternatives, with component-specific native notices. |
 | JNR x86 assembler                               | JNR FFI              | Native-call stubs; MIT.                                                                                   |
 | JCodings and Joni                               | JRuby                | Encodings and regular expressions; MIT.                                                                   |
 | Dirgra                                          | JRuby                | Graph analysis; EPL-1.0.                                                                                  |
 | Headius backport9, invokebinder and options     | JRuby                | JVM compatibility, method binding and options; Apache-2.0.                                                |
-| Chicory runtime, Wasm, WASI and logging         | Lumis4J              | Execute the bundled highlighter; Apache-2.0.                                                              |
+| Chicory runtime, Wasm, WASI and logging         | Lumis4J and Prism    | Execute the bundled highlighter and Ruby parser; Apache-2.0.                                              |
 | TamboUI widgets and annotations                 | TamboUI TUI          | UI support; MIT.                                                                                          |
 | Aesh terminal and readline modules              | Aesh/TamboUI backend | Terminal input and capabilities; Apache-2.0.                                                              |
 | ANTLR runtime and Checker Qual                  | TOMLJ                | Parser runtime and annotations; BSD-3-Clause and MIT respectively.                                        |
 
+`glowadoc-asciidoctor` constrains `jruby`, `jruby-base` and `jruby-stdlib` to the same version.
+These remain transitive dependencies of AsciidoctorJ. JRuby Prism's
+[published POM](https://repo.maven.apache.org/maven2/org/jruby/jruby-prism/2.0.4/jruby-prism-2.0.4.pom)
+specifies EPL-2.0. Prism's [original MIT notice](https://github.com/ruby/prism/blob/5092bf7f65635bfe6e0a042f98b76fc1010f1378/LICENSE.md)
+is retained separately because its Maven jars omit the notice. Redline's
+[release licence](https://github.com/roastedroot/chicory-redline/blob/0.0.5/LICENSE) specifies Apache-2.0.
+
 ### Selected licence alternatives
 
 glow-adoc distributes JRuby and JNR POSIX under EPL-2.0. Their pinned
-[JRuby notice](https://github.com/jruby/jruby/blob/9.4.14.0/COPYING) and
-[JNR POSIX notice](https://github.com/jnr/jnr-posix/blob/jnr-posix-3.1.20/LICENSE.txt)
+[JRuby notice](https://github.com/jruby/jruby/blob/10.1.2.0/COPYING) and
+[JNR POSIX notice](https://github.com/jnr/jnr-posix/blob/3.2.4/LICENSE.txt)
 explicitly permit this choice. These links also provide access to their corresponding source trees.
 Dirgra remains under its own EPL-1.0 terms.
 
 JFFI is distributed under the Apache-2.0 option in its
-[pinned licence](https://github.com/jnr/jffi/blob/jffi-1.3.13/LICENSE).
+[published licence alternatives](https://repo.maven.apache.org/maven2/com/github/jnr/jffi/1.4.3/jffi-1.4.3.pom).
 JRuby's notice also identifies JFFI and JNR FFI as redistributed under Apache-2.0.
 
 These choices are recorded here and packaged with the application. They require no Gradle flag,
@@ -71,7 +82,7 @@ own terms; selecting EPL for JRuby does not relicense them or glow-adoc's MPL-2.
 ### Why the JRuby libraries are present
 
 The dependency chain is `glowadoc-asciidoctor -> AsciidoctorJ -> JRuby -> jruby-base`.
-[JRuby's pinned POM](https://github.com/jruby/jruby/blob/9.4.14.0/core/pom.xml) declares JZlib,
+[JRuby's published POM](https://repo.maven.apache.org/maven2/org/jruby/jruby-base/10.1.2.0/jruby-base-10.1.2.0.pom) declares JZlib,
 CRaC, Joda-Time and JiteScript. Our Java sources do not need to import them for JRuby to use them:
 `RubyTime` references Joda-Time, `DynamicScopeGenerator` references JiteScript, zlib extensions
 reference JZlib, and `CheckpointMain` references CRaC. These references are visible with `jdeps`.
