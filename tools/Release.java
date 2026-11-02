@@ -173,6 +173,8 @@ public class Release {
         }
         if (draft) {
             var body = new JsonObject();
+            // Preserve the intended tag while its Git ref has not been created.
+            body.addProperty("tag_name", tag);
             body.addProperty("target_commitish", sha);
             request("PATCH", "releases/" + id, body);
         }
@@ -330,6 +332,7 @@ public class Release {
             throw new AssertionError("Selected the wrong draft");
         }
         var files = List.of(Path.of("glow-adoc-0.2.0-rc.1.zip"), Path.of("checksums-0.2.0-rc.1.txt"));
+        new Fake().update(true, 1, "v0.2.0-rc.1", "head", files);
         fake.names.addAll(List.of(
                 "glow-adoc-0.1.0-SNAPSHOT.jar",
                 "glow-adoc-0.1.0.zip",
@@ -395,6 +398,7 @@ public class Release {
         boolean prerelease = true;
         String body = "human notes";
         String name = "Human title";
+        String tag = "v0.2.0-rc.1";
         String target = "old";
         final List<String> names = new ArrayList<>();
         final JsonArray otherReleases = new JsonArray();
@@ -405,10 +409,8 @@ public class Release {
 
         @Override
         JsonElement request(String method, String path, JsonObject payload) {
-            var release =
-                    JsonParser
-                .parseString("{id:1,tag_name:'v0.2.0-rc.1',created_at:'2026-11-02T00:00:00Z'}")
-                .getAsJsonObject();
+            var release = JsonParser.parseString("{id:1,created_at:'2026-11-02T00:00:00Z'}").getAsJsonObject();
+            release.addProperty("tag_name", tag);
             release.addProperty("draft", draft);
             release.addProperty("body", body);
             release.addProperty("name", name);
@@ -454,6 +456,8 @@ public class Release {
                 prerelease = payload.get("prerelease").getAsBoolean();
             }
             if (payload != null && payload.has("target_commitish")) {
+                // GitHub replaces an omitted draft tag with a temporary name when updating the target.
+                tag = payload.has("tag_name") ? payload.get("tag_name").getAsString() : "untagged-draft";
                 target = payload.get("target_commitish").getAsString();
             }
             return release;
