@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.document;
 
 import java.nio.file.Path;
@@ -14,10 +13,10 @@ public record Document(List<Block> blocks, Path baseDirectory, List<Path> imageR
     public Document {
         blocks = List.copyOf(blocks);
         baseDirectory = baseDirectory.toAbsolutePath().normalize();
-        imageRoots =
-                Stream.concat(Stream.of(baseDirectory), imageRoots.stream())
-                        .map(path -> path.toAbsolutePath().normalize())
-                        .distinct()
-                        .toList();
+        imageRoots = Stream
+            .concat(Stream.of(baseDirectory), imageRoots.stream())
+            .map(path -> path.toAbsolutePath().normalize())
+            .distinct()
+            .toList();
     }
 }

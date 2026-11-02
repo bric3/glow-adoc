@@ -1,30 +1,28 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.render;
-
-import dev.tamboui.text.CharWidth;
 
 import io.github.bric3.glowadoc.document.Block;
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
-
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.function.Function;
 
 final class TableLayout {
-    private record Cell(Block block, int row, int column, int rows, int columns) {}
+    private record Cell(Block block, int row, int column, int rows, int columns, List<Span> spans) {}
 
-    private TableLayout() {}
+    private TableLayout() {
+    }
 
     static List<List<Span>> render(
             Block table,
             int width,
             Palette palette,
             RenderOptions options,
-            Function<List<Span>, List<Span>> theme) {
+            Function<List<Span>, List<Span>> theme
+    ) {
         var grid = new ArrayList<List<Cell>>();
         var cells = new ArrayList<Cell>();
         int rowCount = table.children().size();
@@ -44,7 +42,7 @@ final class TableLayout {
                 if (column + columns > 256) {
                     throw new IllegalArgumentException("Table exceeds 256 columns");
                 }
-                Cell cell = new Cell(block, r, column, rows, columns);
+                Cell cell = new Cell(block, r, column, rows, columns, theme.apply(block.spans()));
                 cells.add(cell);
                 for (int y = r; y < r + rows; y++) {
                     ensure(grid, y);
@@ -65,10 +63,7 @@ final class TableLayout {
         int[] widths = new int[count];
         Arrays.fill(widths, 1);
         for (Cell cell : cells) {
-            int desired =
-                    theme.apply(cell.block().spans()).stream()
-                            .mapToInt(s -> CharWidth.of(s.text()))
-                            .sum();
+            int desired = TextLayout.width(cell.spans());
             for (int c = cell.column(); c < cell.column() + cell.columns(); c++) {
                 widths[c] = Math.max(widths[c], Math.max(1, desired / cell.columns()));
             }
@@ -89,7 +84,8 @@ final class TableLayout {
                 widths[c] = Math.max(1, budget * weights[c] / totalWeight);
             }
         }
-        while (Arrays.stream(widths).sum() > budget) {
+        int totalWidth = Arrays.stream(widths).sum();
+        while (totalWidth > budget) {
             int largest = 0;
             for (int c = 1; c < count; c++) {
                 if (widths[c] > widths[largest]) {
@@ -100,8 +96,10 @@ final class TableLayout {
                 break;
             }
             widths[largest]--;
+            totalWidth--;
         }
-        var content = new HashMap<Cell, List<List<Span>>>();
+        // Grid entries retain these exact cells; avoid hashing their complete source blocks.
+        var content = new IdentityHashMap<Cell, List<List<Span>>>();
         int[] heights = new int[rowCount];
         Arrays.fill(heights, 1);
         for (Cell cell : cells) {
@@ -109,7 +107,7 @@ final class TableLayout {
             for (int c = cell.column(); c < cell.column() + cell.columns(); c++) {
                 cellWidth += widths[c];
             }
-            var spans = new ArrayList<>(theme.apply(cell.block().spans()));
+            var spans = new ArrayList<>(cell.spans());
             collectChildren(cell.block(), spans, theme);
             var wrapped = TextLayout.wrap(spans, cellWidth, false);
             content.put(cell, wrapped);
@@ -137,8 +135,7 @@ final class TableLayout {
             for (int y = 0; y < heights[r]; y++) {
                 var line = new ArrayList<Span>();
                 boolean edge = vertical(grid, r, 0, count, borders);
-                line.add(
-                        new Span(edge ? (options.ascii() ? "|" : "│") : " ", edge ? border : base));
+                line.add(new Span(edge ? (options.ascii() ? "|" : "│") : " ", edge ? border : base));
                 for (int c = 0; c < count; ) {
                     Cell cell = get(grid, r, c);
                     int span = cell == null ? 1 : cell.columns();
@@ -158,24 +155,16 @@ final class TableLayout {
                     }
                     int remaining = Math.max(0, w - TextLayout.width(text));
                     String align = cell == null ? "" : cell.block().format().alignment();
-                    int left =
-                            align.equals("right")
-                                    ? remaining
-                                    : align.equals("center") ? remaining / 2 : 0;
+                    int left = align.equals("right") ? remaining : align.equals("center") ? remaining / 2 : 0;
                     line.add(new Span(" ".repeat(left + 1), base));
                     for (Span s : text) {
-                        Style style =
-                                s.style()
-                                        .colours(
-                                                s.style().foreground().isEmpty()
-                                                        ? base.foreground()
-                                                        : s.style().foreground(),
-                                                s.style().background().isEmpty()
-                                                        ? bg
-                                                        : s.style().background());
-                        if (section
-                                || cell != null
-                                        && cell.block().format().variant().equals("header")) {
+                        Style style = s
+                            .style()
+                            .colours(
+                                    s.style().foreground().isEmpty() ? base.foreground() : s.style().foreground(),
+                                    s.style().background().isEmpty() ? bg : s.style().background()
+                            );
+                        if (section || cell != null && cell.block().format().variant().equals("header")) {
                             style = style.bolded();
                         }
                         line.add(new Span(s.text(), style));
@@ -183,53 +172,30 @@ final class TableLayout {
                     line.add(new Span(" ".repeat(remaining - left + 1), base));
                     c += span;
                     boolean boundary = vertical(grid, r, c, count, borders);
-                    line.add(
-                            new Span(
-                                    boundary ? (options.ascii() ? "|" : "│") : " ",
-                                    boundary ? border : base));
+                    line.add(new Span(boundary ? (options.ascii() ? "|" : "│") : " ", boundary ? border : base));
                 }
                 result.add(line);
             }
             int boundary = r + 1;
-            boolean sectionRule =
-                    boundary < rowCount
-                            && (table.children().get(r).format().variant().equals("header")
-                                    || table.children()
-                                            .get(boundary)
-                                            .format()
-                                            .variant()
-                                            .equals("footer"));
-            addRule(
-                    result,
-                    grid,
-                    widths,
-                    boundary,
-                    rowCount,
-                    borders,
-                    sectionRule,
-                    palette,
-                    options);
+            boolean sectionRule = boundary < rowCount
+                    && (table.children().get(r).format().variant().equals("header")
+                    || table.children().get(boundary).format().variant().equals("footer"));
+            addRule(result, grid, widths, boundary, rowCount, borders, sectionRule, palette, options);
         }
         return result;
     }
 
-    private record Borders(
-            boolean sides, boolean ends, boolean rows, boolean columns, boolean heavy) {
+    private record Borders(boolean sides, boolean ends, boolean rows, boolean columns, boolean heavy) {
         static Borders resolve(Block table, RenderOptions options) {
-            String frame =
-                    options.tableFrame().equals("auto")
-                            ? table.format().frame()
-                            : options.tableFrame();
-            String grid =
-                    options.tableGrid().equals("auto")
-                            ? table.format().grid()
-                            : options.tableGrid();
+            String frame = options.tableFrame().equals("auto") ? table.format().frame() : options.tableFrame();
+            String grid = options.tableGrid().equals("auto") ? table.format().grid() : options.tableGrid();
             return new Borders(
                     frame.equals("all") || frame.equals("sides"),
                     frame.equals("all") || frame.equals("ends"),
                     grid.equals("all") || grid.equals("rows"),
                     grid.equals("all") || grid.equals("cols"),
-                    options.tableSectionBorders().equals("heavy"));
+                    options.tableSectionBorders().equals("heavy")
+            );
         }
     }
 
@@ -237,21 +203,16 @@ final class TableLayout {
         return row.format().variant().equals("header") || row.format().variant().equals("footer");
     }
 
-    private static String rowBackground(
-            Block table, int row, RenderOptions options, Palette palette) {
-        return section(table.children().get(row)) || options.tableStripes() && row % 2 == 1
-                ? palette.stripe()
-                : "";
+    private static String rowBackground(Block table, int row, RenderOptions options, Palette palette) {
+        return section(table.children().get(row)) || options.tableStripes() && row % 2 == 1 ? palette.stripe() : "";
     }
 
-    private static boolean vertical(
-            List<List<Cell>> grid, int row, int column, int count, Borders borders) {
+    private static boolean vertical(List<List<Cell>> grid, int row, int column, int count, Borders borders) {
         if (column == 0 || column == count) {
             return borders.sides();
         }
         return borders.columns()
-                && (get(grid, row, column - 1) == null
-                        || !get(grid, row, column - 1).equals(get(grid, row, column)));
+                && (get(grid, row, column - 1) == null || !get(grid, row, column - 1).equals(get(grid, row, column)));
     }
 
     private static void addRule(
@@ -263,7 +224,8 @@ final class TableLayout {
             Borders borders,
             boolean section,
             Palette palette,
-            RenderOptions options) {
+            RenderOptions options
+    ) {
         boolean outer = boundary == 0 || boundary == rowCount;
         if (outer ? !borders.ends() : !borders.rows()) {
             return;
@@ -271,10 +233,9 @@ final class TableLayout {
         boolean[] segments = new boolean[widths.length];
         boolean any = false;
         for (int c = 0; c < widths.length; c++) {
-            segments[c] =
-                    outer
-                            || get(grid, boundary - 1, c) == null
-                            || !get(grid, boundary - 1, c).equals(get(grid, boundary, c));
+            segments[c] = outer
+                    || get(grid, boundary - 1, c) == null
+                    || !get(grid, boundary - 1, c).equals(get(grid, boundary, c));
             any |= segments[c];
         }
         if (!any) {
@@ -284,20 +245,11 @@ final class TableLayout {
         String horizontal = options.ascii() ? (heavy ? "=" : "-") : (heavy ? "━" : "─");
         var text = new StringBuilder();
         for (int c = 0; c <= widths.length; c++) {
-            int mask =
-                    (c > 0 && segments[c - 1] ? 1 : 0)
-                            | (c < widths.length && segments[c] ? 2 : 0)
-                            | (boundary > 0
-                                            && vertical(
-                                                    grid, boundary - 1, c, widths.length, borders)
-                                    ? 4
-                                    : 0)
-                            | (boundary < rowCount
-                                            && vertical(grid, boundary, c, widths.length, borders)
-                                    ? 8
-                                    : 0);
-            String glyph =
-                    options.ascii() ? asciiJunction(mask, horizontal) : junction(mask, heavy);
+            int mask = (c > 0 && segments[c - 1] ? 1 : 0)
+                    | (c < widths.length && segments[c] ? 2 : 0)
+                    | (boundary > 0 && vertical(grid, boundary - 1, c, widths.length, borders) ? 4 : 0)
+                    | (boundary < rowCount && vertical(grid, boundary, c, widths.length, borders) ? 8 : 0);
+            String glyph = options.ascii() ? asciiJunction(mask, horizontal) : junction(mask, heavy);
             text.append(glyph);
             if (c < widths.length) {
                 text.append((segments[c] ? horizontal : " ").repeat(widths[c] + 2));
@@ -313,17 +265,12 @@ final class TableLayout {
     }
 
     private static String junction(int mask, boolean heavy) {
-        String[] thin = {
-            " ", "─", "─", "─", "│", "┘", "└", "┴", "│", "┐", "┌", "┬", "│", "┤", "├", "┼"
-        };
-        String[] bold = {
-            " ", "━", "━", "━", "│", "┙", "┕", "┷", "│", "┑", "┍", "┯", "│", "┥", "┝", "┿"
-        };
+        String[] thin = {" ", "─", "─", "─", "│", "┘", "└", "┴", "│", "┐", "┌", "┬", "│", "┤", "├", "┼"};
+        String[] bold = {" ", "━", "━", "━", "│", "┙", "┕", "┷", "│", "┑", "┍", "┯", "│", "┥", "┝", "┿"};
         return (heavy ? bold : thin)[mask];
     }
 
-    private static void collectChildren(
-            Block block, List<Span> spans, Function<List<Span>, List<Span>> theme) {
+    private static void collectChildren(Block block, List<Span> spans, Function<List<Span>, List<Span>> theme) {
         for (Block child : block.children()) {
             if (!spans.isEmpty()) {
                 spans.add(new Span("\n"));
@@ -340,8 +287,6 @@ final class TableLayout {
     }
 
     private static Cell get(List<List<Cell>> grid, int row, int column) {
-        return row < grid.size() && column < grid.get(row).size()
-                ? grid.get(row).get(column)
-                : null;
+        return row < grid.size() && column < grid.get(row).size() ? grid.get(row).get(column) : null;
     }
 }

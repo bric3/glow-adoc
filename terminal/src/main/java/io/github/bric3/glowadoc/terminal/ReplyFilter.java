@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.terminal;
 
 import java.util.function.Consumer;
 
-/** Removes terminal replies before the pager interprets keyboard input. */
+/**
+ * Removes terminal replies before the pager interprets keyboard input.
+ */
 public final class ReplyFilter {
     private final Consumer<String> reply;
     private final Consumer<int[]> keys;
@@ -27,17 +28,17 @@ public final class ReplyFilter {
             }
             pending.appendCodePoint(cp);
             String value = pending.toString();
-            boolean csi = value.startsWith("\u001b[");
-            boolean string = value.startsWith("\u001b]") || value.startsWith("\u001b_");
+            boolean csi = value.startsWith("[");
+            boolean string = value.startsWith("]") || value.startsWith("_");
             if ((csi && value.length() > 2 && cp >= 64 && cp <= 126)
-                    || (string && (cp == 7 || value.endsWith("\u001b\\")))
+                    || (string && (cp == 7 || value.endsWith("\\")))
                     || (value.length() == 2 && !csi && !string)
                     || value.length() > 4096) {
-                if (value.startsWith("\u001b]")
-                        || value.startsWith("\u001b_G")
-                        || value.matches("\u001b\\[6;[0-9]+;[0-9]+t")
-                        || value.matches("\u001b\\[\\?2031;[0-4]\\$y")
-                        || value.matches("\u001b\\[\\?997(?:;[12])?n")) {
+                if (value.startsWith("]")
+                        || value.startsWith("_G")
+                        || value.matches("\\[6;[0-9]+;[0-9]+t")
+                        || value.matches("\\[\\?2031;[0-4]\\$y")
+                        || value.matches("\\[\\?997(?:;[12])?n")) {
                     reply.accept(value);
                 } else {
                     keys.accept(value.codePoints().toArray());
@@ -49,8 +50,7 @@ public final class ReplyFilter {
 
     public synchronized void expire() {
         if (!pending.isEmpty() && System.nanoTime() - started > 200_000_000L) {
-            if (!pending.toString().startsWith("\u001b]")
-                    && !pending.toString().startsWith("\u001b_")) {
+            if (!pending.toString().startsWith("]") && !pending.toString().startsWith("_")) {
                 keys.accept(pending.toString().codePoints().toArray());
             }
             pending.setLength(0);

@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.terminal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -17,7 +14,8 @@ import java.util.List;
 import java.util.Map;
 
 class LinkOpenerTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     @Test
     void passesTheUrlAsOneLiteralArgumentToTheOpener() throws Exception {
@@ -26,8 +24,7 @@ class LinkOpenerTest {
         try (var opener = opener(result, "record", false)) {
             opener.open(target);
             assertEquals("Opened link", diagnostic(opener));
-            assertEquals(
-                    target, Files.readString(result).lines().skip(1).findFirst().orElseThrow());
+            assertEquals(target, Files.readString(result).lines().skip(1).findFirst().orElseThrow());
         }
         assertEquals(List.of("/usr/bin/open", "--"), LinkOpener.command("Mac OS X"));
         assertEquals(List.of("xdg-open"), LinkOpener.command("Linux"));
@@ -43,7 +40,8 @@ class LinkOpenerTest {
                             "javascript:alert(1)",
                             "https://",
                             "https://example.org/has space",
-                            "https://example.org/\u001b")) {
+                            "https://example.org/"
+            )) {
                 opener.open(target);
                 assertEquals("Cannot open this link", diagnostic(opener));
             }
@@ -69,29 +67,20 @@ class LinkOpenerTest {
             Path result = directory.resolve("pid-" + close);
             try (var opener = opener(result, "hang", false)) {
                 opener.open("https://example.org");
-                assertTimeoutPreemptively(
-                        Duration.ofSeconds(10),
-                        () -> {
-                            while (!Files.exists(result) || Files.size(result) == 0) {
-                                Thread.sleep(10);
-                            }
-                            long pid =
-                                    Long.parseLong(
-                                            Files.readString(result)
-                                                    .lines()
-                                                    .findFirst()
-                                                    .orElseThrow());
-                            if (close) {
-                                opener.close();
-                            } else {
-                                assertEquals("Browser opener timed out", diagnostic(opener));
-                            }
-                            while (ProcessHandle.of(pid)
-                                    .map(ProcessHandle::isAlive)
-                                    .orElse(false)) {
-                                Thread.sleep(10);
-                            }
-                        });
+                assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+                    while (!Files.exists(result) || Files.size(result) == 0) {
+                        Thread.sleep(10);
+                    }
+                    long pid = Long.parseLong(Files.readString(result).lines().findFirst().orElseThrow());
+                    if (close) {
+                        opener.close();
+                    } else {
+                        assertEquals("Browser opener timed out", diagnostic(opener));
+                    }
+                    while (ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)) {
+                        Thread.sleep(10);
+                    }
+                });
             }
         }
     }
@@ -99,30 +88,23 @@ class LinkOpenerTest {
     private LinkOpener opener(Path result, String mode, boolean remote) throws Exception {
         String java = Path.of(System.getProperty("java.home"), "bin/java").toString();
         String classes =
-                Path.of(
-                                LinkOpenerTest.class
-                                        .getProtectionDomain()
-                                        .getCodeSource()
-                                        .getLocation()
-                                        .toURI())
-                        .toString();
+                Path.of(LinkOpenerTest.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toString();
         return new LinkOpener(
                 List.of(java, "-cp", classes, FakeOpener.class.getName(), result.toString(), mode),
-                remote);
+                remote
+        );
     }
 
     private static String diagnostic(LinkOpener opener) {
-        return assertTimeoutPreemptively(
-                Duration.ofSeconds(10),
-                () -> {
-                    while (true) {
-                        var messages = opener.takeDiagnostics();
-                        if (!messages.isEmpty()) {
-                            return messages.getFirst();
-                        }
-                        Thread.sleep(10);
-                    }
-                });
+        return assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+            while (true) {
+                var messages = opener.takeDiagnostics();
+                if (!messages.isEmpty()) {
+                    return messages.getFirst();
+                }
+                Thread.sleep(10);
+            }
+        });
     }
 
     public static class FakeOpener {

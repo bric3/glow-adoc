@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.document;
 
 import java.util.List;
@@ -12,7 +11,8 @@ public record Block(
         List<Block> children,
         String language,
         String target,
-        Format format) {
+        Format format
+) {
     public enum Kind {
         HEADING,
         PARAGRAPH,
@@ -42,7 +42,8 @@ public record Block(
             int columnWidth,
             boolean open,
             String frame,
-            String grid) {
+            String grid
+    ) {
         public Format {
             titleSpans = List.copyOf(titleSpans);
         }
@@ -54,7 +55,8 @@ public record Block(
                 int columnSpan,
                 int rowSpan,
                 int columnWidth,
-                boolean open) {
+                boolean open
+        ) {
             this(
                     title.isEmpty() ? List.of() : List.of(new Span(title)),
                     variant,
@@ -64,7 +66,8 @@ public record Block(
                     columnWidth,
                     open,
                     "all",
-                    "all");
+                    "all"
+            );
         }
 
         public String title() {
@@ -74,13 +77,7 @@ public record Block(
         public static final Format DEFAULT = new Format("", "", "left", 1, 1, 0, false);
     }
 
-    public Block(
-            Kind kind,
-            String id,
-            List<Span> spans,
-            List<Block> children,
-            String language,
-            String target) {
+    public Block(Kind kind, String id, List<Span> spans, List<Block> children, String language, String target) {
         this(kind, id, spans, children, language, target, Format.DEFAULT);
     }
 

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.asciidoctor;
 
 import org.asciidoctor.ast.ContentNode;
@@ -11,12 +10,13 @@ import org.asciidoctor.ast.StructuralNode;
 import org.asciidoctor.ast.Table;
 import org.asciidoctor.converter.ConverterFor;
 import org.asciidoctor.converter.StringConverter;
-
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** A private XML vocabulary preserves inline boundaries during Asciidoctor substitutions. */
+/**
+ * A private XML vocabulary preserves inline boundaries during Asciidoctor substitutions.
+ */
 @ConverterFor("glow-terminal")
 public final class TerminalConverter extends StringConverter {
     public TerminalConverter(String backend, Map<String, Object> options) {
@@ -30,25 +30,22 @@ public final class TerminalConverter extends StringConverter {
             String text = phrase.getText() == null ? "" : phrase.getText();
             return switch (name) {
                 case "inline_quoted" -> {
-                    String quoted =
-                            tag(
-                                    switch (phrase.getType()) {
-                                        case "strong" -> "strong";
-                                        case "emphasis" -> "em";
-                                        case "monospaced" -> "code";
-                                        case "superscript" -> "sup";
-                                        default -> "span";
-                                    },
-                                    text);
+                    String quoted = tag(
+                            switch (phrase.getType()) {
+                                case "strong" -> "strong";
+                                case "emphasis" -> "em";
+                                case "monospaced" -> "code";
+                                case "superscript" -> "sup";
+                                default -> "span";
+                            },
+                            text
+                    );
                     yield phrase.hasRole("line-through") ? tag("strike", quoted) : quoted;
                 }
                 case "inline_anchor" -> {
                     if (text.isEmpty() && "xref".equals(phrase.getType())) {
                         String id =
-                                String.valueOf(
-                                        node.getAttribute(
-                                                "refid",
-                                                phrase.getTarget().replaceFirst("^#", "")));
+                                String.valueOf(node.getAttribute("refid", phrase.getTarget().replaceFirst("^#", "")));
                         Object reference = node.getDocument().getCatalog().getRefs().get(id);
                         if (reference instanceof StructuralNode target) {
                             text = target.getTitle();
@@ -60,12 +57,11 @@ public final class TerminalConverter extends StringConverter {
                             + (text == null || text.isEmpty() ? escape(phrase.getTarget()) : text)
                             + "</link>";
                 }
-                case "inline_image" ->
-                        "<inline-image target=\""
-                                + escape(imageTarget(node, phrase.getTarget()))
-                                + "\">"
-                                + escape(String.valueOf(node.getAttribute("alt", "image")))
-                                + "</inline-image>";
+                case "inline_image" -> "<inline-image target=\""
+                        + escape(imageTarget(node, phrase.getTarget()))
+                        + "\">"
+                        + escape(String.valueOf(node.getAttribute("alt", "image")))
+                        + "</inline-image>";
                 case "inline_break" -> text + "<br/>";
                 case "inline_callout" -> "<callout number=\"" + escape(text) + "\"/>";
                 case "inline_footnote" -> "[" + text + "]";
@@ -96,11 +92,12 @@ public final class TerminalConverter extends StringConverter {
                 } else {
                     prefix = name.equals("olist") ? index++ + ". " : "- ";
                 }
-                out.append("<item>")
-                        .append(prefix)
-                        .append(((ListItem) item).getText())
-                        .append(item.getContent())
-                        .append("</item>");
+                out
+                    .append("<item>")
+                    .append(prefix)
+                    .append(((ListItem) item).getText())
+                    .append(item.getContent())
+                    .append("</item>");
             }
             return out.append("</list>").toString();
         }
@@ -113,59 +110,55 @@ public final class TerminalConverter extends StringConverter {
                 }
                 out.append("</strong> ");
                 if (entry.getDescription() != null) {
-                    out.append(entry.getDescription().getText())
-                            .append(entry.getDescription().getContent());
+                    out.append(entry.getDescription().getText()).append(entry.getDescription().getContent());
                 }
                 out.append("</item>");
             }
             return out.append("</list>").toString();
         }
         if (node instanceof Table table) {
-            var out =
-                    new StringBuilder(
-                            "<table frame=\""
-                                    + escape(
-                                            String.valueOf(
-                                                    table.getAttribute(
-                                                            "frame",
-                                                            table.getDocument()
-                                                                    .getAttribute(
-                                                                            "table-frame", "all"),
-                                                            false)))
-                                    + "\" grid=\""
-                                    + escape(
-                                            String.valueOf(
-                                                    table.getAttribute(
-                                                            "grid",
-                                                            table.getDocument()
-                                                                    .getAttribute(
-                                                                            "table-grid", "all"),
-                                                            false)))
-                                    + "\">"
-                                    + title(table));
+            var out = new StringBuilder(
+                    "<table frame=\""
+                    + escape(String.valueOf(table.getAttribute(
+                            "frame",
+                            table.getDocument().getAttribute("table-frame", "all"),
+                            false
+                    )))
+                    + "\" grid=\""
+                    + escape(String.valueOf(table.getAttribute(
+                            "grid",
+                            table.getDocument().getAttribute("table-grid", "all"),
+                            false
+                    )))
+                    + "\">"
+                    + title(table)
+            );
             var header = table.getHeader();
             var footer = table.getFooter();
             for (var rows : List.of(header, table.getBody(), footer)) {
                 for (var row : rows) {
                     out.append(
-                            rows == header
-                                    ? "<row variant=\"header\">"
-                                    : rows == footer ? "<row variant=\"footer\">" : "<row>");
+                            rows == header ? "<row variant=\"header\">" : rows == footer
+                            ? "<row variant=\"footer\">"
+                            : "<row>"
+                    );
                     for (var cell : row.getCells()) {
-                        out.append("<cell colspan=\"")
-                                .append(Math.max(1, cell.getColspan()))
-                                .append("\" rowspan=\"")
-                                .append(Math.max(1, cell.getRowspan()))
-                                .append("\" alignment=\"")
-                                .append(cell.getHorizontalAlignment().toString().toLowerCase())
-                                .append("\" weight=\"")
-                                .append(cell.getColumn().getWidth())
-                                .append("\">")
-                                .append(
-                                        cell.getInnerDocument() == null
-                                                ? cell.getText()
-                                                : cell.getInnerDocument().getContent())
-                                .append("</cell>");
+                        out
+                            .append("<cell colspan=\"")
+                            .append(Math.max(1, cell.getColspan()))
+                            .append("\" rowspan=\"")
+                            .append(Math.max(1, cell.getRowspan()))
+                            .append("\" alignment=\"")
+                            .append(cell.getHorizontalAlignment().toString().toLowerCase())
+                            .append("\" weight=\"")
+                            .append(cell.getColumn().getWidth())
+                            .append("\">")
+                            .append(
+                                    cell.getInnerDocument() == null ? cell.getText() : cell
+                                        .getInnerDocument()
+                                        .getContent()
+                            )
+                            .append("</cell>");
                     }
                     out.append("</row>");
                 }
@@ -205,9 +198,9 @@ public final class TerminalConverter extends StringConverter {
                             + " variant=\""
                             + escape(
                                     name.equals("admonition")
-                                            ? String.valueOf(node.getAttribute("name", "note"))
-                                                    .toLowerCase(Locale.ROOT)
-                                            : block.getStyle())
+                                    ? String.valueOf(node.getAttribute("name", "note")).toLowerCase(Locale.ROOT)
+                                    : block.getStyle()
+                    )
                             + "\" open=\""
                             + block.isOption("open")
                             + "\">"
@@ -260,17 +253,14 @@ public final class TerminalConverter extends StringConverter {
             }
         }
         return escape(
-                block instanceof org.asciidoctor.ast.Block source
-                        ? source.getSource()
-                        : String.valueOf(block.getContent()));
+                block instanceof org.asciidoctor.ast.Block source ? source.getSource() : String.valueOf(block.getContent()
+                )
+        );
     }
 
     private static String escape(String text) {
         return text == null
                 ? ""
-                : text.replace("&", "&amp;")
-                        .replace("<", "&lt;")
-                        .replace(">", "&gt;")
-                        .replace("\"", "&quot;");
+                : text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
     }
 }

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.asciidoctor;
 
 final class Shortcodes {
-    private Shortcodes() {}
+    private Shortcodes() {
+    }
 
     static String hide(String source) {
         var out = new StringBuilder();

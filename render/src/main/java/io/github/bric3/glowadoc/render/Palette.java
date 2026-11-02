@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.render;
 
 import io.github.bric3.glowadoc.document.Appearance;
 import io.github.bric3.glowadoc.document.Style;
 
-public record Palette(
-        String foreground, String surface, String stripe, String border, String accent) {
+public record Palette(String foreground, String surface, String stripe, String border, String accent) {
     public static Palette forAppearance(Appearance appearance) {
         return appearance == Appearance.LIGHT
                 ? new Palette("#24292f", "#f0f2f5", "#e4e8ee", "#57606a", "#0969da")
@@ -44,15 +42,12 @@ public record Palette(
         String background = admonition(kind);
         int rgb = Integer.parseInt(background.substring(1), 16);
         // WCAG relative luminance selects the higher-contrast black or white text.
-        double luminance =
-                0.2126 * linear(rgb >> 16)
-                        + 0.7152 * linear((rgb >> 8) & 255)
-                        + 0.0722 * linear(rgb & 255);
+        double luminance = 0.2126 * linear(rgb >> 16)
+                + 0.7152 * linear((rgb >> 8) & 255)
+                + 0.0722 * linear(rgb & 255);
         double blackContrast = (luminance + 0.05) / 0.05;
         double whiteContrast = 1.05 / (luminance + 0.05);
-        return Style.PLAIN
-                .bolded()
-                .colours(blackContrast >= whiteContrast ? "#000000" : "#ffffff", background);
+        return Style.PLAIN.bolded().colours(blackContrast >= whiteContrast ? "#000000" : "#ffffff", background);
     }
 
     private static double linear(int component) {

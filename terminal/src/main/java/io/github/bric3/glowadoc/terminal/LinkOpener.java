@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.terminal;
 
 import io.github.bric3.glowadoc.document.Controls;
-
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -16,14 +14,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-/** Opens explicitly clicked links without blocking the terminal event loop. */
+/**
+ * Opens explicitly clicked links without blocking the terminal event loop.
+ */
 public final class LinkOpener implements AutoCloseable {
     private final List<String> command;
     private final boolean remote;
     private final Queue<String> diagnostics = new ConcurrentLinkedQueue<>();
     private final ExecutorService worker =
-            Executors.newSingleThreadExecutor(
-                    Thread.ofPlatform().daemon().name("glow-adoc-browser").factory());
+            Executors.newSingleThreadExecutor(Thread.ofPlatform().daemon().name("glow-adoc-browser").factory());
     private Future<?> pending;
     private volatile Process active;
     private volatile boolean closed;
@@ -42,8 +41,10 @@ public final class LinkOpener implements AutoCloseable {
     }
 
     static boolean remote(Map<String, String> env) {
-        return List.of("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY").stream()
-                .anyMatch(name -> !env.getOrDefault(name, "").isBlank());
+        return List
+            .of("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY")
+            .stream()
+            .anyMatch(name -> !env.getOrDefault(name, "").isBlank());
     }
 
     public void open(String target) {
@@ -55,8 +56,7 @@ public final class LinkOpener implements AutoCloseable {
                 throw new IllegalArgumentException();
             }
             URI uri = URI.create(target);
-            if (!uri.getScheme().equals("mailto")
-                    && (uri.getHost() == null || uri.getHost().isBlank())) {
+            if (!uri.getScheme().equals("mailto") && (uri.getHost() == null || uri.getHost().isBlank())) {
                 throw new IllegalArgumentException();
             }
         } catch (IllegalArgumentException e) {
@@ -67,45 +67,40 @@ public final class LinkOpener implements AutoCloseable {
             diagnostics.add("SSH: use terminal link gesture, or m to release mouse");
             return;
         }
-        pending =
-                worker.submit(
-                        () -> {
-                            Process process = null;
-                            try {
-                                var arguments = new ArrayList<>(command);
-                                arguments.add(target);
-                                process =
-                                        new ProcessBuilder(arguments)
-                                                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                                                .redirectError(ProcessBuilder.Redirect.DISCARD)
-                                                .start();
-                                active = process;
-                                process.getOutputStream().close();
-                                if (closed) {
-                                    return;
-                                }
-                                if (!process.waitFor(5, TimeUnit.SECONDS)) {
-                                    diagnostics.add("Browser opener timed out");
-                                } else if (process.exitValue() != 0) {
-                                    diagnostics.add(
-                                            "Browser opener failed; use terminal modifier-click");
-                                } else {
-                                    diagnostics.add("Opened link");
-                                }
-                            } catch (IOException e) {
-                                diagnostics.add(
-                                        "Browser opener unavailable; use terminal modifier-click");
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            } finally {
-                                if (process != null && process.isAlive()) {
-                                    // The launched browser belongs to the user; cancel only its
-                                    // opener.
-                                    process.destroyForcibly();
-                                }
-                                active = null;
-                            }
-                        });
+        pending = worker.submit(() -> {
+            Process process = null;
+            try {
+                var arguments = new ArrayList<>(command);
+                arguments.add(target);
+                process = new ProcessBuilder(arguments)
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+                active = process;
+                process.getOutputStream().close();
+                if (closed) {
+                    return;
+                }
+                if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                    diagnostics.add("Browser opener timed out");
+                } else if (process.exitValue() != 0) {
+                    diagnostics.add("Browser opener failed; use terminal modifier-click");
+                } else {
+                    diagnostics.add("Opened link");
+                }
+            } catch (IOException e) {
+                diagnostics.add("Browser opener unavailable; use terminal modifier-click");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                if (process != null && process.isAlive()) {
+                    // The launched browser belongs to the user; cancel only its
+                    // opener.
+                    process.destroyForcibly();
+                }
+                active = null;
+            }
+        });
     }
 
     public List<String> takeDiagnostics() {

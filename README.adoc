@@ -121,6 +121,6 @@ See link:docs/PERFORMANCE.adoc[performance] and link:docs/TROUBLESHOOTING.adoc[t
 == Development and licence
 
 Read link:CONTRIBUTING.md[Contributing], link:ARCHITECTURE.md[Architecture],
-and link:docs/VERIFICATION.adoc[Verification].
+link:docs/VERIFICATION.adoc[Verification], and link:docs/QUALITY.adoc[quality checks and optimisation review].
 Project source uses link:LICENSE[MPL 2.0]. Dependencies retain their
 link:THIRD-PARTY.md[licences and notices].

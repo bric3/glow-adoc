@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.highlight.lumis;
 
 import io.github.bric3.glowadoc.document.Appearance;
@@ -10,7 +9,6 @@ import io.github.bric3.glowadoc.highlight.Highlighter;
 import io.roastedroot.lumis4j.core.Lang;
 import io.roastedroot.lumis4j.core.Lumis;
 import io.roastedroot.lumis4j.core.Theme;
-
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,20 +49,16 @@ public final class LumisHighlighter implements Highlighter {
             if (lumis == null) {
                 lumis = Lumis.builder().build();
             }
-            String ansi =
-                    lumis.highlighter()
-                            .withLang(lang)
-                            .withTheme(
-                                    appearance == Appearance.LIGHT
-                                            ? Theme.GITHUB_LIGHT
-                                            : Theme.GITHUB_DARK)
-                            .build()
-                            .highlight(source)
-                            .string();
+            String ansi = lumis
+                .highlighter()
+                .withLang(lang)
+                .withTheme(appearance == Appearance.LIGHT ? Theme.GITHUB_LIGHT : Theme.GITHUB_DARK)
+                .build()
+                .highlight(source)
+                .string();
             var spans = decode(ansi);
             // A formatter must preserve the exact source, including its final newline.
-            String rendered =
-                    spans.stream().map(Span::text).collect(java.util.stream.Collectors.joining());
+            String rendered = spans.stream().map(Span::text).collect(java.util.stream.Collectors.joining());
             if (rendered.equals(source)) {
                 if (cache != null) {
                     cache.write(source, language, appearance, spans);
@@ -73,8 +67,7 @@ public final class LumisHighlighter implements Highlighter {
             }
             if (rendered.equals(source + "\n")) {
                 var last = spans.removeLast();
-                spans.add(
-                        new Span(last.text().substring(0, last.text().length() - 1), last.style()));
+                spans.add(new Span(last.text().substring(0, last.text().length() - 1), last.style()));
                 if (cache != null) {
                     cache.write(source, language, appearance, spans);
                 }
@@ -88,16 +81,14 @@ public final class LumisHighlighter implements Highlighter {
 
     static List<Span> decode(String ansi) {
         var spans = new ArrayList<Span>();
-        var matcher = Pattern.compile("\u001b\\[([0-9;]*)m").matcher(ansi);
+        var matcher = Pattern.compile("\\[([0-9;]*)m").matcher(ansi);
         Style style = Style.PLAIN;
         int start = 0;
         while (matcher.find()) {
             if (matcher.start() > start) {
-                spans.add(
-                        new Span(Controls.visible(ansi.substring(start, matcher.start())), style));
+                spans.add(new Span(Controls.visible(ansi.substring(start, matcher.start())), style));
             }
-            String[] codes =
-                    matcher.group(1).isEmpty() ? new String[] {"0"} : matcher.group(1).split(";");
+            String[] codes = matcher.group(1).isEmpty() ? new String[] {"0"} : matcher.group(1).split(";");
             for (int i = 0; i < codes.length; i++) {
                 int code = Integer.parseInt(codes[i]);
                 if (code == 0) {
@@ -106,24 +97,23 @@ public final class LumisHighlighter implements Highlighter {
                     style = style.bolded();
                 } else if (code == 3) {
                     style = style.italicised();
-                } else if ((code == 38 || code == 48)
-                        && i + 4 < codes.length
-                        && codes[i + 1].equals("2")) {
+                } else if ((code == 38 || code == 48) && i + 4 < codes.length && codes[i + 1].equals("2")) {
                     String colour =
                             String.format(
                                     "#%02x%02x%02x",
                                     channel(codes[i + 2]),
                                     channel(codes[i + 3]),
-                                    channel(codes[i + 4]));
-                    style =
-                            new Style(
-                                    style.bold(),
-                                    style.italic(),
-                                    false,
-                                    false,
-                                    code == 38 ? colour : style.foreground(),
-                                    code == 48 ? colour : style.background(),
-                                    "");
+                                    channel(codes[i + 4])
+                    );
+                    style = new Style(
+                            style.bold(),
+                            style.italic(),
+                            false,
+                            false,
+                            code == 38 ? colour : style.foreground(),
+                            code == 48 ? colour : style.background(),
+                            ""
+                    );
                     i += 4;
                 }
             }

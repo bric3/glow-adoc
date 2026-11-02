@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.cli;
 
 import org.tomlj.Toml;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -35,31 +33,31 @@ public record Configuration(
         List<Path> imageRoots,
         String progress,
         boolean imageDim,
-        String callouts) {
+        String callouts
+) {
     static final int DEFAULT_WIDTH = 120;
-
-    private static final Configuration DEFAULTS =
-            new Configuration(
-                    true,
-                    DEFAULT_WIDTH,
-                    "auto",
-                    "auto",
-                    "auto",
-                    "merman-cli",
-                    "hide",
-                    "nerd",
-                    true,
-                    false,
-                    false,
-                    true,
-                    "auto",
-                    "auto",
-                    "thin",
-                    Map.of(),
-                    List.of(),
-                    "auto",
-                    true,
-                    "pill");
+    private static final Configuration DEFAULTS = new Configuration(
+            true,
+            DEFAULT_WIDTH,
+            "auto",
+            "auto",
+            "auto",
+            "merman-cli",
+            "hide",
+            "nerd",
+            true,
+            false,
+            false,
+            true,
+            "auto",
+            "auto",
+            "thin",
+            Map.of(),
+            List.of(),
+            "auto",
+            true,
+            "pill"
+    );
 
     public Configuration {
         attributes = Map.copyOf(attributes);
@@ -78,26 +76,21 @@ public record Configuration(
         return load(
                 explicit,
                 directory,
-                defaultPath(
-                        System.getenv(),
-                        System.getProperty("user.home"),
-                        System.getProperty("os.name")));
+                defaultPath(System.getenv(), System.getProperty("user.home"), System.getProperty("os.name"))
+        );
     }
 
     static Configuration load(Path explicit, Path directory, Path userConfig) throws IOException {
         if (explicit != null) {
             return read(explicit, DEFAULTS, false);
         }
-        Configuration settings =
-                Files.exists(userConfig) ? read(userConfig, DEFAULTS, false) : DEFAULTS;
+        Configuration settings = Files.exists(userConfig) ? read(userConfig, DEFAULTS, false) : DEFAULTS;
         Path project = projectPath(directory);
         return project == null ? settings : read(project, settings, true);
     }
 
     private static Path projectPath(Path directory) {
-        for (Path parent = directory.toAbsolutePath().normalize();
-                parent != null;
-                parent = parent.getParent()) {
+        for (Path parent = directory.toAbsolutePath().normalize(); parent != null; parent = parent.getParent()) {
             for (String name : List.of(".glow-adoc.local.toml", ".glow-adoc.toml")) {
                 Path candidate = parent.resolve(name);
                 if (Files.exists(candidate)) {
@@ -108,35 +101,33 @@ public record Configuration(
         return null;
     }
 
-    private static Configuration read(Path path, Configuration defaults, boolean discovered)
-            throws IOException {
+    private static Configuration read(Path path, Configuration defaults, boolean discovered) throws IOException {
         var toml = Toml.parse(path);
         if (toml.hasErrors()) {
-            throw new IllegalArgumentException(
-                    "Invalid configuration " + path + ": " + toml.errors().getFirst());
+            throw new IllegalArgumentException("Invalid configuration " + path + ": " + toml.errors().getFirst());
         }
-        var allowed =
-                Set.of(
-                        "pager",
-                        "width",
-                        "color",
-                        "theme",
-                        "images",
-                        "merman",
-                        "shortcodes",
-                        "icons",
-                        "table-stripes",
-                        "center",
-                        "page-background",
-                        "mouse",
-                        "table-frame",
-                        "table-grid",
-                        "table-section-borders",
-                        "attributes",
-                        "image-roots",
-                        "progress",
-                        "image-dim",
-                        "callouts");
+        var allowed = Set.of(
+                "pager",
+                "width",
+                "color",
+                "theme",
+                "images",
+                "merman",
+                "shortcodes",
+                "icons",
+                "table-stripes",
+                "center",
+                "page-background",
+                "mouse",
+                "table-frame",
+                "table-grid",
+                "table-section-borders",
+                "attributes",
+                "image-roots",
+                "progress",
+                "image-dim",
+                "callouts"
+        );
         for (String key : toml.keySet()) {
             if (!allowed.contains(key)) {
                 throw new IllegalArgumentException("Unknown configuration key: " + key);
@@ -144,8 +135,7 @@ public record Configuration(
         }
         // Automatic project discovery must not select a program to execute.
         if (discovered && toml.contains("merman")) {
-            throw new IllegalArgumentException(
-                    "Set merman in user configuration or an explicit --config file");
+            throw new IllegalArgumentException("Set merman in user configuration or an explicit --config file");
         }
         var attributes = new LinkedHashMap<>(defaults.attributes());
         if (toml.contains("attributes")) {
@@ -162,10 +152,8 @@ public record Configuration(
             for (int i = 0; i < array.size(); i++) {
                 Path root = parent.resolve(array.getString(i)).normalize();
                 if (discovered
-                        && (!root.startsWith(parent)
-                                || Files.exists(root) && !root.toRealPath().startsWith(parent))) {
-                    throw new IllegalArgumentException(
-                            "Discovered image-roots must stay within " + parent);
+                        && (!root.startsWith(parent) || Files.exists(root) && !root.toRealPath().startsWith(parent))) {
+                    throw new IllegalArgumentException("Discovered image-roots must stay within " + parent);
                 }
                 roots.add(root);
             }
@@ -177,27 +165,12 @@ public record Configuration(
         return new Configuration(
                 toml.getBoolean("pager", defaults::pager),
                 (int) width,
-                choice(
-                        toml.getString("color", defaults::colour),
-                        "color",
-                        Set.of("auto", "always", "never")),
-                choice(
-                        toml.getString("theme", defaults::theme),
-                        "theme",
-                        Set.of("auto", "light", "dark")),
-                choice(
-                        toml.getString("images", defaults::images),
-                        "images",
-                        Set.of("auto", "never")),
+                choice(toml.getString("color", defaults::colour), "color", Set.of("auto", "always", "never")),
+                choice(toml.getString("theme", defaults::theme), "theme", Set.of("auto", "light", "dark")),
+                choice(toml.getString("images", defaults::images), "images", Set.of("auto", "never")),
                 toml.getString("merman", defaults::merman),
-                choice(
-                        toml.getString("shortcodes", defaults::shortcodes),
-                        "shortcodes",
-                        Set.of("hide", "show")),
-                choice(
-                        toml.getString("icons", defaults::icons),
-                        "icons",
-                        Set.of("unicode", "nerd", "ascii")),
+                choice(toml.getString("shortcodes", defaults::shortcodes), "shortcodes", Set.of("hide", "show")),
+                choice(toml.getString("icons", defaults::icons), "icons", Set.of("unicode", "nerd", "ascii")),
                 toml.getBoolean("table-stripes", defaults::tableStripes),
                 toml.getBoolean("center", defaults::center),
                 toml.getBoolean("page-background", defaults::pageBackground),
@@ -205,26 +178,24 @@ public record Configuration(
                 choice(
                         toml.getString("table-frame", defaults::tableFrame),
                         "table-frame",
-                        Set.of("auto", "all", "sides", "ends", "none")),
+                        Set.of("auto", "all", "sides", "ends", "none")
+                ),
                 choice(
                         toml.getString("table-grid", defaults::tableGrid),
                         "table-grid",
-                        Set.of("auto", "all", "rows", "cols", "none")),
+                        Set.of("auto", "all", "rows", "cols", "none")
+                ),
                 choice(
                         toml.getString("table-section-borders", defaults::tableSectionBorders),
                         "table-section-borders",
-                        Set.of("thin", "heavy")),
+                        Set.of("thin", "heavy")
+                ),
                 attributes,
                 roots,
-                choice(
-                        toml.getString("progress", defaults::progress),
-                        "progress",
-                        Set.of("auto", "always", "never")),
+                choice(toml.getString("progress", defaults::progress), "progress", Set.of("auto", "always", "never")),
                 toml.getBoolean("image-dim", defaults::imageDim),
-                choice(
-                        toml.getString("callouts", defaults::callouts),
-                        "callouts",
-                        Set.of("pill", "circle", "ascii")));
+                choice(toml.getString("callouts", defaults::callouts), "callouts", Set.of("pill", "circle", "ascii"))
+        );
     }
 
     static Map<String, String> attributes(Map<String, String> defaults, List<String> options) {
@@ -268,26 +239,21 @@ public record Configuration(
     }
 
     public static Path defaultPath(Map<String, String> env, String home, String os) {
-        String root =
-                os.startsWith("Windows")
-                        ? env.getOrDefault(
-                                "APPDATA", Path.of(home, "AppData", "Roaming").toString())
-                        : env.getOrDefault("XDG_CONFIG_HOME", Path.of(home, ".config").toString());
+        String root = os.startsWith("Windows")
+                ? env.getOrDefault("APPDATA", Path.of(home, "AppData", "Roaming").toString())
+                : env.getOrDefault("XDG_CONFIG_HOME", Path.of(home, ".config").toString());
         if (root.isBlank()) {
-            root =
-                    Path.of(home, os.startsWith("Windows") ? "AppData/Roaming" : ".config")
-                            .toString();
+            root = Path.of(home, os.startsWith("Windows") ? "AppData/Roaming" : ".config").toString();
         }
         return Path.of(root).resolve("glow-adoc/config.toml");
     }
 
     static Path cachePath(Map<String, String> env, String home, String os) {
         Path fallback = Path.of(home, os.startsWith("Windows") ? "AppData/Local" : ".cache");
-        String root =
-                env.getOrDefault(os.startsWith("Windows") ? "LOCALAPPDATA" : "XDG_CACHE_HOME", "");
+        String root = env.getOrDefault(os.startsWith("Windows") ? "LOCALAPPDATA" : "XDG_CACHE_HOME", "");
         try {
             return (root.isBlank() || !Path.of(root).isAbsolute() ? fallback : Path.of(root))
-                    .resolve("glow-adoc/conversions");
+                .resolve("glow-adoc/conversions");
         } catch (InvalidPathException e) {
             return fallback.resolve("glow-adoc/conversions");
         }

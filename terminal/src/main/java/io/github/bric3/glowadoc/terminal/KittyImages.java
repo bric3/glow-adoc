@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.terminal;
 
 import dev.tamboui.terminal.Backend;
-
 import java.awt.AlphaComposite;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
@@ -20,10 +18,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import javax.imageio.ImageIO;
 
-/** Session-owned image data and viewport placements. */
+/**
+ * Session-owned image data and viewport placements.
+ */
 public final class KittyImages implements AutoCloseable {
     private final Backend backend;
     private final long budget;
@@ -63,16 +62,9 @@ public final class KittyImages implements AutoCloseable {
             int rows,
             int cropRows,
             int totalRows,
-            boolean dim) {
-        public Placement(
-                int id,
-                Path path,
-                int row,
-                int column,
-                int columns,
-                int rows,
-                int cropRows,
-                int totalRows) {
+            boolean dim
+    ) {
+        public Placement(int id, Path path, int row, int column, int columns, int rows, int cropRows, int totalRows) {
             this(id, path, row, column, columns, rows, cropRows, totalRows, false);
         }
 
@@ -96,8 +88,7 @@ public final class KittyImages implements AutoCloseable {
         this.budget = budget;
     }
 
-    public static Size measure(Path file, int width, int cellWidth, int cellHeight)
-            throws IOException {
+    public static Size measure(Path file, int width, int cellWidth, int cellHeight) throws IOException {
         try (var stream = ImageIO.createImageInputStream(file.toFile())) {
             var readers = ImageIO.getImageReaders(stream);
             if (!readers.hasNext()) {
@@ -111,10 +102,8 @@ public final class KittyImages implements AutoCloseable {
                 int columns = Math.max(1, Math.min(width, (int) Math.ceil((double) w / cellWidth)));
                 return new Size(
                         columns,
-                        Math.clamp(
-                                (int) Math.ceil((double) h / w * columns * cellWidth / cellHeight),
-                                1,
-                                1000));
+                        Math.clamp((int) Math.ceil((double) h / w * columns * cellWidth / cellHeight), 1, 1000)
+                );
             } finally {
                 reader.dispose();
             }
@@ -129,7 +118,7 @@ public final class KittyImages implements AutoCloseable {
         if (desired.equals(previous) && !refresh) {
             return;
         }
-        backend.writeRaw("\u001b7");
+        backend.writeRaw("7");
         try {
             for (var old : previous.values()) {
                 var replacement = desired.get(old.id());
@@ -151,41 +140,35 @@ public final class KittyImages implements AutoCloseable {
                     resident += image.bytes();
                 }
                 int y =
-                        (int)
-                                Math.min(
-                                        image.height() - 1L,
-                                        (long) placement.cropRows()
-                                                * image.height()
-                                                / placement.totalRows());
-                int end =
-                        (int)
-                                Math.min(
-                                        image.height(),
-                                        (long) (placement.cropRows() + placement.rows())
-                                                * image.height()
-                                                / placement.totalRows());
-                backend.writeRaw(
-                        "\u001b[" + (placement.row() + 1) + ";" + (placement.column() + 1) + "H");
+                        (int) Math.min(
+                                image.height() - 1L,
+                                (long) placement.cropRows() * image.height() / placement.totalRows()
+                );
+                int end = (int) Math.min(
+                        image.height(),
+                        (long) (placement.cropRows() + placement.rows()) * image.height() / placement.totalRows()
+                );
+                backend.writeRaw("[" + (placement.row() + 1) + ";" + (placement.column() + 1) + "H");
                 command(
                         "a=p,i="
-                                + image.id()
-                                + ",p="
-                                + placement.id()
-                                + ",q=1,C=1,x=0,y="
-                                + y
-                                + ",w="
-                                + image.width()
-                                + ",h="
-                                + Math.max(1, end - y)
-                                + ",c="
-                                + placement.columns()
-                                + ",r="
-                                + placement.rows());
+                        + image.id()
+                        + ",p="
+                        + placement.id()
+                        + ",q=1,C=1,x=0,y="
+                        + y
+                        + ",w="
+                        + image.width()
+                        + ",h="
+                        + Math.max(1, end - y)
+                        + ",c="
+                        + placement.columns()
+                        + ",r="
+                        + placement.rows()
+                );
             }
             previous = Map.copyOf(desired);
             refresh = false;
-            Set<ImageKey> visible =
-                    placements.stream().map(Placement::key).collect(Collectors.toSet());
+            Set<ImageKey> visible = placements.stream().map(Placement::key).collect(Collectors.toSet());
             var iterator = images.entrySet().iterator();
             while (resident > budget && iterator.hasNext()) {
                 var entry = iterator.next();
@@ -198,7 +181,7 @@ public final class KittyImages implements AutoCloseable {
                 iterator.remove();
             }
         } finally {
-            backend.writeRaw("\u001b8");
+            backend.writeRaw("8");
             backend.flush();
         }
     }
@@ -222,13 +205,10 @@ public final class KittyImages implements AutoCloseable {
                     var png = new ByteArrayOutputStream();
                     var pixels = reader.read(0);
                     if (key.dim()) {
-                        var dimmed =
-                                new BufferedImage(
-                                        image.width(), image.height(), BufferedImage.TYPE_INT_ARGB);
+                        var dimmed = new BufferedImage(image.width(), image.height(), BufferedImage.TYPE_INT_ARGB);
                         var graphics = dimmed.createGraphics();
                         try {
-                            graphics.setComposite(
-                                    AlphaComposite.getInstance(AlphaComposite.SRC, .65f));
+                            graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC, .65f));
                             graphics.drawImage(pixels, 0, 0, null);
                         } finally {
                             graphics.dispose();
@@ -253,13 +233,14 @@ public final class KittyImages implements AutoCloseable {
         do {
             byte[] next = input.readNBytes(3072);
             backend.writeRaw(
-                    "\u001b_G"
-                            + (first ? "a=t,t=d,f=100,q=2,i=" + id + "," : "")
-                            + "m="
-                            + (next.length == 0 ? 0 : 1)
-                            + ";"
-                            + Base64.getEncoder().encodeToString(chunk)
-                            + "\u001b\\");
+                    "_G"
+                    + (first ? "a=t,t=d,f=100,q=2,i=" + id + "," : "")
+                    + "m="
+                    + (next.length == 0 ? 0 : 1)
+                    + ";"
+                    + Base64.getEncoder().encodeToString(chunk)
+                    + "\\"
+            );
             first = false;
             chunk = next;
         } while (chunk.length > 0);
@@ -272,7 +253,7 @@ public final class KittyImages implements AutoCloseable {
     }
 
     private void command(String controls) throws IOException {
-        backend.writeRaw("\u001b_G" + controls + ";\u001b\\");
+        backend.writeRaw("_G" + controls + ";\\");
     }
 
     @Override

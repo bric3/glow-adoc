@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.terminal;
 
 import dev.tamboui.terminal.Backend;
-
 import java.io.IOException;
 import java.util.Map;
 
-/** Session-owned OSC 9;4 reading progress. */
+/**
+ * Session-owned OSC 9;4 reading progress.
+ */
 public final class Progress implements AutoCloseable {
     private final Backend backend;
     private final boolean enabled;
@@ -30,10 +30,9 @@ public final class Progress implements AutoCloseable {
 
     public void update(int top, int rows, int height) throws IOException {
         int maximum = Math.max(0, rows - height);
-        int percentage =
-                maximum == 0 ? 100 : (int) (Math.clamp((long) top, 0, maximum) * 100 / maximum);
+        int percentage = maximum == 0 ? 100 : (int) (Math.clamp((long) top, 0, maximum) * 100 / maximum);
         if (enabled && previous != percentage) {
-            backend.writeRaw("\u001b]9;4;1;" + percentage + "\u0007");
+            backend.writeRaw("]9;4;1;" + percentage + "");
             backend.flush();
             previous = percentage;
         }
@@ -42,7 +41,7 @@ public final class Progress implements AutoCloseable {
     @Override
     public void close() throws IOException {
         if (enabled && previous >= 0) {
-            backend.writeRaw("\u001b]9;4;0\u0007");
+            backend.writeRaw("]9;4;0");
             backend.flush();
         }
     }

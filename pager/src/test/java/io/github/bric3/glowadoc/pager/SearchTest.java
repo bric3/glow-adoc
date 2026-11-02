@@ -1,18 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.pager;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
 import io.github.bric3.glowadoc.render.RenderedLine;
-
 import org.junit.jupiter.api.Test;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -33,12 +29,12 @@ class SearchTest {
         assertEquals("A [JaVa] and [JAVA]", text(parts));
         assertEquals("[JaVa][JAVA]", text(parts.stream().filter(Search.Part::matched).toList()));
         assertEquals("[JaVa]", text(parts.stream().filter(Search.Part::active).toList()));
-        assertTrue(
-                parts.stream()
-                        .anyMatch(part -> part.matched() && part.span().style().equals(italic)));
-        assertTrue(
-                parts.stream()
-                        .anyMatch(part -> !part.matched() && part.span().text().equals(" and ")));
+        assertTrue(parts
+            .stream()
+            .anyMatch(part -> part.matched() && part.span().style().equals(italic)));
+        assertTrue(parts
+            .stream()
+            .anyMatch(part -> !part.matched() && part.span().text().equals(" and ")));
     }
 
     @Test
@@ -62,10 +58,8 @@ class SearchTest {
         assertEquals(2, search.ordinal());
         assertEquals(
                 "hit",
-                text(
-                        search.parts(0, lines.getFirst().spans()).stream()
-                                .filter(Search.Part::active)
-                                .toList()));
+                text(search.parts(0, lines.getFirst().spans()).stream().filter(Search.Part::active).toList())
+        );
         search.next(1);
         assertEquals(1, search.active().line());
         search.next(1);
@@ -96,18 +90,14 @@ class SearchTest {
         search.update("e", lines, 0, 0);
         assertEquals(
                 "é",
-                text(
-                        search.parts(0, lines.getFirst().spans()).stream()
-                                .filter(Search.Part::matched)
-                                .toList()));
+                text(search.parts(0, lines.getFirst().spans()).stream().filter(Search.Part::matched).toList())
+        );
         assertEquals(5, search.active().column());
         search.update("💻", lines, 0, 0);
         assertEquals(
                 "👩‍💻",
-                text(
-                        search.parts(0, lines.getFirst().spans()).stream()
-                                .filter(Search.Part::matched)
-                                .toList()));
+                text(search.parts(0, lines.getFirst().spans()).stream().filter(Search.Part::matched).toList())
+        );
         assertEquals(7, search.active().column());
         assertEquals(9, search.active().endColumn());
     }
@@ -130,12 +120,16 @@ class SearchTest {
     }
 
     private static List<RenderedLine> lines(String... text) {
-        return Arrays.stream(text)
-                .map(line -> new RenderedLine(List.of(new Span(line)), 0, null))
-                .toList();
+        return Arrays
+            .stream(text)
+            .map(line -> new RenderedLine(List.of(new Span(line)), 0, null))
+            .toList();
     }
 
     private static String text(List<Search.Part> parts) {
-        return parts.stream().map(part -> part.span().text()).collect(Collectors.joining());
+        return parts
+            .stream()
+            .map(part -> part.span().text())
+            .collect(Collectors.joining());
     }
 }

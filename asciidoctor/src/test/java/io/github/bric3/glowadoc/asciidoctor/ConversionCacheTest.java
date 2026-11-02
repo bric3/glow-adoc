@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.asciidoctor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -7,11 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -21,7 +18,8 @@ import java.util.Map;
 import java.util.Set;
 
 class ConversionCacheTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
     @BeforeEach
     void canonicalDirectory() throws Exception {
@@ -30,9 +28,7 @@ class ConversionCacheTest {
 
     @Test
     void cacheHitsPreserveYamlFrontMatterWithoutDuplicatingIt() {
-        var cache =
-                new ConversionCache(
-                        directory.resolve("post.adoc"), directory.resolve("cache"), "front-matter");
+        var cache = new ConversionCache(directory.resolve("post.adoc"), directory.resolve("cache"), "front-matter");
         String source = "---\ntitle: Title\ntags:\n  - java\n---\n\nBody\n";
         var stages = new ArrayList<String>();
         try (var first = new AsciiDocReader(cache, ignored -> {})) {
@@ -57,8 +53,7 @@ class ConversionCacheTest {
             assertEquals(List.of("jruby-ready"), stages);
             stages.clear();
             try (var next = new AsciiDocReader(cache, stages::add)) {
-                assertEquals(
-                        expected, next.read(source, directory, false, Map.of("name", "reader")));
+                assertEquals(expected, next.read(source, directory, false, Map.of("name", "reader")));
             }
             assertEquals(List.of("conversion-cache-hit"), stages);
         }
@@ -66,30 +61,16 @@ class ConversionCacheTest {
 
     @Test
     void validatesAllInputsAndKeepsOnlyTheLastVariantPerFile() throws Exception {
-        var cache =
-                new ConversionCache(directory.resolve("post"), directory.resolve("cache"), "one");
+        var cache = new ConversionCache(directory.resolve("post"), directory.resolve("cache"), "one");
         String key = cache.key("source", directory, false, Map.of("a", "1", "b", "2"));
         cache.write(key, "<document/>");
-        assertEquals(
-                "<document/>",
-                cache.read(cache.key("source", directory, false, Map.of("b", "2", "a", "1"))));
+        assertEquals("<document/>", cache.read(cache.key("source", directory, false, Map.of("b", "2", "a", "1"))));
         assertNull(cache.read(cache.key("changed", directory, false, Map.of("a", "1", "b", "2"))));
-        assertNull(
-                cache.read(
-                        cache.key(
-                                "source",
-                                directory.resolve("other"),
-                                false,
-                                Map.of("a", "1", "b", "2"))));
+        assertNull(cache.read(cache.key("source", directory.resolve("other"), false, Map.of("a", "1", "b", "2"))));
         assertNull(cache.read(cache.key("source", directory, true, Map.of("a", "1", "b", "2"))));
-        assertNull(
-                cache.read(
-                        cache.key("source", directory, false, Map.of("a", "changed", "b", "2"))));
-        var upgraded =
-                new ConversionCache(directory.resolve("post"), directory.resolve("cache"), "two");
-        assertNull(
-                upgraded.read(
-                        upgraded.key("source", directory, false, Map.of("a", "1", "b", "2"))));
+        assertNull(cache.read(cache.key("source", directory, false, Map.of("a", "changed", "b", "2"))));
+        var upgraded = new ConversionCache(directory.resolve("post"), directory.resolve("cache"), "two");
+        assertNull(upgraded.read(upgraded.key("source", directory, false, Map.of("a", "1", "b", "2"))));
         cache.write("replacement", "<document>new</document>");
         assertNull(cache.read(key));
         try (var entries = Files.list(directory.resolve("cache"))) {
@@ -99,16 +80,14 @@ class ConversionCacheTest {
 
     @Test
     void corruptXmlIsReconvertedAndExternalEntitiesRemainDisabled() throws Exception {
-        var cache =
-                new ConversionCache(directory.resolve("post"), directory.resolve("cache"), "one");
+        var cache = new ConversionCache(directory.resolve("post"), directory.resolve("cache"), "one");
         Path secret = Files.writeString(directory.resolve("secret"), "SECRET_FILE_CONTENT");
         String source = "A safe paragraph.";
         String key = cache.key(source, directory, false, Map.of());
         cache.write(
                 key,
-                "<!DOCTYPE document [<!ENTITY external SYSTEM '"
-                        + secret.toUri()
-                        + "'>]><document>&external;</document>");
+                "<!DOCTYPE document [<!ENTITY external SYSTEM '" + secret.toUri() + "'>]><document>&external;</document>"
+        );
         var stages = new ArrayList<String>();
         try (var reader = new AsciiDocReader(cache, stages::add)) {
             var result = reader.read(source, directory);
@@ -121,8 +100,7 @@ class ConversionCacheTest {
 
     @Test
     void includesAndMissingIncludesAreNeverStored() throws Exception {
-        var cache =
-                new ConversionCache(directory.resolve("post"), directory.resolve("cache"), "one");
+        var cache = new ConversionCache(directory.resolve("post"), directory.resolve("cache"), "one");
         String source = "include::part.adoc[]\n";
         try (var reader = new AsciiDocReader(cache, ignored -> {})) {
             reader.read(source, directory);
@@ -141,8 +119,7 @@ class ConversionCacheTest {
 
     @Test
     void bypassesTimeSubstitutionsAndUnavailableStorage() throws Exception {
-        var cache =
-                new ConversionCache(directory.resolve("post"), directory.resolve("cache"), "one");
+        var cache = new ConversionCache(directory.resolve("post"), directory.resolve("cache"), "one");
         assertNull(cache.key("{localdatetime}", directory, false, Map.of()));
         assertNull(cache.key("{name}", directory, false, Map.of("name", "{doctime}")));
         assertNull(cache.read(null));
@@ -169,7 +146,8 @@ class ConversionCacheTest {
         if (entry.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             assertEquals(
                     Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE),
-                    Files.getPosixFilePermissions(entry));
+                    Files.getPosixFilePermissions(entry)
+            );
         }
         Files.writeString(entry, Files.readString(entry).replace("<document/>", "<different/>"));
         assertNull(cache.read(key));

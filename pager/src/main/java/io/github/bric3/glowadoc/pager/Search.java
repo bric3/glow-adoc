@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.pager;
 
 import dev.tamboui.text.CharWidth;
-
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.render.RenderedLine;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -15,7 +12,9 @@ import java.util.Map;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-/** Literal search positions and their projection onto styled rendered lines. */
+/**
+ * Literal search positions and their projection onto styled rendered lines.
+ */
 final class Search {
     record Match(int line, int start, int end, int column, int endColumn) {}
 
@@ -48,9 +47,7 @@ final class Search {
         var found = new ArrayList<Match>();
         byLine.clear();
         if (!query.isEmpty()) {
-            var pattern =
-                    Pattern.compile(
-                            Pattern.quote(query), Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+            var pattern = Pattern.compile(Pattern.quote(query), Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
             for (int line = 0; line < lines.size(); line++) {
                 String text = lines.get(line).text();
                 var matcher = pattern.matcher(text);
@@ -71,15 +68,11 @@ final class Search {
                     int start = graphemes.floor(matcher.start());
                     int end = graphemes.ceiling(matcher.end());
                     column += CharWidth.of(text.substring(previous, start));
-                    var match =
-                            new Match(
-                                    line,
-                                    start,
-                                    end,
-                                    column,
-                                    column + CharWidth.of(text.substring(start, end)));
+                    var match = new Match(line, start, end, column, column + CharWidth.of(text.substring(start, end)));
                     found.add(match);
-                    byLine.computeIfAbsent(line, ignored -> new ArrayList<>()).add(match);
+                    byLine
+                        .computeIfAbsent(line, ignored -> new ArrayList<>())
+                        .add(match);
                     previous = start;
                     from = text.offsetByCodePoints(matcher.start(), 1);
                 }
@@ -87,11 +80,11 @@ final class Search {
         }
         matches = List.copyOf(found);
         selected = -1;
-        var nearest =
-                Comparator.comparingInt((Match match) -> Math.abs(match.line() - originLine))
-                        .thenComparingInt(match -> match.line() > originLine ? 1 : 0)
-                        .thenComparingInt(match -> Math.abs(match.column() - originColumn))
-                        .thenComparingInt(match -> match.column() > originColumn ? 1 : 0);
+        var nearest = Comparator
+            .comparingInt((Match match) -> Math.abs(match.line() - originLine))
+            .thenComparingInt(match -> match.line() > originLine ? 1 : 0)
+            .thenComparingInt(match -> Math.abs(match.column() - originColumn))
+            .thenComparingInt(match -> match.column() > originColumn ? 1 : 0);
         for (int i = 0; i < matches.size(); i++) {
             if (selected < 0 || nearest.compare(matches.get(i), matches.get(selected)) < 0) {
                 selected = i;
@@ -108,7 +101,10 @@ final class Search {
     List<Part> parts(int line, List<Span> spans) {
         List<Match> found = byLine.getOrDefault(line, List.of());
         if (found.isEmpty()) {
-            return spans.stream().map(span -> new Part(span, false, false)).toList();
+            return spans
+                .stream()
+                .map(span -> new Part(span, false, false))
+                .toList();
         }
         var boundaries = new TreeSet<Integer>();
         boundaries.add(0);
@@ -139,19 +135,15 @@ final class Search {
             }
             boolean matched = matchIndex < found.size() && found.get(matchIndex).start() < boundary;
             boolean selected =
-                    active != null
-                            && active.line() == line
-                            && previous < active.end()
-                            && boundary > active.start();
+                    active != null && active.line() == line && previous < active.end() && boundary > active.start();
             Span span = spans.get(spanIndex);
             result.add(
                     new Part(
-                            new Span(
-                                    span.text()
-                                            .substring(previous - spanStart, boundary - spanStart),
-                                    span.style()),
+                            new Span(span.text().substring(previous - spanStart, boundary - spanStart), span.style()),
                             matched,
-                            selected));
+                            selected
+                    )
+            );
             previous = boundary;
         }
         return result;

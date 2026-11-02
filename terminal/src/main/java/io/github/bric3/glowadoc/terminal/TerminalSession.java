@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.terminal;
 
 import dev.tamboui.backend.aesh.AeshBackend;
-
 import io.github.bric3.glowadoc.document.Appearance;
-
 import org.aesh.terminal.tty.MouseEvent;
 import org.aesh.terminal.tty.TerminalBuilder;
 import org.aesh.terminal.tty.TerminalConnection;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,23 +53,17 @@ public final class TerminalSession implements AutoCloseable {
     public TerminalSession(boolean automatic, Appearance fallback) throws IOException {
         this.automatic = automatic;
         appearance = fallback;
-        connection =
-                new TerminalConnection(
-                        TerminalBuilder.builder().system(true).nativeSignals(true).build());
+        connection = new TerminalConnection(TerminalBuilder.builder().system(true).nativeSignals(true).build());
         backend = new AeshBackend(connection);
         var keys = connection.stdinHandler();
         filter = new ReplyFilter(this::reply, keys);
         connection.setStdinHandler(filter::accept);
         // Aesh consumes mouse reports before stdin; return them to TamboUI's input decoder.
-        connection.setMouseHandler(
-                event -> keys.accept(mouseSequence(event).codePoints().toArray()));
+        connection.setMouseHandler(event -> keys.accept(mouseSequence(event).codePoints().toArray()));
         connection.setThemeChangeHandler(theme -> {
             lastReply = System.nanoTime();
             if (automatic) {
-                Appearance next =
-                        theme.toString().equalsIgnoreCase("light")
-                                ? Appearance.LIGHT
-                                : Appearance.DARK;
+                Appearance next = theme.toString().equalsIgnoreCase("light") ? Appearance.LIGHT : Appearance.DARK;
                 if (appearance != next) {
                     appearance = next;
                     dirty = true;
@@ -97,15 +87,14 @@ public final class TerminalSession implements AutoCloseable {
     }
 
     static String mouseSequence(MouseEvent event) {
-        int button =
-                switch (event.button()) {
-                    case LEFT -> 0;
-                    case MIDDLE -> 1;
-                    case RIGHT -> 2;
-                    case NONE -> 3;
-                    case SCROLL_UP -> 64;
-                    case SCROLL_DOWN -> 65;
-                };
+        int button = switch (event.button()) {
+            case LEFT -> 0;
+            case MIDDLE -> 1;
+            case RIGHT -> 2;
+            case NONE -> 3;
+            case SCROLL_UP -> 64;
+            case SCROLL_DOWN -> 65;
+        };
         if (event.type() == MouseEvent.Type.DRAG || event.type() == MouseEvent.Type.MOVE) {
             button |= 32;
         }
@@ -119,7 +108,7 @@ public final class TerminalSession implements AutoCloseable {
             button |= 16;
         }
         // Aesh retains the protocol's one-based coordinates.
-        return "\u001b[<"
+        return "[<"
                 + button
                 + ";"
                 + event.x()
@@ -159,8 +148,7 @@ public final class TerminalSession implements AutoCloseable {
     }
 
     public void start() {
-        connection.write(
-                "\u001b[16t\u001b[?2031$p\u001b_Gi=2147483000,s=1,v=1,a=q,t=d,f=24;AAAA\u001b\\");
+        connection.write("[16t[?2031$p_Gi=2147483000,s=1,v=1,a=q,t=d,f=24;AAAA\\");
         refresh();
     }
 
@@ -179,8 +167,7 @@ public final class TerminalSession implements AutoCloseable {
             deadline = 0;
         }
         if (automatic && now >= nextPoll && misses < 2 && (!notifications || nextPoll == 0)) {
-            connection.write(
-                    "\u001b[?996n\u001b]10;?\u001b\\\u001b]11;?\u001b\\\u001b]4;0;?;7;?;8;?;15;?\u001b\\");
+            connection.write("[?996n]10;?\\]11;?\\]4;0;?;7;?;8;?;15;?\\");
             deadline = now + 200_000_000L;
             nextPoll = now + 2_000_000_000L;
         }
@@ -188,7 +175,7 @@ public final class TerminalSession implements AutoCloseable {
 
     private void reply(String value) {
         var missing = Pattern.compile("i=([0-9]+)(?:,p=[0-9]+)?;ENOENT").matcher(value);
-        if (value.startsWith("\u001b_G") && missing.find()) {
+        if (value.startsWith("_G") && missing.find()) {
             try {
                 missingImages.add(Integer.parseInt(missing.group(1)));
                 dirty = true;
@@ -196,7 +183,7 @@ public final class TerminalSession implements AutoCloseable {
                 /* Ignore IDs outside this client's range. */
             }
         }
-        var cell = Pattern.compile("\u001b\\[6;([0-9]{1,4});([0-9]{1,4})t").matcher(value);
+        var cell = Pattern.compile("\\[6;([0-9]{1,4});([0-9]{1,4})t").matcher(value);
         if (cell.matches()) {
             cellHeight = Math.max(1, Integer.parseInt(cell.group(1)));
             cellWidth = Math.max(1, Integer.parseInt(cell.group(2)));
@@ -206,14 +193,14 @@ public final class TerminalSession implements AutoCloseable {
             kitty = true;
             dirty = true;
         }
-        if (value.matches("\u001b\\[\\?2031;[12]\\$y")) {
+        if (value.matches("\\[\\?2031;[12]\\$y")) {
             notifications = true;
             if (value.contains(";2$y")) {
-                connection.write("\u001b[?2031h");
+                connection.write("[?2031h");
                 enabledNotifications = true;
             }
         }
-        if (value.startsWith("\u001b[?997") && automatic) {
+        if (value.startsWith("[?997") && automatic) {
             if (value.contains(";1n")) {
                 appearance = Appearance.DARK;
             }
@@ -223,10 +210,9 @@ public final class TerminalSession implements AutoCloseable {
             dirty = true;
             refresh();
         }
-        var matcher =
-                Pattern.compile(
-                                "\u001b](10|11|4);(?:(\\d+);)?rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})")
-                        .matcher(value);
+        var matcher = Pattern
+            .compile("](10|11|4);(?:(\\d+);)?rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})")
+            .matcher(value);
         if (matcher.find()) {
             int index = Integer.parseInt(matcher.group(1));
             int r = channel(matcher.group(3));
@@ -241,25 +227,21 @@ public final class TerminalSession implements AutoCloseable {
                 dirty = true;
             }
             if (index == 11 && automatic) {
-                appearance =
-                        0.2126 * r + 0.7152 * g + 0.0722 * b > 140
-                                ? Appearance.LIGHT
-                                : Appearance.DARK;
+                appearance = 0.2126 * r + 0.7152 * g + 0.0722 * b > 140 ? Appearance.LIGHT : Appearance.DARK;
             }
             lastReply = System.nanoTime();
         }
     }
 
     public static int channel(String hex) {
-        return (int)
-                Math.round(Integer.parseInt(hex, 16) * 255.0 / ((1L << (hex.length() * 4)) - 1));
+        return (int) Math.round(Integer.parseInt(hex, 16) * 255.0 / ((1L << (hex.length() * 4)) - 1));
     }
 
     @Override
     public void close() throws IOException {
         try {
             if (enabledNotifications) {
-                connection.write("\u001b[?2031l");
+                connection.write("[?2031l");
             }
             backend.close();
         } finally {

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.pager;
 
 import dev.tamboui.style.Color;
@@ -12,7 +11,6 @@ import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
 import dev.tamboui.tui.event.MouseEvent;
 import dev.tamboui.tui.event.MouseEventKind;
-
 import io.github.bric3.glowadoc.diagrams.DiagramRenderer;
 import io.github.bric3.glowadoc.document.Appearance;
 import io.github.bric3.glowadoc.document.Block;
@@ -29,7 +27,6 @@ import io.github.bric3.glowadoc.terminal.KittyImages;
 import io.github.bric3.glowadoc.terminal.LinkOpener;
 import io.github.bric3.glowadoc.terminal.Progress;
 import io.github.bric3.glowadoc.terminal.TerminalSession;
-
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -106,7 +103,8 @@ public final class ReaderPager {
             String progressMode,
             boolean imageDim,
             DeferredHighlighter highlighter,
-            Consumer<String> milestone) {
+            Consumer<String> milestone
+    ) {
         this.document = document;
         this.layout = layout;
         this.diagrams = diagrams;
@@ -126,175 +124,165 @@ public final class ReaderPager {
     public void run(boolean automatic, Appearance fallback) throws Exception {
         try (var session = new TerminalSession(automatic, fallback)) {
             var config =
-                    TuiConfig.builder()
-                            .backend(session.backend())
-                            .tickRate(Duration.ofMillis(100))
-                            .mouseCapture(mouse)
-                            .build();
+                    TuiConfig
+                .builder()
+                .backend(session.backend())
+                .tickRate(Duration.ofMillis(100))
+                .mouseCapture(mouse)
+                .build();
             try (var runner = TuiRunner.create(config);
                     var kitty = new KittyImages(session.backend());
                     var progress = new Progress(session.backend(), progressMode, System.getenv());
-                    var links = new LinkOpener()) {
+                    var links = new LinkOpener()
+            ) {
                 activeRunner = runner;
                 session.start();
-                runner.run(
-                        (event, tui) -> {
-                            session.tick();
-                            if (!session.focused()) {
-                                pressedLink = "";
+                runner.run((event, tui) -> {
+                    session.tick();
+                    if (!session.focused()) {
+                        pressedLink = "";
+                    }
+                    boolean redraw = session.takeDirty() || layoutDirty;
+                    if (diagrams.takeDirty()) {
+                        layoutDirty = true;
+                        anchorAssets = true;
+                        redraw = true;
+                    }
+                    for (String diagnostic : diagrams.takeDiagnostics()) {
+                        message = diagnostic;
+                        redraw = true;
+                    }
+                    for (String diagnostic : links.takeDiagnostics()) {
+                        message = diagnostic;
+                        redraw = true;
+                    }
+                    for (int id : session.takeMissingImages()) {
+                        kitty.invalidate(id);
+                    }
+                    if (highlighter != null && highlighter.takeDirty()) {
+                        layoutDirty = true;
+                        redraw = true;
+                        if (!highlightingReported && highlighter.isIdle()) {
+                            highlightingReported = true;
+                            milestone.accept("highlighting-ready");
+                        }
+                    }
+                    if (event instanceof KeyEvent key) {
+                        pressedLink = "";
+                        if (key.isCtrlC() || (!searching && key.isChar('q'))) {
+                            tui.quit();
+                            return false;
+                        }
+                        if (searching) {
+                            if (key.isKey(KeyCode.ENTER)) {
+                                searching = false;
+                            } else if (key.isKey(KeyCode.ESCAPE)) {
+                                searching = false;
+                                updateSearch("");
+                            } else if (key.isKey(KeyCode.BACKSPACE) && !search.query().isEmpty()) {
+                                String query = search.query();
+                                updateSearch(query.substring(0, query.offsetByCodePoints(query.length(), -1)));
+                            } else if (key.code() == KeyCode.CHAR && !key.hasCtrl()) {
+                                updateSearch(search.query() + key.string());
                             }
-                            boolean redraw = session.takeDirty() || layoutDirty;
-                            if (diagrams.takeDirty()) {
-                                layoutDirty = true;
-                                anchorAssets = true;
+                        } else if (key.isFocusNext() || key.isFocusPrevious()) {
+                            focus(key.isFocusPrevious() ? -1 : 1);
+                        } else if (key.isKey(KeyCode.ENTER) && focused >= 0) {
+                            toggle(focused);
+                        } else if (key.isUp() || key.isChar('k')) {
+                            top--;
+                        } else if (key.isDown() || key.isChar('j')) {
+                            top++;
+                        } else if (key.isPageDown() || key.isChar(' ')) {
+                            top += height;
+                        } else if (key.isPageUp() || key.isChar('b')) {
+                            top -= height;
+                        } else if (key.isChar('g') || key.isKey(KeyCode.HOME)) {
+                            top = 0;
+                        } else if (key.isChar('G') || key.isKey(KeyCode.END)) {
+                            top = lines.size();
+                        } else if (key.isLeft()) {
+                            left = Math.max(0, left - 4);
+                        } else if (key.isRight()) {
+                            left += 4;
+                        } else if (key.isChar('/')) {
+                            searching = true;
+                            searchOriginTop = top;
+                            searchOriginLeft = left;
+                            updateSearch("");
+                        } else if (key.isChar('n')) {
+                            find(1);
+                        } else if (key.isChar('N')) {
+                            find(-1);
+                        } else if (key.isChar('r')) {
+                            session.refresh();
+                        } else if (key.isChar('m')) {
+                            try {
+                                if (mouse) {
+                                    session.backend().disableMouseCapture();
+                                } else {
+                                    session.backend().enableMouseCapture(hoverTracking);
+                                }
+                                mouse = !mouse;
+                                pointerX = pointerY = -1;
+                            } catch (java.io.IOException e) {
+                                message = "Mouse capture unavailable";
+                            }
+                        }
+                        redraw = true;
+                    } else if (mouse && event instanceof MouseEvent pointer) {
+                        pointerX = pointer.x();
+                        pointerY = pointer.y();
+                        if (pointer.isPress()) {
+                            pressedLink = "";
+                        }
+                        String target = linkAt(pointerX, pointerY);
+                        if (!hoveredLink.equals(target)) {
+                            hoveredLink = target;
+                            redraw = true;
+                        }
+                        int hovered = hoveredImage(visibleImages, pointerX, pointerY);
+                        if (imageDim && appearance == Appearance.DARK && hovered != hoveredImage) {
+                            hoveredImage = hovered;
+                            redraw = true;
+                        }
+                        if (pointer.kind() == MouseEventKind.SCROLL_UP) {
+                            pressedLink = "";
+                            top -= 3;
+                            redraw = true;
+                        } else if (pointer.kind() == MouseEventKind.SCROLL_DOWN) {
+                            pressedLink = "";
+                            top += 3;
+                            redraw = true;
+                        } else if (pointer.kind() == MouseEventKind.DRAG) {
+                            pressedLink = "";
+                        } else if (pointer.kind() == MouseEventKind.RELEASE && pointer.isLeftButton()) {
+                            if (!pressedLink.isEmpty() && pressedLink.equals(target)) {
+                                message = "Opening link...";
+                                links.open(target);
                                 redraw = true;
                             }
-                            for (String diagnostic : diagrams.takeDiagnostics()) {
-                                message = diagnostic;
+                            pressedLink = "";
+                        } else if (pointer.isPress() && pointer.isLeftButton() && !target.isEmpty()) {
+                            pressedLink = target;
+                        } else if (pointer.isPress()
+                                && pointer.isLeftButton()
+                                && pointer.y() >= 0
+                                && pointer.y() < height
+                                && pointer.x() >= contentMargin
+                                && pointer.x() < contentMargin + width
+                                && top + pointer.y() < lines.size()) {
+                            int disclosure = lines.get(top + pointer.y()).disclosure();
+                            if (disclosure >= 0) {
+                                focused = disclosure;
+                                toggle(disclosure);
                                 redraw = true;
                             }
-                            for (String diagnostic : links.takeDiagnostics()) {
-                                message = diagnostic;
-                                redraw = true;
-                            }
-                            for (int id : session.takeMissingImages()) {
-                                kitty.invalidate(id);
-                            }
-                            if (highlighter != null && highlighter.takeDirty()) {
-                                layoutDirty = true;
-                                redraw = true;
-                                if (!highlightingReported && highlighter.isIdle()) {
-                                    highlightingReported = true;
-                                    milestone.accept("highlighting-ready");
-                                }
-                            }
-                            if (event instanceof KeyEvent key) {
-                                pressedLink = "";
-                                if (key.isCtrlC() || (!searching && key.isChar('q'))) {
-                                    tui.quit();
-                                    return false;
-                                }
-                                if (searching) {
-                                    if (key.isKey(KeyCode.ENTER)) {
-                                        searching = false;
-                                    } else if (key.isKey(KeyCode.ESCAPE)) {
-                                        searching = false;
-                                        updateSearch("");
-                                    } else if (key.isKey(KeyCode.BACKSPACE)
-                                            && !search.query().isEmpty()) {
-                                        String query = search.query();
-                                        updateSearch(
-                                                query.substring(
-                                                        0,
-                                                        query.offsetByCodePoints(
-                                                                query.length(), -1)));
-                                    } else if (key.code() == KeyCode.CHAR && !key.hasCtrl()) {
-                                        updateSearch(search.query() + key.string());
-                                    }
-                                } else if (key.isFocusNext() || key.isFocusPrevious()) {
-                                    focus(key.isFocusPrevious() ? -1 : 1);
-                                } else if (key.isKey(KeyCode.ENTER) && focused >= 0) {
-                                    toggle(focused);
-                                } else if (key.isUp() || key.isChar('k')) {
-                                    top--;
-                                } else if (key.isDown() || key.isChar('j')) {
-                                    top++;
-                                } else if (key.isPageDown() || key.isChar(' ')) {
-                                    top += height;
-                                } else if (key.isPageUp() || key.isChar('b')) {
-                                    top -= height;
-                                } else if (key.isChar('g') || key.isKey(KeyCode.HOME)) {
-                                    top = 0;
-                                } else if (key.isChar('G') || key.isKey(KeyCode.END)) {
-                                    top = lines.size();
-                                } else if (key.isLeft()) {
-                                    left = Math.max(0, left - 4);
-                                } else if (key.isRight()) {
-                                    left += 4;
-                                } else if (key.isChar('/')) {
-                                    searching = true;
-                                    searchOriginTop = top;
-                                    searchOriginLeft = left;
-                                    updateSearch("");
-                                } else if (key.isChar('n')) {
-                                    find(1);
-                                } else if (key.isChar('N')) {
-                                    find(-1);
-                                } else if (key.isChar('r')) {
-                                    session.refresh();
-                                } else if (key.isChar('m')) {
-                                    try {
-                                        if (mouse) {
-                                            session.backend().disableMouseCapture();
-                                        } else {
-                                            session.backend().enableMouseCapture(hoverTracking);
-                                        }
-                                        mouse = !mouse;
-                                        pointerX = pointerY = -1;
-                                    } catch (java.io.IOException e) {
-                                        message = "Mouse capture unavailable";
-                                    }
-                                }
-                                redraw = true;
-                            } else if (mouse && event instanceof MouseEvent pointer) {
-                                pointerX = pointer.x();
-                                pointerY = pointer.y();
-                                if (pointer.isPress()) {
-                                    pressedLink = "";
-                                }
-                                String target = linkAt(pointerX, pointerY);
-                                if (!hoveredLink.equals(target)) {
-                                    hoveredLink = target;
-                                    redraw = true;
-                                }
-                                int hovered = hoveredImage(visibleImages, pointerX, pointerY);
-                                if (imageDim
-                                        && appearance == Appearance.DARK
-                                        && hovered != hoveredImage) {
-                                    hoveredImage = hovered;
-                                    redraw = true;
-                                }
-                                if (pointer.kind() == MouseEventKind.SCROLL_UP) {
-                                    pressedLink = "";
-                                    top -= 3;
-                                    redraw = true;
-                                } else if (pointer.kind() == MouseEventKind.SCROLL_DOWN) {
-                                    pressedLink = "";
-                                    top += 3;
-                                    redraw = true;
-                                } else if (pointer.kind() == MouseEventKind.DRAG) {
-                                    pressedLink = "";
-                                } else if (pointer.kind() == MouseEventKind.RELEASE
-                                        && pointer.isLeftButton()) {
-                                    if (!pressedLink.isEmpty() && pressedLink.equals(target)) {
-                                        message = "Opening link...";
-                                        links.open(target);
-                                        redraw = true;
-                                    }
-                                    pressedLink = "";
-                                } else if (pointer.isPress()
-                                        && pointer.isLeftButton()
-                                        && !target.isEmpty()) {
-                                    pressedLink = target;
-                                } else if (pointer.isPress()
-                                        && pointer.isLeftButton()
-                                        && pointer.y() >= 0
-                                        && pointer.y() < height
-                                        && pointer.x() >= contentMargin
-                                        && pointer.x() < contentMargin + width
-                                        && top + pointer.y() < lines.size()) {
-                                    int disclosure = lines.get(top + pointer.y()).disclosure();
-                                    if (disclosure >= 0) {
-                                        focused = disclosure;
-                                        toggle(disclosure);
-                                        redraw = true;
-                                    }
-                                }
-                            }
-                            top = clampTop(top);
-                            return redraw;
-                        },
-                        frame -> draw(frame, session, kitty, progress));
+                        }
+                    }
+                    top = clampTop(top);
+                    return redraw;
+                }, frame -> draw(frame, session, kitty, progress));
             }
         }
     }
@@ -308,15 +296,11 @@ public final class ReaderPager {
         }
         height = Math.max(1, frame.height() - 1);
         boolean rebuilt = false;
-        if (layoutDirty
-                || width != nextWidth
-                || appearance != session.appearance()
-                || lines.isEmpty()) {
+        if (layoutDirty || width != nextWidth || appearance != session.appearance() || lines.isEmpty()) {
             boolean preserveViewport = (layoutDirty || width == nextWidth) && !anchorAssets;
             int previousTop = top;
             layoutDirty = false;
-            int anchor =
-                    lines.isEmpty() ? 0 : lines.get(Math.min(top, lines.size() - 1)).blockIndex();
+            int anchor = lines.isEmpty() ? 0 : lines.get(Math.min(top, lines.size() - 1)).blockIndex();
             int anchorStart = Math.min(top, Math.max(0, lines.size() - 1));
             while (anchorStart > 0 && lines.get(anchorStart - 1).blockIndex() == anchor) {
                 anchorStart--;
@@ -327,7 +311,9 @@ public final class ReaderPager {
             assets.clear();
             diagramBlocks.clear();
             lines = new ArrayList<>(layout.render(document, width, appearance, toggled, true));
-            if (lines.stream().noneMatch(line -> line.disclosure() == focused)) {
+            if (lines
+                .stream()
+                .noneMatch(line -> line.disclosure() == focused)) {
                 focused = -1;
             }
             if (images && session.kitty()) {
@@ -356,13 +342,12 @@ public final class ReaderPager {
         }
         top = clampTop(top);
         if (rebuilt) {
-            hasLinks =
-                    lines.stream()
-                            .flatMap(line -> line.spans().stream())
-                            .anyMatch(span -> Controls.safeLink(span.style().link()));
+            hasLinks = lines
+                .stream()
+                .flatMap(line -> line.spans().stream())
+                .anyMatch(span -> Controls.safeLink(span.style().link()));
         }
-        boolean tracking =
-                hasLinks || imageDim && images && session.kitty() && appearance == Appearance.DARK;
+        boolean tracking = hasLinks || imageDim && images && session.kitty() && appearance == Appearance.DARK;
         if (tracking != hoverTracking) {
             hoverTracking = tracking;
             if (mouse) {
@@ -385,21 +370,13 @@ public final class ReaderPager {
         var palette = Palette.forAppearance(appearance);
         var base = dev.tamboui.style.Style.EMPTY;
         if (colour) {
-            base =
-                    base.fg(
-                            Color.hex(
-                                    session.foreground().isEmpty()
-                                            ? (appearance == Appearance.DARK
-                                                    ? "#eeeeee"
-                                                    : "#202020")
-                                            : session.foreground()));
+            base = base.fg(Color.hex(
+                    session.foreground().isEmpty() ? (appearance == Appearance.DARK ? "#eeeeee" : "#202020") : session.foreground()
+            ));
             if (pageBackground) {
-                base =
-                        base.bg(
-                                Color.hex(
-                                        session.background().isEmpty()
-                                                ? Palette.forAppearance(appearance).canvas()
-                                                : session.background()));
+                base = base.bg(Color.hex(
+                        session.background().isEmpty() ? Palette.forAppearance(appearance).canvas() : session.background()
+                ));
             }
         }
         frame.buffer().setStyle(frame.area(), base);
@@ -426,37 +403,28 @@ public final class ReaderPager {
                 }
                 var style = base.patch(Ansi.style(span.style(), colour, truecolour));
                 if (!hoveredLink.isEmpty() && hoveredLink.equals(span.style().link())) {
-                    style =
-                            colour
-                                    ? style.patch(
-                                            Ansi.style(
-                                                    Style.PLAIN
-                                                            .bolded()
-                                                            .colours(
-                                                                    palette.canvas(),
-                                                                    palette.accent()),
-                                                    true,
-                                                    truecolour))
-                                    : style.reversed();
+                    style = colour
+                            ? style.patch(Ansi.style(
+                                    Style.PLAIN.bolded().colours(palette.canvas(), palette.accent()),
+                                    true,
+                                    truecolour
+                    ))
+                            : style.reversed();
                 }
                 if (row.disclosure() == focused && focused >= 0) {
                     style = style.reversed();
                 }
                 if (part.matched()) {
-                    style =
-                            colour
-                                    ? style.patch(
-                                            Ansi.style(
-                                                    Style.PLAIN.colours(
-                                                            part.active()
-                                                                    ? palette.canvas()
-                                                                    : palette.accent(),
-                                                            part.active()
-                                                                    ? palette.accent()
-                                                                    : palette.stripe()),
-                                                    true,
-                                                    truecolour))
-                                    : style.reversed();
+                    style = colour
+                            ? style.patch(Ansi.style(
+                                    Style.PLAIN.colours(
+                                            part.active() ? palette.canvas() : palette.accent(),
+                                            part.active() ? palette.accent() : palette.stripe()
+                                    ),
+                                    true,
+                                    truecolour
+                    ))
+                            : style.reversed();
                     if (part.active()) {
                         style = style.bold().underlined();
                     }
@@ -465,93 +433,75 @@ public final class ReaderPager {
             }
             frame.buffer().setLine(margin, y, Line.from(spans), available - margin);
         }
-        String matches =
-                search.query().isEmpty()
-                        ? ""
-                        : search.count() == 0
-                                ? "  No match"
-                                : "  " + search.ordinal() + "/" + search.count() + " matches";
-        String status =
-                searching
-                        ? "/" + search.query() + matches
-                        : "q quit  / search  Tab/Enter fold  "
-                                + (mouse ? "m select  " : "m mouse  ")
-                                + matches
-                                + (message.isEmpty() ? "" : "  " + message);
-        var statusStyle =
-                colour ? Ansi.style(palette.statusStyle(), true, truecolour) : base.reversed();
+        String matches = search.query().isEmpty()
+                ? ""
+                : search.count() == 0 ? "  No match" : "  " + search.ordinal() + "/" + search.count() + " matches";
+        String status = searching
+                ? "/" + search.query() + matches
+                : "q quit  / search  Tab/Enter fold  "
+                + (mouse ? "m select  " : "m mouse  ")
+                + matches
+                + (message.isEmpty() ? "" : "  " + message);
+        var statusStyle = colour ? Ansi.style(palette.statusStyle(), true, truecolour) : base.reversed();
         String positionText = " " + (top + 1) + "/" + lines.size() + " ";
         int positionWidth = Math.min(available, CharWidth.of(positionText));
         String controls = clip(status, available - positionWidth);
-        var positionStyle =
-                colour
-                        ? Ansi.style(
-                                Style.PLAIN.colours(palette.surface(), palette.accent()),
-                                true,
-                                truecolour)
-                        : statusStyle.bold();
-        var statusSpans =
-                List.of(
-                        dev.tamboui.text.Span.styled(
-                                controls
-                                        + " "
-                                                .repeat(
-                                                        Math.max(
-                                                                0,
-                                                                available
-                                                                        - positionWidth
-                                                                        - CharWidth.of(controls))),
-                                statusStyle),
-                        dev.tamboui.text.Span.styled(
-                                clip(positionText, positionWidth), positionStyle));
+        var positionStyle = colour
+                ? Ansi.style(Style.PLAIN.colours(palette.surface(), palette.accent()), true, truecolour)
+                : statusStyle.bold();
+        var statusSpans = List.of(
+                dev.tamboui.text.Span.styled(
+                        controls + " ".repeat(Math.max(0, available - positionWidth - CharWidth.of(controls))),
+                        statusStyle
+                ),
+                dev.tamboui.text.Span.styled(clip(positionText, positionWidth), positionStyle)
+        );
         frame.buffer().setLine(0, frame.height() - 1, Line.from(statusSpans), available);
         // Graphics are emitted after TamboUI has flushed its text frame.
-        pendingImages =
-                () -> {
-                    var placements = new ArrayList<KittyImages.Placement>();
-                    for (var entry : assets.entrySet()) {
-                        int first = entry.getKey();
-                        var asset = entry.getValue();
-                        int count = asset.size().rows();
-                        int start = Math.max(top, first);
-                        int end = Math.min(top + height, first + count);
-                        if (start < end) {
-                            placements.add(
-                                    new KittyImages.Placement(
-                                            first + 1,
-                                            asset.path(),
-                                            start - top,
-                                            margin,
-                                            asset.size().columns(),
-                                            end - start,
-                                            start - first,
-                                            count));
-                        }
-                    }
-                    visibleImages = List.copyOf(placements);
-                    hoveredImage =
-                            session.focused()
-                                    ? hoveredImage(visibleImages, pointerX, pointerY)
-                                    : -1;
-                    if (imageDim && mouse && appearance == Appearance.DARK) {
-                        placements.replaceAll(placement ->
-                                new KittyImages.Placement(
-                                        placement.id(),
-                                        placement.path(),
-                                        placement.row(),
-                                        placement.column(),
-                                        placement.columns(),
-                                        placement.rows(),
-                                        placement.cropRows(),
-                                        placement.totalRows(),
-                                        placement.id() != hoveredImage));
-                    }
-                    kitty.render(placements);
-                    if (firstImage && !placements.isEmpty()) {
-                        firstImage = false;
-                        milestone.accept("first-image");
-                    }
-                };
+        pendingImages = () -> {
+            var placements = new ArrayList<KittyImages.Placement>();
+            for (var entry : assets.entrySet()) {
+                int first = entry.getKey();
+                var asset = entry.getValue();
+                int count = asset.size().rows();
+                int start = Math.max(top, first);
+                int end = Math.min(top + height, first + count);
+                if (start < end) {
+                    placements.add(
+                            new KittyImages.Placement(
+                                    first + 1,
+                                    asset.path(),
+                                    start - top,
+                                    margin,
+                                    asset.size().columns(),
+                                    end - start,
+                                    start - first,
+                                    count
+                            )
+                    );
+                }
+            }
+            visibleImages = List.copyOf(placements);
+            hoveredImage = session.focused() ? hoveredImage(visibleImages, pointerX, pointerY) : -1;
+            if (imageDim && mouse && appearance == Appearance.DARK) {
+                placements.replaceAll(placement -> new KittyImages.Placement(
+                        placement.id(),
+                        placement.path(),
+                        placement.row(),
+                        placement.column(),
+                        placement.columns(),
+                        placement.rows(),
+                        placement.cropRows(),
+                        placement.totalRows(),
+                        placement.id() != hoveredImage
+                ));
+            }
+            kitty.render(placements);
+            if (firstImage && !placements.isEmpty()) {
+                firstImage = false;
+                milestone.accept("first-image");
+            }
+        };
         activeRunner.runLater(() -> {
             if (firstFrame) {
                 firstFrame = false;
@@ -586,11 +536,11 @@ public final class ReaderPager {
 
     private String linkAt(int x, int y) {
         return mouse
-                        && y >= 0
-                        && y < height
-                        && top + y < lines.size()
-                        && x >= contentMargin
-                        && x < contentMargin + contentColumns
+                && y >= 0
+                && y < height
+                && top + y < lines.size()
+                && x >= contentMargin
+                && x < contentMargin + contentColumns
                 ? lines.get(top + y).linkAt(x - contentMargin, left)
                 : "";
     }
@@ -633,18 +583,15 @@ public final class ReaderPager {
             if (block.kind() == Block.Kind.DIAGRAM) {
                 diagramBlocks.put(row.blockIndex(), block);
             }
-            Optional<Path> path =
-                    block.kind() == Block.Kind.DIAGRAM
-                            ? firstFrame ? Optional.empty() : diagrams.cached(block, appearance)
-                            : DiagramRenderer.localImage(document, block.target());
+            Optional<Path> path = block.kind() == Block.Kind.DIAGRAM
+                    ? firstFrame ? Optional.empty() : diagrams.cached(block, appearance)
+                    : DiagramRenderer.localImage(document, block.target());
             if (path.isEmpty()) {
                 continue;
             }
             KittyImages.Size size;
             try {
-                size =
-                        KittyImages.measure(
-                                path.get(), width, session.cellWidth(), session.cellHeight());
+                size = KittyImages.measure(path.get(), width, session.cellWidth(), session.cellHeight());
             } catch (java.io.IOException e) {
                 message = "Image unavailable";
                 continue;
@@ -691,22 +638,20 @@ public final class ReaderPager {
 
     private void focus(int direction) {
         var headers =
-                lines.stream()
-                        .filter(line -> line.disclosure() >= 0)
-                        .map(RenderedLine::disclosure)
-                        .distinct()
-                        .toList();
+                lines
+            .stream()
+            .filter(line -> line.disclosure() >= 0)
+            .map(RenderedLine::disclosure)
+            .distinct()
+            .toList();
         if (headers.isEmpty()) {
             return;
         }
         int current = headers.indexOf(focused);
-        focused =
-                headers.get(
-                        Math.floorMod(
-                                current < 0
-                                        ? (direction > 0 ? 0 : headers.size() - 1)
-                                        : current + direction,
-                                headers.size()));
+        focused = headers.get(Math.floorMod(
+                current < 0 ? (direction > 0 ? 0 : headers.size() - 1) : current + direction,
+                headers.size()
+        ));
         for (int i = 0; i < lines.size(); i++) {
             if (lines.get(i).disclosure() == focused) {
                 if (i < top || i >= top + height) {

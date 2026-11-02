@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 pluginManagement {
+    includeBuild("build-logic/quality") {
+        name = "quality"
+    }
     includeBuild("build-logic")
 }
 

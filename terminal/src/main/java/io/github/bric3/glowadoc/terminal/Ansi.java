@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.terminal;
 
 import dev.tamboui.style.Color;
-
 import io.github.bric3.glowadoc.document.Controls;
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
-
 import java.util.List;
 
 public final class Ansi {
-    private Ansi() {}
+    private Ansi() {
+    }
 
     public static dev.tamboui.style.Style style(Style span, boolean colour, boolean truecolour) {
         var result = dev.tamboui.style.Style.EMPTY;
@@ -48,10 +46,10 @@ public final class Ansi {
             return rgb;
         }
         return Color.indexed(
-                16
-                        + 36 * Math.round(rgb.r() / 255f * 5)
-                        + 6 * Math.round(rgb.g() / 255f * 5)
-                        + Math.round(rgb.b() / 255f * 5));
+                16 + 36 * Math.round(rgb.r() / 255f * 5) + 6 * Math.round(rgb.g() / 255f * 5) + Math.round(
+                        rgb.b() / 255f * 5
+                )
+        );
     }
 
     public static String line(List<Span> spans, boolean colour, boolean truecolour) {
@@ -59,36 +57,36 @@ public final class Ansi {
         for (var span : spans) {
             if (colour) {
                 var style = style(span.style(), true, truecolour);
-                out.append("\u001b[0m");
+                out.append("[0m");
                 if (span.style().bold()) {
-                    out.append("\u001b[1m");
+                    out.append("[1m");
                 }
                 if (span.style().italic()) {
-                    out.append("\u001b[3m");
+                    out.append("[3m");
                 }
                 if (span.style().underline()) {
-                    out.append("\u001b[4m");
+                    out.append("[4m");
                 }
                 if (span.style().strike()) {
-                    out.append("\u001b[9m");
+                    out.append("[9m");
                 }
-                style.fg()
-                        .ifPresent(c ->
-                                out.append("\u001b[").append(c.toAnsiForeground()).append('m'));
-                style.bg()
-                        .ifPresent(c ->
-                                out.append("\u001b[").append(c.toAnsiBackground()).append('m'));
+                style
+                    .fg()
+                    .ifPresent(c -> out.append("[").append(c.toAnsiForeground()).append('m'));
+                style
+                    .bg()
+                    .ifPresent(c -> out.append("[").append(c.toAnsiBackground()).append('m'));
                 if (Controls.safeLink(span.style().link())) {
-                    out.append("\u001b]8;;").append(span.style().link()).append("\u001b\\");
+                    out.append("]8;;").append(span.style().link()).append("\\");
                 }
             }
             out.append(Controls.visible(span.text()));
             if (colour && Controls.safeLink(span.style().link())) {
-                out.append("\u001b]8;;\u001b\\");
+                out.append("]8;;\\");
             }
         }
         if (colour) {
-            out.append("\u001b[0m");
+            out.append("[0m");
         }
         return out.toString();
     }

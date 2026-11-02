@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.cache;
 
 import java.io.IOException;
@@ -26,7 +25,9 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 
-/** Private, bounded cache entries. Unavailable storage behaves like an empty cache. */
+/**
+ * Private, bounded cache entries. Unavailable storage behaves like an empty cache.
+ */
 public final class CacheFiles {
     private static final int LIMIT = 8 * 1024 * 1024;
     private static final int HASH_LINE_LENGTH = 64 + 1;
@@ -43,15 +44,16 @@ public final class CacheFiles {
         this.budget = budget;
     }
 
-    /** Only a shared packaged artifact supplies a complete identity for these components. */
+    /**
+     * Only a shared packaged artifact supplies a complete identity for these components.
+     */
     public static String artifactIdentity(Class<?>... components) {
         URL own = origin(CacheFiles.class);
         if (own == null) {
             return null;
         }
         for (Class<?> component : components) {
-            if (component.getClassLoader() != CacheFiles.class.getClassLoader()
-                    || !own.equals(origin(component))) {
+            if (component.getClassLoader() != CacheFiles.class.getClassLoader() || !own.equals(origin(component))) {
                 return null;
             }
         }
@@ -82,7 +84,9 @@ public final class CacheFiles {
         }
     }
 
-    /** Reuse the launcher's full hash only for the artifact supplying these classes. */
+    /**
+     * Reuse the launcher's full hash only for the artifact supplying these classes.
+     */
     static String launcherIdentity(Path artifact) {
         try {
             String path = System.getProperty("glowadoc.launcher.artifact");
@@ -155,36 +159,28 @@ public final class CacheFiles {
         }
         Path temporary = null;
         try {
-            boolean posix =
-                    directory.getFileSystem().supportedFileAttributeViews().contains("posix");
+            boolean posix = directory.getFileSystem().supportedFileAttributeViews().contains("posix");
             Files.createDirectories(
                     directory,
                     posix
-                            ? new FileAttribute<?>[] {
-                                PosixFilePermissions.asFileAttribute(
-                                        PosixFilePermissions.fromString("rwx------"))
-                            }
-                            : new FileAttribute<?>[0]);
+                    ? new FileAttribute<?>[] {
+                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------"))
+                    }
+                    : new FileAttribute<?>[0]
+            );
             if (!swept) {
                 swept = true;
                 prune();
             }
             temporary = Files.createTempFile(directory, ".cache-", ".tmp");
             try (var out = Files.newOutputStream(temporary)) {
-                out.write(
-                        (hash(fingerprint.getBytes(StandardCharsets.UTF_8))
-                                        + "\n"
-                                        + hash(value)
-                                        + "\n")
-                                .getBytes(StandardCharsets.US_ASCII));
+                out.write((hash(fingerprint.getBytes(StandardCharsets.UTF_8)) + "\n" + hash(value) + "\n")
+                    .getBytes(StandardCharsets.US_ASCII)
+                );
                 out.write(value);
             }
             try {
-                Files.move(
-                        temporary,
-                        entry(slot),
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING);
+                Files.move(temporary, entry(slot), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException e) {
                 Files.move(temporary, entry(slot), StandardCopyOption.REPLACE_EXISTING);
             }

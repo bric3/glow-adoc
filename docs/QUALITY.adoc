@@ -1,0 +1,105 @@
+// SPDX-License-Identifier: MPL-2.0
+
+= Quality and optimisation review
+
+== Checks
+
+`checkAll` includes tests, Spotless and Yumi Licenser. The `glow.quality` convention is shared by the
+application and independent build-logic builds. Its separate included build avoids a bootstrap cycle;
+build-logic's checks also cover the convention's own sources. Gradle TestKit checks missing headers,
+Java and table formatting, executable directives, exclusions, idempotence and configuration-cache reuse.
+
+Java uses Prince of Space 2.3.0, four-space indentation and 120 columns, followed by TableTest
+formatter 1.1.2. TableTest 1.2.2 supplies readable parameter matrices; JUnit converters handle values
+such as hexadecimal icon code points. Stateful process and PTY tests remain ordinary JUnit tests.
+Build tools and test libraries do not enter the runtime jar.
+
+== Production changes
+
+Table layout retains each cell's styled spans for sizing and wrapping. It maintains the current width
+total while shrinking columns, and looks up wrapped content by cell identity instead of hashing source
+blocks. Existing grid, spans, Unicode, styling and border behaviour remains covered by rendering tests.
+The unused direct TamboUI widgets dependency and catalog entry were removed.
+
+Review also covered conversion, source sanitisation, caches, deferred highlighting, diagram cancellation,
+terminal replies, mouse hit testing, image placement and launcher/AOT identity. Their resource and
+ownership boundaries remain intact. Repeated regex compilation occurs in bounded terminal-reply work;
+changing it has no demonstrated startup benefit. Prose and search allocations remain candidates for
+separate measured changes. Shared behaviour stays with its existing owner.
+
+The release version convention retains its tested Semver bootstrap workaround, including
+`afterEvaluate`. Removing it requires an upstream-compatible replacement for untagged snapshots.
+No unused versioning or packaging plugin was identified. Runtime dependencies reached through service
+registrations, JRuby resources and generated command metadata remain packaged.
+
+== Measurements
+
+JMH 1.37, OpenJDK 27+35-2325, macOS ARM64: two forks, three 500 ms warmup iterations and three
+500 ms measurement iterations, with the GC profiler. Inputs cover small, typical, large and long-word
+pathological prose and linked tables. Benchmarks return rendered rows to retain the measured work.
+
+Initial comparison, before and after table changes:
+
+[cols="2,1,1,1,1",options="header"]
+|===
+|Table input |Before ms/op |After ms/op |Before bytes/op |After bytes/op
+|Small |0.024 |0.020 |53,153 |49,376
+|Typical |0.242 |0.199 |519,500 |478,691
+|Large |2.381 |2.024 |5,175,310 |4,794,698
+|Pathological |27.772 |26.060 |83,721,471 |82,746,258
+|===
+
+See link:benchmarks/quality-layout.csv[all eight cases, allocation results and timing errors].
+Prose timings were effectively unchanged. These are local microbenchmarks, not a claim about JRuby
+startup. The baseline empty-cache first text was 1291 ms median and 1333 ms p95 across 20 fresh JVMs.
+The initial microbenchmark runs included development-tool activity; use isolated runs for release claims.
+
+A separate interleaved startup check alternated baseline/final order across 20 pairs, with no concurrent
+builds or corpus rendering and a fresh application cache per launch. Baseline/final median first text
+was 1255/1250 ms; p95 was 1265/1276 ms. Cold start was comparable; this change establishes no startup
+speedup. See link:benchmarks/quality-startup.csv[all 40 startup samples].
+
+An interleaved populated-cache check used separate homes for the two jars so entries remained valid.
+Baseline/final median first text was 316/319 ms; p95 was 331/346 ms. The first cache miss for each jar
+was retained. See link:benchmarks/quality-startup-warm.csv[all warm-cache samples].
+The installed AOT launcher was checked separately: 20 sequential launches measured 1479 ms median
+and 1617 ms p95, with substantial variation. This includes manager selection and cache lookup and has
+no paired launcher baseline; it establishes no AOT speedup.
+See link:benchmarks/quality-installed-aot.csv[installed-launcher samples].
+
+Normalised Java syntax was compared before and after formatting, accounting for equivalent Unicode
+escapes, added braces, constant-string splits and table alignment. The remaining differences were
+intentional test and SVG-probe changes. A separate audit preserved the normalised content and order
+of 145 comments across 68 Java files. Release-tool self-tests and all application checks pass.
+All 16 current AsciiDoc files in the supplied corpus produced byte-for-byte identical ANSI output from
+frozen baseline and final jars. Installation into a temporary home, automatic AOT selection and an
+explicit `AOTMode=required` launch also passed. Configuration-cache reuse completed in 495 ms.
+
+[source,sh]
+----
+jbang --java 27 --cp cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar tools/LayoutBenchmark.java -prof gc
+jbang --java 27 tools/Benchmark.java --runs 20 --pty --empty-cache -- java --sun-misc-unsafe-memory-access=allow -jar cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --images=never fixtures/showcase.adoc
+----
+
+== SVG decision
+
+Keep PNG output from PlantUML and Merman. This checkout has no direct resvg dependency or invocation;
+substituting JSVG would add a new SVG input path rather than replace an existing Java renderer.
+
+The opt-in `tools/SvgProbe.java` evaluates JSVG 2.2.0 without adding it to the application.
+It checks colour, alpha, transparency, denied external images and disabled external entities with a
+secure StAX reader. It renders supplied files headlessly with explicit document and pixel limits.
+HTML in `foreignObject` did not paint in the probe, so JSVG does not meet the fidelity gate for a
+general replacement. Two local SVG assets rendered successfully. First load and rendering took
+approximately 82 ms in a diagnostic run; this is not a fresh-process startup benchmark.
+
+[source,sh]
+----
+jbang --java 27 tools/SvgProbe.java
+jbang --java 27 tools/SvgProbe.java diagram.svg
+----
+
+Supplied files produce PNGs under `build/review/svg`. Empty or unsupported inputs fail the probe.
+Consider a future lazy SVG adapter for an explicitly supported SVG subset; keep parsing and rasterisation
+off the first-text path. Resvg/JSVG pixel equivalence, real-terminal appearance and Native Image support
+were not established by this evaluation.

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.document;
 
 public record Style(
@@ -10,7 +9,8 @@ public record Style(
         String foreground,
         String background,
         String link,
-        boolean strike) {
+        boolean strike
+) {
     public static final Style PLAIN = new Style(false, false, false, false, "", "", "", false);
 
     public Style(
@@ -20,7 +20,8 @@ public record Style(
             boolean underline,
             String foreground,
             String background,
-            String link) {
+            String link
+    ) {
         this(bold, italic, code, underline, foreground, background, link, false);
     }
 

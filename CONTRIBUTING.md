@@ -22,7 +22,21 @@ Use [the performance procedure](docs/PERFORMANCE.adoc) for startup and scrolling
 
 ## Code
 
-Use four-space Java/Kotlin indentation, Google Java Format AOSP style and ktlint IntelliJ style.
+Use four-space indentation and 120 columns. Spotless runs Prince of Space followed by the TableTest
+formatter for Java, and ktlint's IntelliJ style for Kotlin. Apply formatting explicitly:
+
+```sh
+./gradlew spotlessApply :build-logic:spotlessApply
+```
+
+`checkAll` checks formatting and MPL-2.0 SPDX headers in application, bootstrap, build and tool sources.
+Yumi Licenser owns headers; `applyLicenses` and `:build-logic:applyLicenses` insert missing headers
+while preserving shebangs and JBang directives. Fixtures, generated files and upstream notices are excluded.
+
+Prefer TableTest for input/output matrices. Use argument converters for domain values; ordinary JUnit
+tests suit lifecycle, asynchronous and PTY scenarios. Add observable regression coverage before changing
+behaviour. Measure performance changes against the same JDK, fixtures and cache state.
+
 Expand control-flow blocks and separate methods and logical groups. Honour `.editorconfig`.
 
 Keep parser nodes, highlighter implementations and terminal types inside their adapters.

@@ -1,27 +1,22 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.terminal;
 
 import static org.junit.jupiter.api.Assertions.*;
-
 import dev.tamboui.terminal.Backend;
-
 import org.junit.jupiter.api.Test;
-
 import java.lang.reflect.Proxy;
 import java.util.Map;
 
 class ProgressTest {
     private final StringBuilder output = new StringBuilder();
-    private final Backend backend =
-            (Backend)
-                    Proxy.newProxyInstance(
-                            Backend.class.getClassLoader(),
-                            new Class<?>[] {Backend.class},
-                            (proxy, method, args) -> {
-                                if (method.getName().equals("writeRaw")) output.append(args[0]);
-                                return null;
-                            });
+    private final Backend backend = (Backend) Proxy.newProxyInstance(Backend.class.getClassLoader(), new Class<?>[] {
+            Backend.class
+    }, (proxy, method, args) -> {
+        if (method.getName().equals("writeRaw")) {
+            output.append(args[0]);
+        }
+        return null;
+    });
 
     @Test
     void reportsPositionOnceAndClearsOnExit() throws Exception {
@@ -31,9 +26,7 @@ class ProgressTest {
             progress.update(50, 120, 20);
             progress.update(200, 120, 20);
         }
-        assertEquals(
-                "\u001b]9;4;1;0\u0007\u001b]9;4;1;50\u0007\u001b]9;4;1;100\u0007\u001b]9;4;0\u0007",
-                output.toString());
+        assertEquals("]9;4;1;0]9;4;1;50]9;4;1;100]9;4;0", output.toString());
     }
 
     @Test

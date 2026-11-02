@@ -42,4 +42,6 @@ org.ow2.asm:asm-commons:9.7.1=compileClasspath,runtimeClasspath,testCompileClass
 org.ow2.asm:asm-tree:9.7.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.ow2.asm:asm-util:9.7.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.ow2.asm:asm:9.7.1=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.tabletest:tabletest-junit:1.2.2=testCompileClasspath,testRuntimeClasspath
+org.tabletest:tabletest-parser:1.2.1=testCompileClasspath,testRuntimeClasspath
 empty=annotationProcessor,testAnnotationProcessor

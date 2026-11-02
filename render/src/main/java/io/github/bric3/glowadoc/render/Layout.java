@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.render;
 
 import io.github.bric3.glowadoc.document.Appearance;
@@ -9,7 +8,6 @@ import io.github.bric3.glowadoc.document.Document;
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
 import io.github.bric3.glowadoc.highlight.Highlighter;
-
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -21,8 +19,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public final class Layout {
-    private static final Pattern ISSUE_PATH =
-            Pattern.compile("(?:^|/)issues(?:/(?:[0-9]+|new)(?:/.*)?)?/?$");
+    private static final Pattern ISSUE_PATH = Pattern.compile("(?:^|/)issues(?:/(?:[0-9]+|new)(?:/.*)?)?/?$");
     private static final Pattern PULL_PATH =
             Pattern.compile("(?:^|/)(?:pulls?|merge_requests)(?:/(?:[0-9]+|new)(?:/.*)?)?/?$");
     private final Highlighter highlighter;
@@ -46,15 +43,15 @@ public final class Layout {
             int width,
             Appearance appearance,
             Set<Integer> toggled,
-            boolean interactive) {
+            boolean interactive
+    ) {
         var positions = new IdentityHashMap<Block, Integer>();
         for (Block block : document.blocks()) {
             index(block, positions);
         }
         var lines = new ArrayList<RenderedLine>();
         for (Block block : document.blocks()) {
-            lines.addAll(
-                    render(block, Math.max(1, width), appearance, positions, toggled, interactive));
+            lines.addAll(render(block, Math.max(1, width), appearance, positions, toggled, interactive));
         }
         // The pager paints its canvas with queried terminal colours.
         if (options.pageBackground() && !interactive) {
@@ -65,17 +62,23 @@ public final class Layout {
                     spans.add(
                             new Span(
                                     span.text(),
-                                    span.style()
-                                            .colours(
-                                                    span.style().foreground(),
-                                                    span.style().background().isEmpty()
-                                                            ? palette.canvas()
-                                                            : span.style().background())));
+                                    span
+                                        .style()
+                                        .colours(
+                                                span.style().foreground(),
+                                                span.style().background().isEmpty() ? palette.canvas() : span
+                                                    .style()
+                                                    .background()
+                                        )
+                            )
+                    );
                 }
                 spans.add(
                         new Span(
                                 " ".repeat(Math.max(0, width - TextLayout.width(spans))),
-                                Style.PLAIN.colours("", palette.canvas())));
+                                Style.PLAIN.colours("", palette.canvas())
+                        )
+                );
                 return new RenderedLine(spans, line.blockIndex(), line.asset(), line.disclosure());
             });
         }
@@ -97,58 +100,42 @@ public final class Layout {
                 if (options.callouts().equals("pill") && !options.ascii()) {
                     // Keep each pill atomic when prose wraps, including its rounded ends.
                     if (options.icons().equals("nerd")) {
-                        themed.add(
-                                new Span(
-                                        "\ue0b6",
-                                        Style.PLAIN.colours(palette.accent(), ""),
-                                        span.callout()));
+                        themed.add(new Span("", Style.PLAIN.colours(palette.accent(), ""), span.callout()));
                     }
                     themed.add(
                             new Span(
                                     " " + span.callout() + " ",
-                                    Style.PLAIN
-                                            .bolded()
-                                            .colours(palette.canvas(), palette.accent()),
-                                    span.callout()));
+                                    Style.PLAIN.bolded().colours(palette.canvas(), palette.accent()),
+                                    span.callout()
+                            )
+                    );
                     if (options.icons().equals("nerd")) {
-                        themed.add(
-                                new Span(
-                                        "\ue0b4",
-                                        Style.PLAIN.colours(palette.accent(), ""),
-                                        span.callout()));
+                        themed.add(new Span("", Style.PLAIN.colours(palette.accent(), ""), span.callout()));
                     }
                 } else {
                     themed.add(
                             new Span(
                                     callout(span.callout()),
                                     span.style().bolded().colours(palette.accent(), ""),
-                                    span.callout()));
+                                    span.callout()
+                            )
+                    );
                 }
             } else if (span.style().code()) {
-                themed.add(
-                        new Span(
-                                span.text(),
-                                span.style().colours(palette.accent(), palette.stripe())));
+                themed.add(new Span(span.text(), span.style().colours(palette.accent(), palette.stripe())));
             } else {
                 themed.add(
                         Controls.safeLink(span.style().link())
-                                ? new Span(
-                                        span.text(),
-                                        span.style()
-                                                .colours(
-                                                        palette.accent(),
-                                                        span.style().background()))
-                                : span);
+                        ? new Span(span.text(), span.style().colours(palette.accent(), span.style().background()))
+                        : span
+                );
             }
             String target = span.style().link();
             if (options.icons().equals("nerd")
                     && Controls.safeLink(target)
                     && (i + 1 == spans.size() || !target.equals(spans.get(i + 1).style().link()))) {
                 // A non-breaking space keeps the suffix with the link's final word.
-                themed.add(
-                        new Span(
-                                "\u00a0" + linkIcon(target),
-                                Style.PLAIN.linked(target).colours(palette.accent(), "")));
+                themed.add(new Span(" " + linkIcon(target), Style.PLAIN.linked(target).colours(palette.accent(), "")));
             }
         }
         return themed;
@@ -159,24 +146,23 @@ public final class Layout {
             URI uri = URI.create(target);
             String host = uri.getHost();
             String path = uri.getPath();
-            boolean forge =
-                    host != null
-                            && path != null
-                            && (host.equalsIgnoreCase("github.com")
-                                    || host.equalsIgnoreCase("www.github.com")
-                                    || host.equalsIgnoreCase("gitlab.com")
-                                    || host.equalsIgnoreCase("www.gitlab.com")
-                                    || path.contains("/-/"));
+            boolean forge = host != null
+                    && path != null
+                    && (host.equalsIgnoreCase("github.com")
+                    || host.equalsIgnoreCase("www.github.com")
+                    || host.equalsIgnoreCase("gitlab.com")
+                    || host.equalsIgnoreCase("www.gitlab.com")
+                    || path.contains("/-/"));
             if (forge && ISSUE_PATH.matcher(path).find()) {
-                return "\ueb0c";
+                return "";
             }
             if (forge && PULL_PATH.matcher(path).find()) {
-                return "\uea64";
+                return "";
             }
         } catch (IllegalArgumentException ignored) {
             // Malformed targets still retain their readable labels.
         }
-        return "\ueb14";
+        return "";
     }
 
     private List<Span> source(Block block, Palette palette, Appearance appearance) {
@@ -185,23 +171,19 @@ public final class Layout {
             String text = block.text();
             int first = text.indexOf('\n');
             int last = text.lastIndexOf('\n');
-            spans =
-                    List.of(
-                            new Span(
-                                    first >= 0 && last > first
-                                            ? text.substring(first + 1, last)
-                                            : ""));
+            spans = List.of(new Span(first >= 0 && last > first ? text.substring(first + 1, last) : ""));
         }
         var themed = theme(spans, palette);
-        var highlighted =
-                highlighter.highlight(
-                        themed.stream().map(Span::text).collect(Collectors.joining()),
-                        block.language(),
-                        appearance);
-        if (themed.stream().noneMatch(span -> !span.callout().isEmpty())) {
+        var highlighted = highlighter.highlight(
+                themed.stream().map(Span::text).collect(Collectors.joining()),
+                block.language(),
+                appearance
+        );
+        if (themed
+            .stream()
+            .noneMatch(span -> !span.callout().isEmpty())) {
             return highlighted;
         }
-
         // Syntax spans can split a callout; restore its colours after highlighting the whole
         // source.
         var restored = new ArrayList<Span>();
@@ -215,15 +197,14 @@ public final class Layout {
                     position = 0;
                 }
                 Span original = themed.get(index);
-                int count =
-                        Math.min(
-                                syntax.text().length() - offset,
-                                original.text().length() - position);
+                int count = Math.min(syntax.text().length() - offset, original.text().length() - position);
                 restored.add(
                         new Span(
                                 syntax.text().substring(offset, offset + count),
                                 original.callout().isEmpty() ? syntax.style() : original.style(),
-                                original.callout()));
+                                original.callout()
+                        )
+                );
                 offset += count;
                 position += count;
             }
@@ -237,34 +218,31 @@ public final class Layout {
             Appearance appearance,
             Map<Block, Integer> positions,
             Set<Integer> toggled,
-            boolean interactive) {
+            boolean interactive
+    ) {
         int position = positions.get(block);
         Palette palette = Palette.forAppearance(appearance);
         var lines = new ArrayList<RenderedLine>();
         if (block.kind() == Block.Kind.TABLE) {
-            for (var row :
-                    TextLayout.wrap(theme(block.format().titleSpans(), palette), width, false)) {
+            for (var row : TextLayout.wrap(theme(block.format().titleSpans(), palette), width, false)) {
                 if (!row.isEmpty()) {
                     lines.add(new RenderedLine(row, position, null));
                 }
             }
-            for (var row :
-                    TableLayout.render(block, width, palette, options, s -> theme(s, palette))) {
+            for (var row : TableLayout.render(block, width, palette, options, s -> theme(s, palette))) {
                 lines.add(new RenderedLine(row, position, null));
             }
             lines.add(new RenderedLine(List.of(), position, null));
             return lines;
         }
         boolean source = block.kind() == Block.Kind.CODE || block.kind() == Block.Kind.DIAGRAM;
-        boolean frontMatter =
-                block.kind() == Block.Kind.CODE && block.format().variant().equals("front-matter");
+        boolean frontMatter = block.kind() == Block.Kind.CODE && block.format().variant().equals("front-matter");
         boolean quote = block.kind() == Block.Kind.QUOTE || block.kind() == Block.Kind.VERSE;
-        boolean box =
-                switch (block.kind()) {
-                    case CODE -> !frontMatter;
-                    case EXAMPLE, SIDEBAR, ADMONITION, DETAILS -> true;
-                    default -> false;
-                };
+        boolean box = switch (block.kind()) {
+            case CODE -> !frontMatter;
+            case EXAMPLE, SIDEBAR, ADMONITION, DETAILS -> true;
+            default -> false;
+        };
         if (width < 5) {
             box = false;
         }
@@ -275,25 +253,23 @@ public final class Layout {
         int inner = Math.max(1, width - inset);
         if (block.kind() == Block.Kind.DETAILS) {
             boolean open = !interactive || block.format().open() != toggled.contains(position);
-            String marker =
-                    options.ascii()
-                            ? (open ? "[-] " : "[+] ")
-                            : options.icons().equals("nerd")
-                                    ? (open ? "\uf0d7 " : "\uf0da ")
-                                    : (open ? "▼ " : "▶ ");
+            String marker = options.ascii()
+                    ? (open ? "[-] " : "[+] ")
+                    : options.icons().equals("nerd") ? (open ? " " : " ") : (open ? "▼ " : "▶ ");
             var title = new ArrayList<Span>();
             title.add(new Span(marker));
             title.addAll(
-                    block.format().titleSpans().isEmpty()
-                            ? List.of(new Span("Details"))
-                            : block.format().titleSpans());
+                    block.format().titleSpans().isEmpty() ? List.of(new Span("Details")) : block.format().titleSpans()
+            );
             for (var row :
                     TextLayout.wrap(
-                            theme(title, palette).stream()
-                                    .map(span -> new Span(span.text(), span.style().bolded()))
-                                    .toList(),
+                            theme(title, palette)
+                                .stream()
+                                .map(span -> new Span(span.text(), span.style().bolded()))
+                                .toList(),
                             width,
-                            false)) {
+                            false
+            )) {
                 lines.add(new RenderedLine(row, position, null, position));
             }
             if (!open) {
@@ -301,23 +277,18 @@ public final class Layout {
                 return lines;
             }
         }
-        List<Span> spans =
-                source ? source(block, palette, appearance) : theme(block.spans(), palette);
+        List<Span> spans = source ? source(block, palette, appearance) : theme(block.spans(), palette);
         if (block.kind() == Block.Kind.HEADING) {
-            spans =
-                    spans.stream()
-                            .map(s ->
-                                    new Span(
-                                            s.text(),
-                                            s.style().bolded().colours(palette.accent(), "")))
-                            .toList();
+            spans = spans
+                .stream()
+                .map(s -> new Span(s.text(), s.style().bolded().colours(palette.accent(), "")))
+                .toList();
         }
         if (block.kind() == Block.Kind.IMAGE) {
             spans = List.of(new Span("[image: " + block.text() + "] " + block.target()));
         }
         if (!spans.isEmpty()) {
-            for (var row :
-                    TextLayout.wrap(spans, inner, source || block.kind() == Block.Kind.VERSE)) {
+            for (var row : TextLayout.wrap(spans, inner, source || block.kind() == Block.Kind.VERSE)) {
                 lines.add(new RenderedLine(row, position, null));
             }
         }
@@ -327,12 +298,11 @@ public final class Layout {
         if (frontMatter) {
             lines.add(
                     new RenderedLine(
-                            List.of(
-                                    new Span(
-                                            (options.ascii() ? "-" : "─").repeat(width),
-                                            palette.borderStyle())),
+                            List.of(new Span((options.ascii() ? "-" : "─").repeat(width), palette.borderStyle())),
                             position,
-                            null));
+                            null
+                    )
+            );
         }
         if (block.kind() == Block.Kind.IMAGE || block.kind() == Block.Kind.DIAGRAM) {
             if (lines.isEmpty()) {
@@ -346,50 +316,42 @@ public final class Layout {
                 lines.removeLast();
             }
             boolean admonition = block.kind() == Block.Kind.ADMONITION;
-            String title =
-                    admonition
-                            ? icon(block.format().variant())
-                                    + " "
-                                    + block.format().variant().toUpperCase(Locale.ROOT)
-                            : block.kind() == Block.Kind.DETAILS ? "" : block.format().title();
-            String accent =
-                    admonition ? palette.admonition(block.format().variant()) : palette.border();
+            String title = admonition
+                    ? icon(block.format().variant()) + " " + block.format().variant().toUpperCase(Locale.ROOT)
+                    : block.kind() == Block.Kind.DETAILS ? "" : block.format().title();
+            String accent = admonition ? palette.admonition(block.format().variant()) : palette.border();
             Style border = Style.PLAIN.colours(accent, palette.surface());
             var framed = new ArrayList<RenderedLine>();
-            framed.addAll(lines.stream().filter(line -> line.disclosure() == position).toList());
-            boolean inlineCaption =
-                    (block.kind() == Block.Kind.CODE || admonition)
-                            && !title.isEmpty()
-                            && inner >= 4;
+            framed.addAll(lines
+                .stream()
+                .filter(line -> line.disclosure() == position)
+                .toList());
+            boolean inlineCaption = (block.kind() == Block.Kind.CODE || admonition)
+                    && !title.isEmpty()
+                    && inner >= 4;
             if (!title.isEmpty()) {
-                List<Span> caption =
-                        admonition
-                                ? List.of(
-                                        new Span(
-                                                title,
-                                                palette.admonitionTitleStyle(
-                                                        block.format().variant())))
-                                : theme(block.format().titleSpans(), palette);
-                caption =
-                        caption.stream()
-                                .map(span ->
-                                        new Span(
-                                                span.text(),
-                                                block.kind() == Block.Kind.CODE
-                                                        ? span.style().italicised()
-                                                        : span.style().bolded()))
-                                .toList();
+                List<Span> caption = admonition
+                        ? List.of(new Span(title, palette.admonitionTitleStyle(block.format().variant())))
+                        : theme(block.format().titleSpans(), palette);
+                caption = caption
+                    .stream()
+                    .map(span -> new Span(
+                            span.text(),
+                            block.kind() == Block.Kind.CODE ? span.style().italicised() : span.style().bolded()
+                    ))
+                    .toList();
                 if (inlineCaption) {
                     var captionRows = TextLayout.wrap(caption, inner - 2, false);
                     for (int i = 0; i < captionRows.size(); i++) {
                         var row = new ArrayList<Span>();
                         row.add(
                                 new Span(
-                                        (i == 0
-                                                        ? (options.ascii() ? "+--" : "┌──")
-                                                        : (options.ascii() ? "|  " : "│  "))
-                                                + (admonition ? "" : " "),
-                                        border));
+                                        (i == 0 ? (options.ascii() ? "+--" : "┌──") : (options.ascii() ? "|  " : "│  ")) + (admonition
+                                        ? ""
+                                        : " "),
+                                        border
+                                )
+                        );
                         if (admonition) {
                             row.add(new Span(" ", caption.getFirst().style()));
                         }
@@ -397,14 +359,18 @@ public final class Layout {
                             row.add(
                                     new Span(
                                             span.text(),
-                                            span.style()
-                                                    .colours(
-                                                            span.style().foreground().isEmpty()
-                                                                    ? border.foreground()
-                                                                    : span.style().foreground(),
-                                                            span.style().background().isEmpty()
-                                                                    ? border.background()
-                                                                    : span.style().background())));
+                                            span
+                                                .style()
+                                                .colours(
+                                                        span.style().foreground().isEmpty() ? border.foreground() : span
+                                                            .style()
+                                                            .foreground(),
+                                                        span.style().background().isEmpty() ? border.background() : span
+                                                            .style()
+                                                            .background()
+                                                )
+                                    )
+                            );
                         }
                         if (admonition) {
                             row.add(new Span(" ", caption.getFirst().style()));
@@ -413,12 +379,11 @@ public final class Layout {
                         row.add(
                                 new Span(
                                         (admonition ? "" : " ")
-                                                + (i == 0 ? (options.ascii() ? "-" : "─") : " ")
-                                                        .repeat(Math.max(0, padding))
-                                                + (i == 0
-                                                        ? (options.ascii() ? "+" : "┐")
-                                                        : (options.ascii() ? "|" : "│")),
-                                        border));
+                                        + (i == 0 ? (options.ascii() ? "-" : "─") : " ").repeat(Math.max(0, padding))
+                                        + (i == 0 ? (options.ascii() ? "+" : "┐") : (options.ascii() ? "|" : "│")),
+                                        border
+                                )
+                        );
                         framed.add(new RenderedLine(row, position, null));
                     }
                 } else {
@@ -432,13 +397,15 @@ public final class Layout {
                         new RenderedLine(
                                 List.of(
                                         new Span(
-                                                (options.ascii() ? "+" : "┌")
-                                                        + (options.ascii() ? "-" : "─")
-                                                                .repeat(inner + 2)
-                                                        + (options.ascii() ? "+" : "┐"),
-                                                border)),
+                                                (options.ascii() ? "+" : "┌") + (options.ascii() ? "-" : "─")
+                                                    .repeat(inner + 2) + (options.ascii() ? "+" : "┐"),
+                                                border
+                                        )
+                                ),
                                 position,
-                                null));
+                                null
+                        )
+                );
             }
             for (RenderedLine line : lines) {
                 if (line.disclosure() == position) {
@@ -452,45 +419,42 @@ public final class Layout {
                             new Span(
                                     span.text(),
                                     style.colours(
-                                            style.foreground().isEmpty()
-                                                    ? palette.foreground()
-                                                    : style.foreground(),
-                                            style.background().isEmpty()
-                                                    ? palette.surface()
-                                                    : style.background())));
+                                            style.foreground().isEmpty() ? palette.foreground() : style.foreground(),
+                                            style.background().isEmpty() ? palette.surface() : style.background()
+                                    )
+                            )
+                    );
                 }
                 row.add(
                         new Span(
-                                " ".repeat(Math.max(0, inner - TextLayout.width(line.spans())))
-                                        + " ",
-                                palette.surfaceStyle()));
+                                " ".repeat(Math.max(0, inner - TextLayout.width(line.spans()))) + " ",
+                                palette.surfaceStyle()
+                        )
+                );
                 row.add(new Span(options.ascii() ? "|" : "│", border));
-                framed.add(
-                        new RenderedLine(row, line.blockIndex(), line.asset(), line.disclosure()));
+                framed.add(new RenderedLine(row, line.blockIndex(), line.asset(), line.disclosure()));
             }
             framed.add(
                     new RenderedLine(
                             List.of(
                                     new Span(
-                                            (options.ascii() ? "+" : "└")
-                                                    + (options.ascii() ? "-" : "─")
-                                                            .repeat(inner + 2)
-                                                    + (options.ascii() ? "+" : "┘"),
-                                            border)),
+                                            (options.ascii() ? "+" : "└") + (options.ascii() ? "-" : "─")
+                                                .repeat(inner + 2) + (options.ascii() ? "+" : "┘"),
+                                            border
+                                    )
+                            ),
                             position,
-                            null));
+                            null
+                    )
+            );
             lines = framed;
         } else if (quote || block.kind() == Block.Kind.ITEM) {
             var indented = new ArrayList<RenderedLine>();
             for (RenderedLine line : lines) {
                 var row = new ArrayList<Span>();
-                row.add(
-                        new Span(
-                                quote ? (options.ascii() ? "| " : "│ ") : "  ",
-                                palette.borderStyle()));
+                row.add(new Span(quote ? (options.ascii() ? "| " : "│ ") : "  ", palette.borderStyle()));
                 row.addAll(line.spans());
-                indented.add(
-                        new RenderedLine(row, line.blockIndex(), line.asset(), line.disclosure()));
+                indented.add(new RenderedLine(row, line.blockIndex(), line.asset(), line.disclosure()));
             }
             lines = indented;
         }
@@ -506,11 +470,11 @@ public final class Layout {
         }
         if (options.icons().equals("nerd")) {
             return switch (kind) {
-                case "tip" -> "\uf400";
-                case "warning" -> "\uf421";
+                case "tip" -> "";
+                case "warning" -> "";
                 case "caution" -> Character.toString(0xf0238);
-                case "important" -> "\uf50a";
-                default -> "\uf129";
+                case "important" -> "";
+                default -> "";
             };
         }
         return switch (kind) {

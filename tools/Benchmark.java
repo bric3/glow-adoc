@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
 //JAVA 27
-
 package io.github.bric3.glowadoc.tools;
 
 import java.nio.charset.StandardCharsets;
@@ -15,21 +14,19 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-/** Fresh-process timings; --pty measures the first complete pager frame. */
+/**
+ * Fresh-process timings; --pty measures the first complete pager frame.
+ */
 public class Benchmark {
-    private static final Pattern TIMING_STAGE =
-            Pattern.compile(
-                    "(?m)^glow-adoc (?:(?:launcher|benchmark): ([a-z-]+)|timing ([a-z-]+): [0-9.]+"
-                            + " ms)\\r"
-                            + "?\\n");
+    private static final Pattern TIMING_STAGE = Pattern.compile(
+            "(?m)^glow-adoc (?:(?:launcher|benchmark): ([a-z-]+)|timing ([a-z-]+): [0-9.]+" + " ms)\\r" + "?\\n"
+    );
 
     public static void main(String[] args) throws Exception {
-        assert timingStages("glow-adoc launcher: entered\r\nglow-adoc launcher: runtime-")
-                .equals(List.of("entered"));
+        assert timingStages("glow-adoc launcher: entered\r\nglow-adoc launcher: runtime-").equals(List.of("entered"));
         assert timingStages("glow-adoc timing conversion-cache-hit: 42.0 ms\n")
-                .equals(List.of("app-conversion-cache-hit"));
-        assert timingStages("glow-adoc benchmark: command-start\n")
-                .equals(List.of("command-start"));
+            .equals(List.of("app-conversion-cache-hit"));
+        assert timingStages("glow-adoc benchmark: command-start\n").equals(List.of("command-start"));
         int runs = 10;
         boolean pty = false;
         boolean stages = false;
@@ -51,8 +48,8 @@ public class Benchmark {
                 emptyCache = true;
             } else {
                 throw new IllegalArgumentException(
-                        "Usage: Benchmark.java [--runs N] [--pty|--scroll|--stages] [--empty-cache]"
-                                + " -- COMMAND [ARGS]");
+                        "Usage: Benchmark.java [--runs N] [--pty|--scroll|--stages] [--empty-cache]" + " -- COMMAND [ARGS]"
+                );
             }
         }
         if (runs < 1 || start + 1 >= args.length) {
@@ -60,42 +57,24 @@ public class Benchmark {
         }
         List<String> command = Arrays.asList(args).subList(start + 1, args.length);
         if (stages && !command.contains("--timings")) {
-            throw new IllegalArgumentException(
-                    "--stages requires --timings in the application command");
+            throw new IllegalArgumentException("--stages requires --timings in the application command");
         }
         var times = new ArrayList<Double>();
         var commandTimes = new ArrayList<Double>();
         System.out.println("run,milliseconds");
         for (int run = 0; run < runs; run++) {
             Path transcript = Files.createTempFile("glow-benchmark-", ".log");
-            String invocation =
-                    "stty cols 80 rows 24 && "
-                            + (stages
-                                    ? "printf 'glow-adoc benchmark: command-start\\n' >&2 && "
-                                    : "")
-                            + "exec "
-                            + command.stream()
-                                    .map(Benchmark::quote)
-                                    .collect(Collectors.joining(" "));
-            var builder =
-                    new ProcessBuilder(
-                            pty
-                                    ? System.getProperty("os.name").startsWith("Mac")
-                                            ? List.of(
-                                                    "/usr/bin/script",
-                                                    "-q",
-                                                    "/dev/null",
-                                                    "/bin/sh",
-                                                    "-c",
-                                                    invocation)
-                                            : List.of(
-                                                    "/usr/bin/script",
-                                                    "-q",
-                                                    "-e",
-                                                    "-c",
-                                                    invocation,
-                                                    "/dev/null")
-                                    : command);
+            String invocation = "stty cols 80 rows 24 && "
+                    + (stages ? "printf 'glow-adoc benchmark: command-start\\n' >&2 && " : "")
+                    + "exec "
+                    + command.stream().map(Benchmark::quote).collect(Collectors.joining(" "));
+            var builder = new ProcessBuilder(
+                    pty
+                    ? System.getProperty("os.name").startsWith("Mac")
+                    ? List.of("/usr/bin/script", "-q", "/dev/null", "/bin/sh", "-c", invocation)
+                    : List.of("/usr/bin/script", "-q", "-e", "-c", invocation, "/dev/null")
+                    : command
+            );
             if (pty) {
                 builder.redirectOutput(transcript.toFile());
             } else {
@@ -132,22 +111,20 @@ public class Benchmark {
                                         run + 1,
                                         reported + 1,
                                         observed.get(reported),
-                                        (System.nanoTime() - begin) / 1_000_000.0);
+                                        (System.nanoTime() - begin) / 1_000_000.0
+                                );
                             }
                         }
                         if (output.contains("q quit")) {
                             break;
                         }
-                        if (!process.isAlive()
-                                || System.nanoTime() - begin > TimeUnit.SECONDS.toNanos(60)) {
-                            throw new IllegalStateException(
-                                    "No first frame; exit/alive=" + process.isAlive());
+                        if (!process.isAlive() || System.nanoTime() - begin > TimeUnit.SECONDS.toNanos(60)) {
+                            throw new IllegalStateException("No first frame; exit/alive=" + process.isAlive());
                         }
                         Thread.sleep(5);
                     }
                 } else if (!process.waitFor(60, TimeUnit.SECONDS) || process.exitValue() != 0) {
-                    throw new IllegalStateException(
-                            "Command failed: " + Files.readString(transcript));
+                    throw new IllegalStateException("Command failed: " + Files.readString(transcript));
                 }
                 long end = System.nanoTime();
                 double elapsed = (end - begin) / 1_000_000.0;
@@ -193,28 +170,25 @@ public class Benchmark {
                 Locale.ROOT,
                 prefix + "median,%.1f%n" + prefix + "p95,%.1f%n",
                 (times.get((times.size() - 1) / 2) + times.get(times.size() / 2)) / 2,
-                times.get(Math.min(times.size() - 1, (int) Math.ceil(times.size() * .95) - 1)));
+                times.get(Math.min(times.size() - 1, (int) Math.ceil(times.size() * .95) - 1))
+        );
     }
 
     private static List<String> timingStages(String output) {
         return TIMING_STAGE
-                .matcher(output)
-                .results()
-                .map(match -> match.group(1) == null ? "app-" + match.group(2) : match.group(1))
-                .toList();
+            .matcher(output)
+            .results()
+            .map(match -> match.group(1) == null ? "app-" + match.group(2) : match.group(1))
+            .toList();
     }
 
-    private static void measureScrolling(Process process, Path transcript, int run)
-            throws Exception {
-        process.getOutputStream()
-                .write("\u001b_Gi=2147483000;OK\u001b\\".getBytes(StandardCharsets.UTF_8));
+    private static void measureScrolling(Process process, Path transcript, int run) throws Exception {
+        process.getOutputStream().write("_Gi=2147483000;OK\\".getBytes(StandardCharsets.UTF_8));
         process.getOutputStream().flush();
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
-        while (!Files.readString(transcript).contains("a=p,i=")
-                && !Files.readString(transcript).contains("a=T,t=d")) {
+        while (!Files.readString(transcript).contains("a=p,i=") && !Files.readString(transcript).contains("a=T,t=d")) {
             if (!process.isAlive() || System.nanoTime() > deadline) {
-                throw new IllegalStateException(
-                        "No visible image; --scroll requires an image in the initial viewport");
+                throw new IllegalStateException("No visible image; --scroll requires an image in the initial viewport");
             }
             Thread.sleep(5);
         }
@@ -227,9 +201,8 @@ public class Benchmark {
             long begin = System.nanoTime();
             process.getOutputStream().write('j');
             process.getOutputStream().flush();
-            while (!Files.readString(transcript).substring(offset).contains("\u001b[?2026l")) {
-                if (!process.isAlive()
-                        || System.nanoTime() - begin > TimeUnit.SECONDS.toNanos(10)) {
+            while (!Files.readString(transcript).substring(offset).contains("[?2026l")) {
+                if (!process.isAlive() || System.nanoTime() - begin > TimeUnit.SECONDS.toNanos(10)) {
                     throw new IllegalStateException("Scroll frame timed out");
                 }
                 Thread.sleep(2);
@@ -248,7 +221,8 @@ public class Benchmark {
                 run,
                 Files.size(transcript) - bytes,
                 run,
-                uploads);
+                uploads
+        );
     }
 
     private static String quote(String value) {

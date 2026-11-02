@@ -1,18 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.launcher;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.tabletest.junit.TableTest;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -31,7 +27,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 class JavaLauncherTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
     private Path home;
     private Path bin;
     private Path launcher;
@@ -47,8 +44,7 @@ class JavaLauncherTest {
         launcher = directory.resolve("reader with spaces.jar");
         Files.copy(Path.of(System.getProperty("launcher.executable")), launcher);
         assertTrue(launcher.toFile().setExecutable(true));
-        for (String utility :
-                List.of("uname", "mkdir", "mktemp", "rm", "mv", "shasum", "sha256sum")) {
+        for (String utility : List.of("uname", "mkdir", "mktemp", "rm", "mv", "shasum", "sha256sum")) {
             Path source = Path.of("/usr/bin", utility);
             if (!Files.exists(source)) {
                 source = Path.of("/bin", utility);
@@ -76,10 +72,13 @@ class JavaLauncherTest {
         assertFalse(Files.readString(directory.resolve("manager-calls")).contains("where"));
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"mise", "asdf", "jenv"})
-    void delegatesToTheSelectedManagerAndPreservesArgumentsAndFailure(String name)
-            throws Exception {
+    @TableTest("""
+        name
+        mise
+        asdf
+        jenv
+        """)
+    void delegatesToTheSelectedManagerAndPreservesArgumentsAndFailure(String name) throws Exception {
         manager(name, javaHome(name + " selected", name), "");
         environment.put("JAVA_OPTS", "-Xmx64m -Dexample=value");
         environment.put("FAKE_JAVA_EXIT", "23");
@@ -93,8 +92,10 @@ class JavaLauncherTest {
                         "-jar",
                         launcher.toString(),
                         "a file with spaces.adoc",
-                        "$(touch should-not-exist)"),
-                arguments());
+                        "$(touch should-not-exist)"
+                ),
+                arguments()
+        );
         assertFalse(Files.exists(directory.resolve("should-not-exist")));
         String calls = Files.readString(directory.resolve("manager-calls"));
         assertTrue(calls.startsWith(name + "\nexec\n"), calls);
@@ -134,9 +135,8 @@ class JavaLauncherTest {
         Path selected = javaHome("jabba selected", "jabba");
         script(
                 bin.resolve("jabba"),
-                "[ \"$1:$2\" = which:--home ] || exit 91\nprintf '%s\\n' "
-                        + quote(selected.toString())
-                        + "\n");
+                "[ \"$1:$2\" = which:--home ] || exit 91\nprintf '%s\\n' " + quote(selected.toString()) + "\n"
+        );
         assertEquals(0, run());
         assertEquals("jabba", arguments().getFirst());
     }
@@ -180,12 +180,9 @@ class JavaLauncherTest {
         }
         assertTrue(
                 arguments().contains("-Dglowadoc.launcher.artifact=" + launcher.toRealPath()),
-                arguments().toString());
-        assertTrue(
-                arguments()
-                        .contains(
-                                "-Dglowadoc.launcher.sha256="
-                                        + HexFormat.of().formatHex(digest.digest())));
+                arguments().toString()
+        );
+        assertTrue(arguments().contains("-Dglowadoc.launcher.sha256=" + HexFormat.of().formatHex(digest.digest())));
         String output = Files.readString(directory.resolve("output.txt"));
         int previous = -1;
         for (String stage :
@@ -195,14 +192,14 @@ class JavaLauncherTest {
                         "artifact-hash-ready",
                         "cache-key-ready",
                         "cache-lookup-ready",
-                        "jvm-exec")) {
+                        "jvm-exec"
+        )) {
             int at = output.indexOf("glow-adoc launcher: " + stage);
             assertTrue(at > previous, stage + ": " + output);
             previous = at;
         }
         assertEquals(0, run("document.adoc"));
-        assertFalse(
-                Files.readString(directory.resolve("output.txt")).contains("glow-adoc launcher:"));
+        assertFalse(Files.readString(directory.resolve("output.txt")).contains("glow-adoc launcher:"));
     }
 
     @Test
@@ -213,8 +210,9 @@ class JavaLauncherTest {
         Files.deleteIfExists(bin.resolve("sha256sum"));
         script(bin.resolve("sha256sum"), "exit 1\n");
         assertEquals(0, run("document.adoc"));
-        assertFalse(
-                arguments().stream().anyMatch(value -> value.startsWith("-Dglowadoc.launcher.")));
+        assertFalse(arguments()
+            .stream()
+            .anyMatch(value -> value.startsWith("-Dglowadoc.launcher.")));
         assertEquals(2, run("--train-aot", "document.adoc"));
     }
 
@@ -248,10 +246,7 @@ class JavaLauncherTest {
         assertEquals(0, run("--train-aot", "document.adoc"));
         assertEquals(0, run("document.adoc"));
         assertTrue(arguments().contains("-XX:AOTMode=auto"));
-        Files.writeString(
-                selected.resolve("release"),
-                "IMPLEMENTOR=\"Another vendor\"\n",
-                StandardOpenOption.APPEND);
+        Files.writeString(selected.resolve("release"), "IMPLEMENTOR=\"Another vendor\"\n", StandardOpenOption.APPEND);
         assertEquals(0, run("document.adoc"));
         assertFalse(arguments().contains("-XX:AOTMode=auto"));
     }
@@ -291,9 +286,7 @@ class JavaLauncherTest {
         usePathJava("selected");
         environment.put("XDG_CACHE_HOME", directory.resolve("relocation-aot").toString());
         assertEquals(0, run("--train-aot"));
-        Path relocated =
-                Files.createDirectories(directory.resolve("installed bin"))
-                        .resolve(launcher.getFileName());
+        Path relocated = Files.createDirectories(directory.resolve("installed bin")).resolve(launcher.getFileName());
         Files.copy(launcher, relocated, StandardCopyOption.COPY_ATTRIBUTES);
         launcher = relocated;
         assertEquals(0, run("other.adoc"));
@@ -305,8 +298,12 @@ class JavaLauncherTest {
         assertFalse(arguments().contains("-XX:AOTMode=auto"));
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"mise", "asdf", "jenv"})
+    @TableTest("""
+        name
+        mise
+        asdf
+        jenv
+        """)
     void aotUsesTheManagersRuntimeAndJvmEnvironment(String name) throws Exception {
         Path selected = javaHome(name + " selected", name);
         manager(name, selected, "export JAVA_TOOL_OPTIONS='-Dmanager.setting=one'\n");
@@ -322,8 +319,13 @@ class JavaLauncherTest {
         assertFalse(arguments().contains("-XX:AOTMode=auto"));
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"JAVA_OPTS", "JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS"})
+    @TableTest("""
+        variable
+        JAVA_OPTS
+        JAVA_TOOL_OPTIONS
+        JDK_JAVA_OPTIONS
+        _JAVA_OPTIONS
+        """)
     void automaticJvmOptionsInvalidateAndBypassAotCaches(String variable) throws Exception {
         usePathJava("selected");
         environment.put("XDG_CACHE_HOME", directory.resolve("automatic-aot").toString());
@@ -336,8 +338,7 @@ class JavaLauncherTest {
         environment.put(variable, "-javaagent:example.jar");
         assertEquals(0, run("--timings", "document.adoc"));
         assertFalse(arguments().contains("-XX:AOTMode=auto"));
-        assertFalse(
-                Files.readString(directory.resolve("output.txt")).contains("artifact-hash-start"));
+        assertFalse(Files.readString(directory.resolve("output.txt")).contains("artifact-hash-start"));
     }
 
     @Test
@@ -345,28 +346,23 @@ class JavaLauncherTest {
         Path selected = usePathJava("selected");
         String realJava = quote(Path.of(System.getProperty("java.home"), "bin/java").toString());
         environment.put("XDG_CACHE_HOME", directory.resolve("aot cache").toString());
-        Path document =
-                Files.writeString(directory.resolve("document.adoc"), "= Hello\n\nAOT fallback\n");
+        Path document = Files.writeString(directory.resolve("document.adoc"), "= Hello\n\nAOT fallback\n");
         script(
                 selected.resolve("bin/java"),
                 "for option do\n"
-                        + "  case \"$option\" in -XX:AOTCacheOutput=*) printf corrupt >"
-                        + " \"${option#*=}\" ;; esac\n"
-                        + "done\n"
-                        + "exit 0\n");
+                + "  case \"$option\" in -XX:AOTCacheOutput=*) printf corrupt >"
+                + " \"${option#*=}\" ;; esac\n"
+                + "done\n"
+                + "exit 0\n"
+        );
         assertEquals(0, run("--train-aot", document.toString()));
         script(selected.resolve("bin/java"), "exec " + realJava + " \"$@\"\n");
         Path stdout = directory.resolve("stdout");
         Path stderr = directory.resolve("stderr");
-        var builder =
-                new ProcessBuilder(
-                                launcher.toString(),
-                                "--no-pager",
-                                "--color=never",
-                                document.toString())
-                        .directory(directory.toFile())
-                        .redirectOutput(stdout.toFile())
-                        .redirectError(stderr.toFile());
+        var builder = new ProcessBuilder(launcher.toString(), "--no-pager", "--color=never", document.toString())
+            .directory(directory.toFile())
+            .redirectOutput(stdout.toFile())
+            .redirectError(stderr.toFile());
         builder.environment().clear();
         builder.environment().putAll(environment);
         var process = builder.start();
@@ -384,11 +380,10 @@ class JavaLauncherTest {
         var command = new ArrayList<String>();
         command.add(launcher.toString());
         command.addAll(Arrays.asList(args));
-        var builder =
-                new ProcessBuilder(command)
-                        .directory(directory.toFile())
-                        .redirectErrorStream(true)
-                        .redirectOutput(directory.resolve("output.txt").toFile());
+        var builder = new ProcessBuilder(command)
+            .directory(directory.toFile())
+            .redirectErrorStream(true)
+            .redirectOutput(directory.resolve("output.txt").toFile());
         builder.environment().clear();
         builder.environment().putAll(environment);
         var process = builder.start();
@@ -418,8 +413,7 @@ class JavaLauncherTest {
 
     private void javaHomeAt(Path path, String label) throws IOException {
         javaAt(path.resolve("bin/java"), label);
-        Files.writeString(
-                path.resolve("release"), "JAVA_VERSION=\"27\"\nIMPLEMENTOR=\"Example\"\n");
+        Files.writeString(path.resolve("release"), "JAVA_VERSION=\"27\"\nIMPLEMENTOR=\"Example\"\n");
     }
 
     private void javaAt(Path path, String label) throws IOException {
@@ -435,7 +429,9 @@ class JavaLauncherTest {
                         "done",
                         "printf '%s\\n' " + quote(label) + " \"$@\" > \"$LAUNCHER_CAPTURE\"",
                         "exit \"$FAKE_JAVA_EXIT\"",
-                        ""));
+                        ""
+                )
+        );
     }
 
     private void manager(String name, Path selected, String setup) throws IOException {
@@ -443,12 +439,11 @@ class JavaLauncherTest {
                 bin.resolve(name),
                 String.join(
                         "\n",
-                        "printf '%s\\n' "
-                                + quote(name)
-                                + " \"$@\" >> "
-                                + quote(directory.resolve("manager-calls").toString()),
-                        "[ \"$MISE_OFFLINE:$MISE_AUTO_INSTALL:$MISE_EXEC_AUTO_INSTALL\" = 1:0:0 ]"
-                                + " || exit 90",
+                        "printf '%s\\n' " + quote(name) + " \"$@\" >> " + quote(directory
+                            .resolve("manager-calls")
+                            .toString()
+                        ),
+                        "[ \"$MISE_OFFLINE:$MISE_AUTO_INSTALL:$MISE_EXEC_AUTO_INSTALL\" = 1:0:0 ]" + " || exit 90",
                         "if [ \"$1\" = exec ]; then",
                         "  shift",
                         "  [ \"${1:-}\" != -- ] || shift",
@@ -462,7 +457,9 @@ class JavaLauncherTest {
                         "export PATH",
                         setup,
                         "exec \"$@\"",
-                        ""));
+                        ""
+                )
+        );
     }
 
     private static String quote(String value) {

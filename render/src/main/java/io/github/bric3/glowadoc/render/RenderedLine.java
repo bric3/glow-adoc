@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.render;
 
 import dev.tamboui.text.CharWidth;
-
 import io.github.bric3.glowadoc.document.Block;
 import io.github.bric3.glowadoc.document.Controls;
 import io.github.bric3.glowadoc.document.Span;
-
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;

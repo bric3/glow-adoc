@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.highlight.lumis;
 
 import io.github.bric3.glowadoc.cache.CacheFiles;
@@ -8,7 +7,6 @@ import io.github.bric3.glowadoc.document.Controls;
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
 import io.roastedroot.lumis4j.core.Lumis;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -21,7 +19,9 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/** Persisted terminal spans, validated against the source and bundled highlighter. */
+/**
+ * Persisted terminal spans, validated against the source and bundled highlighter.
+ */
 final class HighlightCache {
     private final CacheFiles files;
     private final String identity;
@@ -61,16 +61,16 @@ final class HighlightCache {
                 if ((flags & ~31) != 0) {
                     return null;
                 }
-                var style =
-                        new Style(
-                                (flags & 1) != 0,
-                                (flags & 2) != 0,
-                                (flags & 4) != 0,
-                                (flags & 8) != 0,
-                                in.readUTF(),
-                                in.readUTF(),
-                                in.readUTF(),
-                                (flags & 16) != 0);
+                var style = new Style(
+                        (flags & 1) != 0,
+                        (flags & 2) != 0,
+                        (flags & 4) != 0,
+                        (flags & 8) != 0,
+                        in.readUTF(),
+                        in.readUTF(),
+                        in.readUTF(),
+                        (flags & 16) != 0
+                );
                 if (!colour(style.foreground())
                         || !colour(style.background())
                         || (!style.link().isEmpty() && !Controls.safeLink(style.link()))) {
@@ -89,7 +89,8 @@ final class HighlightCache {
             return;
         }
         try (var bytes = new ByteArrayOutputStream();
-                var out = new DataOutputStream(bytes)) {
+                var out = new DataOutputStream(bytes)
+        ) {
             out.writeInt(spans.size());
             for (Span span : spans) {
                 byte[] text = span.text().getBytes(StandardCharsets.UTF_8);
@@ -98,10 +99,11 @@ final class HighlightCache {
                 Style style = span.style();
                 out.writeByte(
                         (style.bold() ? 1 : 0)
-                                | (style.italic() ? 2 : 0)
-                                | (style.code() ? 4 : 0)
-                                | (style.underline() ? 8 : 0)
-                                | (style.strike() ? 16 : 0));
+                        | (style.italic() ? 2 : 0)
+                        | (style.code() ? 4 : 0)
+                        | (style.underline() ? 8 : 0)
+                        | (style.strike() ? 16 : 0)
+                );
                 out.writeUTF(style.foreground());
                 out.writeUTF(style.background());
                 out.writeUTF(style.link());

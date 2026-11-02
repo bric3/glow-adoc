@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.diagrams;
 
 import io.github.bric3.glowadoc.document.Appearance;
 import io.github.bric3.glowadoc.document.Block;
 import io.github.bric3.glowadoc.document.Controls;
 import io.github.bric3.glowadoc.document.Document;
-
 import net.sourceforge.plantuml.FileFormat;
 import net.sourceforge.plantuml.FileFormatOption;
 import net.sourceforge.plantuml.SourceStringReader;
-
 import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -45,8 +42,7 @@ public final class DiagramRenderer implements AutoCloseable {
     private record Key(String language, String source, Appearance appearance) {}
 
     private final Map<Key, Future<Optional<Path>>> cache = new ConcurrentHashMap<>();
-    private final ExecutorService renders =
-            Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
+    private final ExecutorService renders = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
     private final Queue<String> diagnostics = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean dirty = new AtomicBoolean();
     private volatile boolean closed;
@@ -54,8 +50,7 @@ public final class DiagramRenderer implements AutoCloseable {
     private final Set<Process> processes = ConcurrentHashMap.newKeySet();
     private final java.util.function.Consumer<String> diagnostic;
 
-    public DiagramRenderer(String merman, java.util.function.Consumer<String> diagnostic)
-            throws IOException {
+    public DiagramRenderer(String merman, java.util.function.Consumer<String> diagnostic) throws IOException {
         this.merman = merman;
         this.diagnostic = diagnostic;
         directory = Files.createTempDirectory("glow-adoc-");
@@ -78,7 +73,9 @@ public final class DiagramRenderer implements AutoCloseable {
         }
     }
 
-    /** Enqueue a render without delaying the terminal frame. */
+    /**
+     * Enqueue a render without delaying the terminal frame.
+     */
     public Optional<Path> request(Block block, Appearance appearance) {
         if (!closed) {
             task(block, appearance, true);
@@ -86,7 +83,9 @@ public final class DiagramRenderer implements AutoCloseable {
         return cached(block, appearance);
     }
 
-    /** Keep the previous theme's image visible while its replacement is rendering. */
+    /**
+     * Keep the previous theme's image visible while its replacement is rendering.
+     */
     public Optional<Path> cached(Block block, Appearance appearance) {
         if (closed) {
             return Optional.empty();
@@ -94,14 +93,13 @@ public final class DiagramRenderer implements AutoCloseable {
         Key key = new Key(block.language(), block.text(), appearance);
         var future = cache.get(key);
         if (future == null || !future.isDone()) {
-            future =
-                    cache.get(
-                            new Key(
-                                    key.language(),
-                                    key.source(),
-                                    appearance == Appearance.DARK
-                                            ? Appearance.LIGHT
-                                            : Appearance.DARK));
+            future = cache.get(
+                    new Key(
+                            key.language(),
+                            key.source(),
+                            appearance == Appearance.DARK ? Appearance.LIGHT : Appearance.DARK
+                    )
+            );
         }
         if (future == null || !future.isDone()) {
             return Optional.empty();
@@ -134,25 +132,22 @@ public final class DiagramRenderer implements AutoCloseable {
             return CompletableFuture.completedFuture(Optional.empty());
         }
         Key key = new Key(block.language(), block.text(), appearance);
-        return cache.computeIfAbsent(
-                key,
-                ignored -> {
-                    var task =
-                            new FutureTask<Optional<Path>>(() -> renderNow(key, background)) {
-                                @Override
-                                protected void done() {
-                                    if (background && !closed) {
-                                        dirty.set(true);
-                                    }
-                                }
-                            };
-                    try {
-                        renders.execute(task);
-                    } catch (RejectedExecutionException e) {
-                        task.cancel(false);
+        return cache.computeIfAbsent(key, ignored -> {
+            var task = new FutureTask<Optional<Path>>(() -> renderNow(key, background)) {
+                @Override
+                protected void done() {
+                    if (background && !closed) {
+                        dirty.set(true);
                     }
-                    return task;
-                });
+                }
+            };
+            try {
+                renders.execute(task);
+            } catch (RejectedExecutionException e) {
+                task.cancel(false);
+            }
+            return task;
+        });
     }
 
     private Optional<Path> renderNow(Key key, boolean background) {
@@ -165,12 +160,10 @@ public final class DiagramRenderer implements AutoCloseable {
             }
             Path output = Files.createTempFile(directory, "diagram-", ".png");
             if (key.language().equals("plantuml")) {
-                var task =
-                        workers.submit(
-                                () -> {
-                                    plantuml(key.source(), output, key.appearance());
-                                    return output;
-                                });
+                var task = workers.submit(() -> {
+                    plantuml(key.source(), output, key.appearance());
+                    return output;
+                });
                 try {
                     task.get(15, TimeUnit.SECONDS);
                 } finally {
@@ -190,10 +183,7 @@ public final class DiagramRenderer implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
             String message =
-                    key.language()
-                            + ": "
-                            + Controls.visible(String.valueOf(e.getMessage()))
-                            + "; showing source";
+                    key.language() + ": " + Controls.visible(String.valueOf(e.getMessage())) + "; showing source";
             if (!closed) {
                 if (background) {
                     diagnostics.add(message);
@@ -205,8 +195,7 @@ public final class DiagramRenderer implements AutoCloseable {
         }
     }
 
-    private static void plantuml(String source, Path output, Appearance appearance)
-            throws IOException {
+    private static void plantuml(String source, Path output, Appearance appearance) throws IOException {
         if (source.matches("(?is).*![a-z]*(?:include|import|theme).*")) {
             throw new IOException("PlantUML includes, imports and themes are disabled");
         }
@@ -217,17 +206,14 @@ public final class DiagramRenderer implements AutoCloseable {
         if (newline < 0) {
             throw new IOException("PlantUML requires a multiline diagram");
         }
-        source =
-                source.substring(0, newline + 1)
-                        + "!pragma layout smetana\nskinparam backgroundColor "
-                        + (appearance == Appearance.DARK
-                                ? "#202020\nskinparam defaultFontColor #eeeeee\n"
-                                : "#ffffff\nskinparam defaultFontColor #202020\n")
-                        + source.substring(newline + 1);
+        source = source.substring(0, newline + 1)
+                + "!pragma layout smetana\nskinparam backgroundColor "
+                + (appearance == Appearance.DARK
+                ? "#202020\nskinparam defaultFontColor #eeeeee\n"
+                : "#ffffff\nskinparam defaultFontColor #202020\n")
+                + source.substring(newline + 1);
         try (var out = new LimitedOutput(Files.newOutputStream(output), 10_000_000)) {
-            var result =
-                    new SourceStringReader(source)
-                            .outputImage(out, new FileFormatOption(FileFormat.PNG));
+            var result = new SourceStringReader(source).outputImage(out, new FileFormatOption(FileFormat.PNG));
             if (result == null || result.getDescription().contains("Error")) {
                 throw new IOException("Invalid or unsupported PlantUML diagram");
             }
@@ -237,55 +223,49 @@ public final class DiagramRenderer implements AutoCloseable {
     private void mermaid(String source, Path output, Appearance appearance) throws Exception {
         Path input = Files.createTempFile(directory, "source-", ".mmd");
         Files.writeString(input, source);
-        var process =
-                new ProcessBuilder(
-                                merman,
-                                "render",
-                                input.toString(),
-                                "--format",
-                                "png",
-                                "--theme",
-                                appearance == Appearance.DARK ? "dark" : "default",
-                                "--resource-profile",
-                                "constrained",
-                                "--operation-timeout-ms",
-                                "14000",
-                                "--output",
-                                "-")
-                        .directory(directory.toFile())
-                        .start();
+        var process = new ProcessBuilder(
+                merman,
+                "render",
+                input.toString(),
+                "--format",
+                "png",
+                "--theme",
+                appearance == Appearance.DARK ? "dark" : "default",
+                "--resource-profile",
+                "constrained",
+                "--operation-timeout-ms",
+                "14000",
+                "--output",
+                "-"
+        )
+            .directory(directory.toFile())
+            .start();
         processes.add(process);
         if (closed) {
             process.destroyForcibly();
             processes.remove(process);
             throw new InterruptedException("Diagram renderer closed");
         }
-        var stdout =
-                workers.submit(
-                        () -> {
-                            try (var in = process.getInputStream();
-                                    var out =
-                                            new LimitedOutput(
-                                                    Files.newOutputStream(output), 10_000_000)) {
-                                in.transferTo(out);
-                            } catch (IOException e) {
-                                process.destroyForcibly();
-                                throw new UncheckedIOException(e);
-                            }
-                        });
-        var stderr =
-                workers.submit(
-                        () -> {
-                            try (var in = process.getErrorStream();
-                                    var out =
-                                            new LimitedOutput(
-                                                    OutputStream.nullOutputStream(), 64_000)) {
-                                in.transferTo(out);
-                            } catch (IOException e) {
-                                process.destroyForcibly();
-                                throw new UncheckedIOException(e);
-                            }
-                        });
+        var stdout = workers.submit(() -> {
+            try (var in = process.getInputStream();
+                    var out = new LimitedOutput(Files.newOutputStream(output), 10_000_000)
+            ) {
+                in.transferTo(out);
+            } catch (IOException e) {
+                process.destroyForcibly();
+                throw new UncheckedIOException(e);
+            }
+        });
+        var stderr = workers.submit(() -> {
+            try (var in = process.getErrorStream();
+                    var out = new LimitedOutput(OutputStream.nullOutputStream(), 64_000)
+            ) {
+                in.transferTo(out);
+            } catch (IOException e) {
+                process.destroyForcibly();
+                throw new UncheckedIOException(e);
+            }
+        });
         try {
             if (!process.waitFor(15, TimeUnit.SECONDS)) {
                 throw new IOException("Merman timed out");
@@ -325,11 +305,10 @@ public final class DiagramRenderer implements AutoCloseable {
         closed = true;
         renders.shutdownNow();
         cache.values().forEach(future -> future.cancel(true));
-        processes.forEach(
-                p -> {
-                    p.descendants().forEach(ProcessHandle::destroyForcibly);
-                    p.destroyForcibly();
-                });
+        processes.forEach(p -> {
+            p.descendants().forEach(ProcessHandle::destroyForcibly);
+            p.destroyForcibly();
+        });
         workers.shutdownNow();
         try {
             renders.awaitTermination(1, TimeUnit.SECONDS);

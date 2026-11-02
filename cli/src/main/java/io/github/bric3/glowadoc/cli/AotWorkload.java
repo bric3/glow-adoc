@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.cli;
 
 import java.io.IOException;
@@ -9,7 +8,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 
-/** Owns the temporary files needed for the bundled corpus's includes and images. */
+/**
+ * Owns the temporary files needed for the bundled corpus's includes and images.
+ */
 final class AotWorkload implements AutoCloseable {
     private static final String RESOURCES = "/META-INF/glow-adoc/aot/";
     private final Path directory;

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.asciidoctor;
 
 import io.github.bric3.glowadoc.document.Block;
@@ -7,7 +6,6 @@ import io.github.bric3.glowadoc.document.Controls;
 import io.github.bric3.glowadoc.document.Document;
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
-
 import org.asciidoctor.Asciidoctor;
 import org.asciidoctor.Attributes;
 import org.asciidoctor.Options;
@@ -18,7 +16,6 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
 import org.xml.sax.helpers.DefaultHandler;
-
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
@@ -27,7 +24,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-
 import javax.xml.parsers.DocumentBuilderFactory;
 
 public final class AsciiDocReader implements AutoCloseable {
@@ -57,60 +53,51 @@ public final class AsciiDocReader implements AutoCloseable {
         }
         engine = Asciidoctor.Factory.create();
         engine.javaConverterRegistry().register(TerminalConverter.class);
-        engine.javaExtensionRegistry()
-                .includeProcessor(
-                        new IncludeProcessor() {
-                            @Override
-                            public boolean handles(String target) {
-                                return true;
-                            }
+        engine.javaExtensionRegistry().includeProcessor(new IncludeProcessor() {
+            @Override
+            public boolean handles(String target) {
+                return true;
+            }
 
-                            @Override
-                            public void process(
-                                    org.asciidoctor.ast.Document document,
-                                    PreprocessorReader reader,
-                                    String target,
-                                    Map<String, Object> attributes) {
-                                includesUsed = true;
-                                try {
-                                    Path path =
-                                            Path.of(reader.getDir())
-                                                    .resolve(target)
-                                                    .normalize()
-                                                    .toRealPath();
-                                    if (!path.startsWith(includeRoot)) {
-                                        throw new IOException(
-                                                "Include is outside the document directory");
-                                    }
-                                    if (Files.size(path) > 4_000_000) {
-                                        throw new IOException("Include exceeds 4 MB");
-                                    }
-                                    if (attributes.containsKey("tag")
-                                            || attributes.containsKey("tags")
-                                            || attributes.containsKey("lines")) {
-                                        throw new IOException(
-                                                "Include selectors are not supported yet");
-                                    }
-                                    reader.pushInclude(
-                                            showShortcodes
-                                                    ? Files.readString(path)
-                                                    : Shortcodes.hide(Files.readString(path)),
-                                            path.toString(),
-                                            path.toString(),
-                                            1,
-                                            attributes);
-                                } catch (IOException | java.nio.file.InvalidPathException e) {
-                                    reader.pushInclude(
-                                            "[include unavailable: "
-                                                    + Controls.visible(target)
-                                                    + "]",
-                                            target,
-                                            target,
-                                            1,
-                                            Map.of());
-                                }
-                            }
-                        });
+            @Override
+            public void process(
+                    org.asciidoctor.ast.Document document,
+                    PreprocessorReader reader,
+                    String target,
+                    Map<String, Object> attributes
+            ) {
+                includesUsed = true;
+                try {
+                    Path path = Path.of(reader.getDir()).resolve(target).normalize().toRealPath();
+                    if (!path.startsWith(includeRoot)) {
+                        throw new IOException("Include is outside the document directory");
+                    }
+                    if (Files.size(path) > 4_000_000) {
+                        throw new IOException("Include exceeds 4 MB");
+                    }
+                    if (attributes.containsKey("tag")
+                            || attributes.containsKey("tags")
+                            || attributes.containsKey("lines")) {
+                        throw new IOException("Include selectors are not supported yet");
+                    }
+                    reader.pushInclude(
+                            showShortcodes ? Files.readString(path) : Shortcodes.hide(Files.readString(path)),
+                            path.toString(),
+                            path.toString(),
+                            1,
+                            attributes
+                    );
+                } catch (IOException | java.nio.file.InvalidPathException e) {
+                    reader.pushInclude(
+                            "[include unavailable: " + Controls.visible(target) + "]",
+                            target,
+                            target,
+                            1,
+                            Map.of()
+                    );
+                }
+            }
+        });
         milestone.accept("jruby-ready");
         return engine;
     }
@@ -123,22 +110,13 @@ public final class AsciiDocReader implements AutoCloseable {
         return read(source, baseDirectory, showShortcodes, Map.of());
     }
 
-    public Document read(
-            String source,
-            Path baseDirectory,
-            boolean showShortcodes,
-            Map<String, String> attributes) {
+    public Document read(String source, Path baseDirectory, boolean showShortcodes, Map<String, String> attributes) {
         try {
             this.showShortcodes = showShortcodes;
             includeRoot = baseDirectory.toRealPath();
             int frontMatterEnd = frontMatterEnd(source);
-            String frontMatter =
-                    Controls.visible(
-                            source.substring(source.startsWith("\ufeff") ? 1 : 0, frontMatterEnd));
-            String key =
-                    cache == null
-                            ? null
-                            : cache.key(source, includeRoot, showShortcodes, attributes);
+            String frontMatter = Controls.visible(source.substring(source.startsWith("﻿") ? 1 : 0, frontMatterEnd));
+            String key = cache == null ? null : cache.key(source, includeRoot, showShortcodes, attributes);
             String cached = cache == null ? null : cache.read(key);
             if (cached != null) {
                 try {
@@ -151,26 +129,27 @@ public final class AsciiDocReader implements AutoCloseable {
             }
             includesUsed = false;
             var conversionAttributes = Attributes.builder();
-            attributes.forEach(
-                    (name, value) -> conversionAttributes.attribute(name, Controls.visible(value)));
+            attributes.forEach((name, value) -> conversionAttributes.attribute(name, Controls.visible(value)));
             conversionAttributes
-                    .attribute("allow-uri-read", false)
-                    // The terminal highlighter owns source styling.
-                    .attribute("source-highlighter", "none");
-            String xml =
-                    engine().convert(
-                                    Controls.visible(
-                                            showShortcodes
-                                                    ? source.substring(frontMatterEnd)
-                                                    : Shortcodes.hide(
-                                                            source.substring(frontMatterEnd))),
-                                    Options.builder()
-                                            .backend("glow-terminal")
-                                            .safe(SafeMode.SAFE)
-                                            .baseDir(baseDirectory.toFile())
-                                            .toFile(false)
-                                            .attributes(conversionAttributes.build())
-                                            .build());
+                .attribute("allow-uri-read", false)
+                // The terminal highlighter owns source styling.
+                .attribute("source-highlighter", "none");
+            String xml = engine()
+                .convert(
+                        Controls.visible(
+                                showShortcodes ? source.substring(frontMatterEnd) : Shortcodes.hide(source.substring(
+                                        frontMatterEnd
+                                ))
+                        ),
+                        Options
+                            .builder()
+                            .backend("glow-terminal")
+                            .safe(SafeMode.SAFE)
+                            .baseDir(baseDirectory.toFile())
+                            .toFile(false)
+                            .attributes(conversionAttributes.build())
+                            .build()
+                );
             xml = HtmlContent.normalise(xml);
             Document document = parse(xml, baseDirectory, frontMatter);
             // Includes can change independently of the top-level source and attributes.
@@ -184,7 +163,7 @@ public final class AsciiDocReader implements AutoCloseable {
     }
 
     private static int frontMatterEnd(String source) {
-        int start = source.startsWith("\ufeff") ? 1 : 0;
+        int start = source.startsWith("﻿") ? 1 : 0;
         int end = source.indexOf('\n', start);
         if (end < 0 || !source.substring(start, end).stripTrailing().equals("---")) {
             return start;
@@ -201,11 +180,10 @@ public final class AsciiDocReader implements AutoCloseable {
             }
             start = end + 1;
         }
-        return source.startsWith("\ufeff") ? 1 : 0;
+        return source.startsWith("﻿") ? 1 : 0;
     }
 
-    private static Document parse(String xml, Path baseDirectory, String frontMatter)
-            throws Exception {
+    private static Document parse(String xml, Path baseDirectory, String frontMatter) throws Exception {
         var factory = DocumentBuilderFactory.newInstance();
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
@@ -223,7 +201,9 @@ public final class AsciiDocReader implements AutoCloseable {
                             List.of(),
                             "yaml",
                             "",
-                            new Block.Format("", "front-matter", "left", 1, 1, 0, false)));
+                            new Block.Format("", "front-matter", "left", 1, 1, 0, false)
+                    )
+            );
         }
         return new Document(blocks, baseDirectory);
     }
@@ -231,9 +211,7 @@ public final class AsciiDocReader implements AutoCloseable {
     private static List<Block> blocks(Element parent) {
         var blocks = new ArrayList<Block>();
         for (Node node = parent.getFirstChild(); node != null; node = node.getNextSibling()) {
-            if (node instanceof Element element
-                    && !inline(element)
-                    && !element.getTagName().equals("title")) {
+            if (node instanceof Element element && !inline(element) && !element.getTagName().equals("title")) {
                 blocks.add(block(element));
             }
         }
@@ -241,26 +219,25 @@ public final class AsciiDocReader implements AutoCloseable {
     }
 
     private static Block block(Element element) {
-        Block.Kind kind =
-                switch (element.getTagName()) {
-                    case "heading" -> Block.Kind.HEADING;
-                    case "source" -> Block.Kind.CODE;
-                    case "list" -> Block.Kind.LIST;
-                    case "item" -> Block.Kind.ITEM;
-                    case "table" -> Block.Kind.TABLE;
-                    case "row" -> Block.Kind.ROW;
-                    case "cell" -> Block.Kind.CELL;
-                    case "quote" -> Block.Kind.QUOTE;
-                    case "verse" -> Block.Kind.VERSE;
-                    case "example" -> Block.Kind.EXAMPLE;
-                    case "sidebar" -> Block.Kind.SIDEBAR;
-                    case "open" -> Block.Kind.OPEN;
-                    case "details" -> Block.Kind.DETAILS;
-                    case "admonition" -> Block.Kind.ADMONITION;
-                    case "image" -> Block.Kind.IMAGE;
-                    case "diagram" -> Block.Kind.DIAGRAM;
-                    default -> Block.Kind.PARAGRAPH;
-                };
+        Block.Kind kind = switch (element.getTagName()) {
+            case "heading" -> Block.Kind.HEADING;
+            case "source" -> Block.Kind.CODE;
+            case "list" -> Block.Kind.LIST;
+            case "item" -> Block.Kind.ITEM;
+            case "table" -> Block.Kind.TABLE;
+            case "row" -> Block.Kind.ROW;
+            case "cell" -> Block.Kind.CELL;
+            case "quote" -> Block.Kind.QUOTE;
+            case "verse" -> Block.Kind.VERSE;
+            case "example" -> Block.Kind.EXAMPLE;
+            case "sidebar" -> Block.Kind.SIDEBAR;
+            case "open" -> Block.Kind.OPEN;
+            case "details" -> Block.Kind.DETAILS;
+            case "admonition" -> Block.Kind.ADMONITION;
+            case "image" -> Block.Kind.IMAGE;
+            case "diagram" -> Block.Kind.DIAGRAM;
+            default -> Block.Kind.PARAGRAPH;
+        };
         var spans = new ArrayList<Span>();
         inlines(element, Style.PLAIN, spans);
         var titleSpans = new ArrayList<Span>();
@@ -294,7 +271,9 @@ public final class AsciiDocReader implements AutoCloseable {
                         number(element, "weight", 0),
                         element.getAttribute("open").equals("true"),
                         attribute(element, "frame", "all"),
-                        attribute(element, "grid", "all")));
+                        attribute(element, "grid", "all")
+                )
+        );
     }
 
     private static String attribute(Element element, String name, String fallback) {
@@ -310,8 +289,9 @@ public final class AsciiDocReader implements AutoCloseable {
     }
 
     private static boolean inline(Element element) {
-        return List.of("strong", "em", "code", "link", "span", "strike", "callout", "br")
-                .contains(element.getTagName());
+        return List
+            .of("strong", "em", "code", "link", "span", "strike", "callout", "br")
+            .contains(element.getTagName());
     }
 
     private static void inlines(Element element, Style style, List<Span> spans) {
@@ -325,15 +305,14 @@ public final class AsciiDocReader implements AutoCloseable {
                     spans.add(Span.callout(child.getAttribute("number")));
                     continue;
                 }
-                Style next =
-                        switch (child.getTagName()) {
-                            case "strong" -> style.bolded();
-                            case "em" -> style.italicised();
-                            case "code" -> style.coded();
-                            case "strike" -> style.struck();
-                            case "link" -> style.linked(child.getAttribute("target"));
-                            default -> style;
-                        };
+                Style next = switch (child.getTagName()) {
+                    case "strong" -> style.bolded();
+                    case "em" -> style.italicised();
+                    case "code" -> style.coded();
+                    case "strike" -> style.struck();
+                    case "link" -> style.linked(child.getAttribute("target"));
+                    default -> style;
+                };
                 inlines(child, next, spans);
             } else if (node.getNodeType() == Node.TEXT_NODE) {
                 spans.add(new Span(Controls.visible(node.getTextContent()), style));

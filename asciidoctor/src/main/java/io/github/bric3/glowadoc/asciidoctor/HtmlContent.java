@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.asciidoctor;
 
 import org.jsoup.Jsoup;
@@ -7,14 +6,14 @@ import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
 import org.jsoup.parser.Parser;
-
 import java.util.Set;
 import java.util.regex.Pattern;
 
 final class HtmlContent {
     private static final Pattern SOFT_BREAK = Pattern.compile("[ \\t]*\\r?\\n[ \\t]*");
 
-    private HtmlContent() {}
+    private HtmlContent() {
+    }
 
     static String convert(String html) {
         var body = Jsoup.parseBodyFragment(html).body();
@@ -40,15 +39,11 @@ final class HtmlContent {
                     out.append("<strike>");
                 }
                 boolean literal =
-                        parent instanceof Element element
-                                && element.closest("source, verse, diagram, pre, code") != null;
-                String value =
-                        literal
-                                ? text.getWholeText()
-                                : SOFT_BREAK.matcher(text.getWholeText()).replaceAll(" ");
-                if (!literal
-                        && text.previousSibling() instanceof Element previous
-                        && previous.normalName().equals("br")) {
+                        parent instanceof Element element && element.closest("source, verse, diagram, pre, code") != null;
+                String value = literal ? text.getWholeText() : SOFT_BREAK.matcher(text.getWholeText()).replaceAll(" ");
+                if (!literal && text.previousSibling() instanceof Element previous && previous
+                    .normalName()
+                    .equals("br")) {
                     value = value.stripLeading();
                 }
                 out.append(escape(value));
@@ -64,22 +59,21 @@ final class HtmlContent {
             if (Set.of("script", "style", "iframe", "object", "template").contains(name)) {
                 continue;
             }
-            String tag =
-                    switch (name) {
-                        case "b" -> "strong";
-                        case "i" -> "em";
-                        case "s", "del" -> "strike";
-                        case "p", "div" -> "paragraph";
-                        case "h1", "h2", "h3", "h4", "h5", "h6" -> "heading";
-                        case "blockquote" -> "quote";
-                        case "pre" -> "source";
-                        case "ul", "ol" -> "list";
-                        case "li" -> "item";
-                        case "a" -> "link";
-                        case "tr" -> "row";
-                        case "td", "th" -> "cell";
-                        default -> name;
-                    };
+            String tag = switch (name) {
+                case "b" -> "strong";
+                case "i" -> "em";
+                case "s", "del" -> "strike";
+                case "p", "div" -> "paragraph";
+                case "h1", "h2", "h3", "h4", "h5", "h6" -> "heading";
+                case "blockquote" -> "quote";
+                case "pre" -> "source";
+                case "ul", "ol" -> "list";
+                case "li" -> "item";
+                case "a" -> "link";
+                case "tr" -> "row";
+                case "td", "th" -> "cell";
+                default -> name;
+            };
             if (name.equals("inline-image")) {
                 Element parentElement = element.parent();
                 if (parentElement != null
@@ -106,34 +100,36 @@ final class HtmlContent {
                 out.append("<span>[").append(nodes(element)).append("]</span>");
                 continue;
             }
-            if (!Set.of(
-                            "document",
-                            "title",
-                            "callout",
-                            "strong",
-                            "em",
-                            "strike",
-                            "span",
-                            "code",
-                            "paragraph",
-                            "heading",
-                            "quote",
-                            "source",
-                            "list",
-                            "item",
-                            "link",
-                            "table",
-                            "row",
-                            "cell",
-                            "details",
-                            "admonition",
-                            "verse",
-                            "example",
-                            "sidebar",
-                            "open",
-                            "image",
-                            "diagram")
-                    .contains(tag)) {
+            if (!Set
+                .of(
+                        "document",
+                        "title",
+                        "callout",
+                        "strong",
+                        "em",
+                        "strike",
+                        "span",
+                        "code",
+                        "paragraph",
+                        "heading",
+                        "quote",
+                        "source",
+                        "list",
+                        "item",
+                        "link",
+                        "table",
+                        "row",
+                        "cell",
+                        "details",
+                        "admonition",
+                        "verse",
+                        "example",
+                        "sidebar",
+                        "open",
+                        "image",
+                        "diagram"
+                )
+                .contains(tag)) {
                 if (!name.equals("summary")) {
                     out.append(nodes(element));
                 }
@@ -153,7 +149,8 @@ final class HtmlContent {
                             "target",
                             "number",
                             "frame",
-                            "grid")) {
+                            "grid"
+            )) {
                 String value = element.attr(attr);
                 if (attr.equals("target") && name.equals("a")) {
                     value = element.attr("href");
@@ -174,14 +171,13 @@ final class HtmlContent {
                 }
                 if (attr.equals("title") && name.equals("details")) {
                     Element summary =
-                            element.children().stream()
-                                    .filter(e -> e.normalName().equals("summary"))
-                                    .findFirst()
-                                    .orElse(null);
-                    value =
-                            summary == null
-                                    ? (value.isEmpty() ? "Details" : value)
-                                    : summary.text();
+                            element
+                        .children()
+                        .stream()
+                        .filter(e -> e.normalName().equals("summary"))
+                        .findFirst()
+                        .orElse(null);
+                    value = summary == null ? (value.isEmpty() ? "Details" : value) : summary.text();
                 }
                 if (!value.isEmpty()) {
                     out.append(" ").append(attr).append("=\"").append(escape(value)).append("\"");
@@ -202,15 +198,13 @@ final class HtmlContent {
             if (name.equals("li")) {
                 out.append(
                         element.parent() != null && element.parent().normalName().equals("ol")
-                                ? (element.elementSiblingIndex() + 1) + ". "
-                                : "- ");
+                        ? (element.elementSiblingIndex() + 1) + ". "
+                        : "- "
+                );
             }
-            boolean strike =
-                    inheritedStrike
-                            || element.attr("style")
-                                    .matches(
-                                            "(?is).*text-decoration(?:-line)?\\s*:[^;]*line-through.*")
-                            || element.classNames().contains("line-through");
+            boolean strike = inheritedStrike
+                    || element.attr("style").matches("(?is).*text-decoration(?:-line)?\\s*:[^;]*line-through.*")
+                    || element.classNames().contains("line-through");
             if (tag.equals("source") && name.equals("pre")) {
                 out.append(escape(element.wholeText()));
             } else {
@@ -222,9 +216,6 @@ final class HtmlContent {
     }
 
     private static String escape(String text) {
-        return text.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;");
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
     }
 }

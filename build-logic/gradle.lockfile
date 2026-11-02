@@ -1,7 +1,7 @@
 # This is a Gradle generated file for dependency locking.
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
-# To regenerate this file, run: ./gradlew :dependencies --write-locks
+# To regenerate this file, run: ./gradlew :build-logic:dependencies --write-locks
 com.googlecode.javaewah:JavaEWAH:1.2.3=precompiledScriptPluginAccessorsGenerationClasspath,runtimeClasspath,testRuntimeClasspath
 com.javiersc.gradle:gradle-delegated-properties-extensions:1.0.0-alpha.34=precompiledScriptPluginAccessorsGenerationClasspath,runtimeClasspath,testRuntimeClasspath
 com.javiersc.gradle:gradle-extensions:1.0.0-alpha.34=precompiledScriptPluginAccessorsGenerationClasspath,runtimeClasspath,testRuntimeClasspath

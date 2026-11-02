@@ -1,17 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.terminal;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import dev.tamboui.terminal.Backend;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import java.awt.image.BufferedImage;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
@@ -20,7 +16,6 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Random;
 import java.util.regex.Pattern;
-
 import javax.imageio.ImageIO;
 
 class KittyImagesTest {
@@ -35,12 +30,9 @@ class KittyImagesTest {
             var dim = new KittyImages.Placement(1, png, 0, 0, 2, 1, 0, 1, true);
             var original = new KittyImages.Placement(1, png, 0, 0, 2, 1, 0, 1);
             kitty.render(List.of(dim));
-            var payload = Pattern.compile("m=0;([A-Za-z0-9+/=]+)\u001b\\\\").matcher(output);
+            var payload = Pattern.compile("m=0;([A-Za-z0-9+/=]+)\\\\").matcher(output);
             assertTrue(payload.find());
-            var decoded =
-                    ImageIO.read(
-                            new java.io.ByteArrayInputStream(
-                                    Base64.getDecoder().decode(payload.group(1))));
+            var decoded = ImageIO.read(new java.io.ByteArrayInputStream(Base64.getDecoder().decode(payload.group(1))));
             assertEquals(166, decoded.getRGB(0, 0) >>> 24);
             assertEquals(83, decoded.getRGB(1, 0) >>> 24);
             assertEquals(0xff0000, decoded.getRGB(0, 0) & 0xffffff);
@@ -72,19 +64,17 @@ class KittyImagesTest {
         }
     }
 
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
     private final StringBuilder output = new StringBuilder();
-    private final Backend backend =
-            (Backend)
-                    Proxy.newProxyInstance(
-                            Backend.class.getClassLoader(),
-                            new Class<?>[] {Backend.class},
-                            (proxy, method, args) -> {
-                                if (method.getName().equals("writeRaw")) {
-                                    output.append(args[0]);
-                                }
-                                return null;
-                            });
+    private final Backend backend = (Backend) Proxy.newProxyInstance(Backend.class.getClassLoader(), new Class<?>[] {
+            Backend.class
+    }, (proxy, method, args) -> {
+        if (method.getName().equals("writeRaw")) {
+            output.append(args[0]);
+        }
+        return null;
+    });
 
     @Test
     void scrollingReusesPixelsAndUnchangedFramesEmitNothing() throws Exception {
@@ -104,14 +94,11 @@ class KittyImagesTest {
             assertTrue(output.toString().contains("a=t,t=d,f=100"));
             assertTrue(output.toString().contains("m=1;"));
             var payload = new StringBuilder();
-            var chunks =
-                    Pattern.compile("\u001b_G(?:a=t[^;]+)?m=[01];([A-Za-z0-9+/=]*)\u001b\\\\")
-                            .matcher(output);
+            var chunks = Pattern.compile("_G(?:a=t[^;]+)?m=[01];([A-Za-z0-9+/=]*)\\\\").matcher(output);
             while (chunks.find()) {
                 payload.append(chunks.group(1));
             }
-            assertArrayEquals(
-                    Files.readAllBytes(png), Base64.getDecoder().decode(payload.toString()));
+            assertArrayEquals(Files.readAllBytes(png), Base64.getDecoder().decode(payload.toString()));
             output.setLength(0);
             kitty.render(List.of(initial));
             assertEquals("", output.toString());

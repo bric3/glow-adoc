@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.asciidoctor;
 
 import io.github.bric3.glowadoc.cache.CacheFiles;
-
 import org.asciidoctor.Asciidoctor;
-
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,7 +13,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
-/** One private, replaceable conversion per input file. */
+/**
+ * One private, replaceable conversion per input file.
+ */
 final class ConversionCache {
     private final CacheFiles files;
     private final String slot;
@@ -32,11 +31,8 @@ final class ConversionCache {
         if (input == null || directory == null || !Files.isRegularFile(input)) {
             return null;
         }
-        String implementation =
-                CacheFiles.artifactIdentity(AsciiDocReader.class, Asciidoctor.class);
-        return implementation == null
-                ? null
-                : new ConversionCache(input, directory, implementation);
+        String implementation = CacheFiles.artifactIdentity(AsciiDocReader.class, Asciidoctor.class);
+        return implementation == null ? null : new ConversionCache(input, directory, implementation);
     }
 
     String key(String source, Path base, boolean showShortcodes, Map<String, String> attributes) {
@@ -44,26 +40,23 @@ final class ConversionCache {
         if (temporal(source) || attributes.values().stream().anyMatch(ConversionCache::temporal)) {
             return null;
         }
-        var values =
-                new ArrayList<>(
-                        List.of(
-                                implementation,
-                                Runtime.version().toString(),
-                                System.getProperty("user.home"),
-                                Locale.getDefault().toLanguageTag(),
-                                ZoneId.systemDefault().getId(),
-                                base.toString(),
-                                Boolean.toString(showShortcodes),
-                                source));
+        var values = new ArrayList<>(List.of(
+                implementation,
+                Runtime.version().toString(),
+                System.getProperty("user.home"),
+                Locale.getDefault().toLanguageTag(),
+                ZoneId.systemDefault().getId(),
+                base.toString(),
+                Boolean.toString(showShortcodes),
+                source
+        ));
         for (String name : List.of("TZ", "LANG", "LC_ALL", "LC_TIME", "SOURCE_DATE_EPOCH")) {
             values.add(System.getenv().getOrDefault(name, ""));
         }
-        new TreeMap<>(attributes)
-                .forEach(
-                        (name, value) -> {
-                            values.add(name);
-                            values.add(value);
-                        });
+        new TreeMap<>(attributes).forEach((name, value) -> {
+            values.add(name);
+            values.add(value);
+        });
         return CacheFiles.key(values);
     }
 
@@ -77,8 +70,9 @@ final class ConversionCache {
     }
 
     private static boolean temporal(String text) {
-        return List.of("localdate", "localtime", "localyear", "docdate", "doctime", "docyear")
-                .stream()
-                .anyMatch(text::contains);
+        return List
+            .of("localdate", "localtime", "localyear", "docdate", "doctime", "docyear")
+            .stream()
+            .anyMatch(text::contains);
     }
 }

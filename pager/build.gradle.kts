@@ -10,5 +10,4 @@ dependencies {
     implementation(project(":highlight"))
     implementation(project(":diagrams"))
     implementation(libs.tamboui.tui)
-    implementation(libs.tamboui.widgets)
 }

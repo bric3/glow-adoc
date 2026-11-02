@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
-
 package io.github.bric3.glowadoc.render;
 
 import dev.tamboui.text.CharWidth;
-
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -16,10 +13,14 @@ final class TextLayout {
 
     private record Cell(String text, Style style, String callout) {}
 
-    private TextLayout() {}
+    private TextLayout() {
+    }
 
     static int width(List<Span> spans) {
-        return spans.stream().mapToInt(s -> CharWidth.of(s.text())).sum();
+        return spans
+            .stream()
+            .mapToInt(s -> CharWidth.of(s.text()))
+            .sum();
     }
 
     static void append(List<Span> spans, String text, Style style) {
@@ -30,9 +31,7 @@ final class TextLayout {
         if (text.isEmpty()) {
             return;
         }
-        if (!spans.isEmpty()
-                && spans.getLast().style().equals(style)
-                && spans.getLast().callout().equals(callout)) {
+        if (!spans.isEmpty() && spans.getLast().style().equals(style) && spans.getLast().callout().equals(callout)) {
             Span last = spans.removeLast();
             spans.add(new Span(last.text() + text, style, callout));
         } else {
@@ -69,9 +68,8 @@ final class TextLayout {
             while (end < cells.size()
                     && !cells.get(end).text().contains("\n")
                     && (cell.callout().isEmpty()
-                            ? cells.get(end).callout().isEmpty()
-                                    && cells.get(end).text().isBlank() == space
-                            : cell.callout().equals(cells.get(end).callout()))) {
+                    ? cells.get(end).callout().isEmpty() && cells.get(end).text().isBlank() == space
+                    : cell.callout().equals(cells.get(end).callout()))) {
                 end++;
             }
             int wordWidth = 0;
