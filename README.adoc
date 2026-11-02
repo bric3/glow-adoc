@@ -2,6 +2,10 @@
 
 = glow-adoc
 
+image:https://github.com/bric3/glow-adoc/actions/workflows/ci.yml/badge.svg?branch=master[Build,link=https://github.com/bric3/glow-adoc/actions/workflows/ci.yml]
+image:https://img.shields.io/badge/license-MPL--2.0-blue[MPL 2.0,link=LICENSE]
+image:https://img.shields.io/github/v/release/bric3/glow-adoc[Latest release,link=https://github.com/bric3/glow-adoc/releases/latest]
+
 glow-adoc makes AsciiDoc comfortable to read in your terminal, with a searchable pager,
 highlighted code, aligned tables, colourful admonitions and collapsible sections.
 
