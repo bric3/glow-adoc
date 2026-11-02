@@ -2,6 +2,7 @@
 # Manual edits can break the build and are not advised.
 # This file is expected to be part of source control.
 # To regenerate this file, run: ./gradlew :glowadoc-pager:dependencies --write-locks
+com.github.weisj:jsvg:2.2.0=runtimeClasspath,testRuntimeClasspath
 dev.tamboui:tamboui-aesh-backend:0.6.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 dev.tamboui:tamboui-annotations:0.6.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 dev.tamboui:tamboui-core:0.6.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath

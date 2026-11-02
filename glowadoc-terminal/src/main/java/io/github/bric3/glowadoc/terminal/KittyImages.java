@@ -24,6 +24,7 @@ import javax.imageio.ImageIO;
  * Session-owned image data and viewport placements.
  */
 public final class KittyImages implements AutoCloseable {
+    private static final int MAX_ROWS = 1000;
     private final Backend backend;
     private final long budget;
     private int nextId = 1 + new SecureRandom().nextInt(1_000_000_000);
@@ -61,11 +62,20 @@ public final class KittyImages implements AutoCloseable {
             int columns,
             int rows,
             int cropRows,
-            int totalRows,
+            double cellAspectRatio,
             boolean dim
     ) {
-        public Placement(int id, Path path, int row, int column, int columns, int rows, int cropRows, int totalRows) {
-            this(id, path, row, column, columns, rows, cropRows, totalRows, false);
+        public Placement(
+                int id,
+                Path path,
+                int row,
+                int column,
+                int columns,
+                int rows,
+                int cropRows,
+                double cellAspectRatio
+        ) {
+            this(id, path, row, column, columns, rows, cropRows, cellAspectRatio, false);
         }
 
         private ImageKey key() {
@@ -100,10 +110,13 @@ public final class KittyImages implements AutoCloseable {
                 int w = reader.getWidth(0), h = reader.getHeight(0);
                 checkDimensions(w, h);
                 int columns = Math.max(1, Math.min(width, (int) Math.ceil((double) w / cellWidth)));
-                return new Size(
-                        columns,
-                        Math.clamp((int) Math.ceil((double) h / w * columns * cellWidth / cellHeight), 1, 1000)
-                );
+                double rowsPerColumn = (double) h / w * cellWidth / cellHeight;
+                columns = Math.max(1, Math.min(columns, (int) Math.floor(MAX_ROWS / rowsPerColumn)));
+                int rows = Math.max(1, (int) Math.ceil(rowsPerColumn * columns));
+                if (rows > MAX_ROWS) {
+                    throw new IOException("Image aspect ratio exceeds terminal row limit");
+                }
+                return new Size(columns, rows);
             } finally {
                 reader.dispose();
             }
@@ -139,14 +152,13 @@ public final class KittyImages implements AutoCloseable {
                     images.put(placement.key(), image);
                     resident += image.bytes();
                 }
-                int y =
+                // One dimension preserves aspect ratio; cropping follows physical cell height.
+                double pixelsPerRow = placement.cellAspectRatio() * image.width() / placement.columns();
+                int y = (int) Math.min(image.height() - 1L, Math.round(placement.cropRows() * pixelsPerRow));
+                int end =
                         (int) Math.min(
-                                image.height() - 1L,
-                                (long) placement.cropRows() * image.height() / placement.totalRows()
-                );
-                int end = (int) Math.min(
-                        image.height(),
-                        (long) (placement.cropRows() + placement.rows()) * image.height() / placement.totalRows()
+                                image.height(),
+                                Math.round((placement.cropRows() + placement.rows()) * pixelsPerRow)
                 );
                 backend.writeRaw("[" + (placement.row() + 1) + ";" + (placement.column() + 1) + "H");
                 command(
@@ -162,8 +174,6 @@ public final class KittyImages implements AutoCloseable {
                         + Math.max(1, end - y)
                         + ",c="
                         + placement.columns()
-                        + ",r="
-                        + placement.rows()
                 );
             }
             previous = Map.copyOf(desired);

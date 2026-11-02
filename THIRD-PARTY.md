@@ -15,6 +15,7 @@ pin the complete graph and downloaded bytes.
 | -------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
 | AsciidoctorJ 3.0.1         | `glowadoc-asciidoctor`       | AsciiDoc conversion; Apache-2.0.                                            |
 | jsoup 1.23.2               | `glowadoc-asciidoctor`       | HTML passthrough parsing; MIT.                                              |
+| JSVG 2.2.0                 | `glowadoc-images`            | SVG parsing and rasterisation; MIT.                                         |
 | TamboUI core 0.6.0         | `glowadoc-render`            | Terminal text widths and layout types; MIT.                                 |
 | TamboUI TUI 0.6.0          | `glowadoc-pager`             | Pager event loop and rendering; MIT.                                        |
 | TamboUI Aesh backend 0.6.0 | `glowadoc-terminal`          | Terminal connection; MIT.                                                   |
@@ -120,6 +121,6 @@ Gradle, Kotlin, Shadow, Semver, Spotless, Prince of Space, Yumi Licenser, ktlint
 and the Aesh annotation processor are build/test tools and are not included in the runtime merely
 because the build uses them. Version pins and checksums cover their resolved dependencies too.
 
-Merman is installed separately and is not bundled. JMH, Reggie and JSVG are used only by explicitly
+Merman is installed separately and is not bundled. JMH and Reggie are used only by explicitly
 invoked JBang tools; those tool dependencies are not application runtime dependencies.
 The Gradle wrapper retains its upstream Apache header.

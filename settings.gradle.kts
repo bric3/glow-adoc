@@ -30,6 +30,7 @@ include(
     "glowadoc-highlight-lumis4j",
     "glowadoc-render",
     "glowadoc-terminal",
+    "glowadoc-images",
     "glowadoc-pager",
     "glowadoc-diagrams-common",
     "glowadoc-diagrams-plantuml",

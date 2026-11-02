@@ -20,6 +20,12 @@ The off-screen residency target is 128 MiB of decoded pixels; visible images rem
 when their working set exceeds that target. All owned image IDs are released on exit.
 This is terminal image residency, not a JVM heap limit.
 
+Visible SVG images and supported remote badges load on a background worker after the first text
+frame. JSVG and the HTTP client initialise on demand. Rendered PNGs are reused for the session;
+badge downloads have a three-second deadline and are cancelled on exit.
+SVG rasters are cached by target and density. New cell-height reports rerasterise vectors while reusing
+downloaded source bytes. At most 128 raster variants are retained per session within the image limits.
+
 == Document caches
 
 Packaged applications cache AsciidoctorJ's normalised XML for regular file inputs. A hit reconstructs

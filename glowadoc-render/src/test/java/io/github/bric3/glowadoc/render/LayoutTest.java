@@ -20,6 +20,50 @@ import java.util.stream.Collectors;
 
 class LayoutTest {
     @Test
+    void adjacentInlineImagesRemainOneLayoutAsset() {
+        var first = new Block(Block.Kind.IMAGE, "", List.of(new Span("Build")), List.of(), "", "build.svg");
+        var second = new Block(Block.Kind.IMAGE, "", List.of(new Span("Licence")), List.of(), "", "licence.svg");
+        var group = new Block(Block.Kind.PARAGRAPH, "", List.of(), List.of(first, second), "", "");
+        var lines = layout.render(new Document(List.of(group), Path.of(".")), 80, Appearance.DARK);
+        var imageRows = lines
+            .stream()
+            .filter(row -> row.asset() != null)
+            .toList();
+        assertEquals(1, imageRows.size());
+        assertEquals(group, imageRows.getFirst().asset());
+        assertTrue(lines
+            .stream()
+            .allMatch(row -> row.blockIndex() == imageRows.getFirst().blockIndex()));
+        assertTrue(lines
+            .stream()
+            .anyMatch(row -> row.text().contains("Build")));
+        assertTrue(lines
+            .stream()
+            .anyMatch(row -> row.text().contains("Licence")));
+    }
+
+    @Test
+    void imageFallbackRetainsTheBadgeLink() {
+        String link = "https://example.org/releases";
+        var image = new Block(
+                Block.Kind.IMAGE,
+                "",
+                List.of(new Span("Latest release", Style.PLAIN.linked(link))),
+                List.of(),
+                "",
+                "https://img.shields.io/badge/release-1.0-blue"
+        );
+        var lines = layout.render(new Document(List.of(image), Path.of(".")), 120, Appearance.DARK);
+        var fallback = lines
+            .stream()
+            .filter(line -> line.text().contains("[image:"))
+            .findFirst()
+            .orElseThrow();
+        assertTrue(fallback.text().contains("Latest release"));
+        assertEquals(link, fallback.linkAt(2, 0));
+    }
+
+    @Test
     void syntaxHighlightingPreservesPillColoursInSourceBlocks() {
         var syntaxStyle = Style.PLAIN.colours("#ff0000", "#111111");
         var highlighted = new Layout((text, language, appearance) -> text

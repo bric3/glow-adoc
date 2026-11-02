@@ -66,7 +66,17 @@ Symbolic links are checked against the allowed directories.
 
 Configuration roots are relative to the configuration file. Discovered roots stay inside its directory tree.
 User configuration, explicit files and CLI roots may allow other directories.
-The standard `imagesdir` attribute prefixes relative image targets. Remote images and HTML resources are not fetched.
+The standard `imagesdir` attribute prefixes relative image targets.
+The pager fetches HTTPS badges from `img.shields.io` and GitHub Actions after the first text frame.
+Requests have a three-second deadline, a 256 KiB source limit and no redirects. `--images=never`
+disables these requests. Other remote images and HTML resources retain text fallbacks.
+Local SVGs have the same source limit and a two-megapixel raster limit. SVG external resources are disabled.
+SVG raster density follows the reported cell height against a 16 px reference text line, keeping
+badges readable on HiDPI displays. New cell-size replies select a new density, capped at 4096 px per axis and
+two megapixels. A missing cell-size reply uses the 8 x 16 fallback.
+Adjacent inline images share a row with a one-cell gap and wrap at the reading width. Block images
+remain separate. Image proportions are preserved, with at most 1000 rows per image; extreme aspect
+ratios that cannot fit one column retain text fallbacks.
 
 == Rendering
 

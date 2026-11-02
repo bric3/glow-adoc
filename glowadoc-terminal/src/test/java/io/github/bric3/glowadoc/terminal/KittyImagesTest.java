@@ -4,11 +4,14 @@ package io.github.bric3.glowadoc.terminal;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.tamboui.terminal.Backend;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.tabletest.junit.TableTest;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,6 +22,54 @@ import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 
 class KittyImagesTest {
+    @TableTest(
+            """
+        width | height | cellWidth | cellHeight | columns | rows | cropped | visible | sourceY | sourceHeight
+        102   | 20     | 8         | 16         | 13      | 2    | 0       | 2       | 0       | 20
+        102   | 20     | 8         | 16         | 13      | 2    | 1       | 1       | 16      | 4
+        102   | 20     | 16        | 32         | 7       | 1    | 0       | 1       | 0       | 20
+        102   | 20     | 10        | 17         | 11      | 2    | 1       | 1       | 16      | 4
+        80    | 100    | 8         | 16         | 10      | 7    | 2       | 4       | 32      | 64
+        80    | 20000  | 8         | 16         | 8       | 1000 | 0       | 1000    | 0       | 20000
+        """
+    )
+    void preservesImageProportionsAndCropsAtTerminalRowBoundaries(
+            int width,
+            int height,
+            int cellWidth,
+            int cellHeight,
+            int columns,
+            int rows,
+            int cropped,
+            int visible,
+            int sourceY,
+            int sourceHeight
+    ) throws Exception {
+        Path png = directory.resolve("proportions.png");
+        ImageIO.write(new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", png.toFile());
+        assertEquals(new KittyImages.Size(columns, rows), KittyImages.measure(png, 80, cellWidth, cellHeight));
+        try (var kitty = new KittyImages(backend)) {
+            kitty.render(List.of(
+                    new KittyImages.Placement(1, png, 0, 0, columns, visible, cropped, (double) cellHeight / cellWidth)
+            ));
+            assertTrue(output
+                .toString()
+                .contains("y=" + sourceY + ",w=" + width + ",h=" + sourceHeight + ",c=" + columns)
+            );
+            assertFalse(
+                    Pattern.compile(",r=[0-9]+").matcher(output).find(),
+                    "The terminal must derive height from the image aspect ratio"
+            );
+        }
+    }
+
+    @Test
+    void excessiveAspectRatiosKeepTheTextFallback() throws Exception {
+        Path png = directory.resolve("too-tall.png");
+        ImageIO.write(new BufferedImage(1, 20000, BufferedImage.TYPE_INT_RGB), "png", png.toFile());
+        assertThrows(IOException.class, () -> KittyImages.measure(png, 80, 8, 16));
+    }
+
     @Test
     void dimmingPreservesPixelsAndAlphaAndReusesBothVariants() throws Exception {
         Path png = directory.resolve("alpha.png");
@@ -27,8 +78,8 @@ class KittyImagesTest {
         picture.setRGB(1, 0, 0x8000ff00);
         ImageIO.write(picture, "png", png.toFile());
         try (var kitty = new KittyImages(backend)) {
-            var dim = new KittyImages.Placement(1, png, 0, 0, 2, 1, 0, 1, true);
-            var original = new KittyImages.Placement(1, png, 0, 0, 2, 1, 0, 1);
+            var dim = new KittyImages.Placement(1, png, 0, 0, 2, 1, 0, 2.0, true);
+            var original = new KittyImages.Placement(1, png, 0, 0, 2, 1, 0, 2.0);
             kitty.render(List.of(dim));
             var payload = Pattern.compile("m=0;([A-Za-z0-9+/=]+)\\\\").matcher(output);
             assertTrue(payload.find());
@@ -52,8 +103,8 @@ class KittyImagesTest {
         Path png = directory.resolve("budget.png");
         ImageIO.write(new BufferedImage(10, 10, BufferedImage.TYPE_INT_RGB), "png", png.toFile());
         try (var kitty = new KittyImages(backend, 400)) {
-            var dim = new KittyImages.Placement(1, png, 0, 0, 10, 10, 0, 10, true);
-            var original = new KittyImages.Placement(1, png, 0, 0, 10, 10, 0, 10);
+            var dim = new KittyImages.Placement(1, png, 0, 0, 10, 10, 0, 2.0, true);
+            var original = new KittyImages.Placement(1, png, 0, 0, 10, 10, 0, 2.0);
             kitty.render(List.of(dim));
             output.setLength(0);
             kitty.render(List.of(original));
@@ -89,7 +140,7 @@ class KittyImagesTest {
         }
         ImageIO.write(picture, "png", png.toFile());
         try (var kitty = new KittyImages(backend)) {
-            var initial = new KittyImages.Placement(1, png, 0, 2, 10, 4, 0, 10);
+            var initial = new KittyImages.Placement(1, png, 0, 2, 10, 4, 0, 2.0);
             kitty.render(List.of(initial));
             assertTrue(output.toString().contains("a=t,t=d,f=100"));
             assertTrue(output.toString().contains("m=1;"));
@@ -102,9 +153,9 @@ class KittyImagesTest {
             output.setLength(0);
             kitty.render(List.of(initial));
             assertEquals("", output.toString());
-            kitty.render(List.of(new KittyImages.Placement(1, png, 0, 2, 10, 4, 2, 10)));
+            kitty.render(List.of(new KittyImages.Placement(1, png, 0, 2, 10, 4, 2, 2.0)));
             assertFalse(output.toString().contains("a=t"));
-            assertTrue(output.toString().contains("y=20,w=80,h=40,c=10,r=4"));
+            assertTrue(output.toString().contains("y=32,w=80,h=64,c=10"));
             output.setLength(0);
             kitty.refreshPlacements();
             kitty.render(List.of(initial));
@@ -126,7 +177,7 @@ class KittyImagesTest {
         Path png = directory.resolve("graph.png");
         ImageIO.write(new BufferedImage(80, 100, BufferedImage.TYPE_INT_RGB), "png", png.toFile());
         try (var kitty = new KittyImages(backend)) {
-            var placement = new KittyImages.Placement(1, png, 0, 0, 10, 4, 0, 10);
+            var placement = new KittyImages.Placement(1, png, 0, 0, 10, 4, 0, 2.0);
             kitty.render(List.of(placement));
             var header = Pattern.compile("a=t,t=d,f=100,q=2,i=([0-9]+)").matcher(output);
             assertTrue(header.find());
@@ -143,7 +194,7 @@ class KittyImagesTest {
         Path jpeg = directory.resolve("graph.jpg");
         ImageIO.write(new BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB), "jpeg", jpeg.toFile());
         try (var kitty = new KittyImages(backend, 100)) {
-            var placement = new KittyImages.Placement(1, jpeg, 0, 0, 10, 10, 0, 10);
+            var placement = new KittyImages.Placement(1, jpeg, 0, 0, 10, 10, 0, 2.0);
             kitty.render(List.of(placement));
             output.setLength(0);
             kitty.render(List.of());

@@ -10,7 +10,7 @@ import java.util.List;
 class ImageHoverTest {
     @Test
     void usesVisibleCroppedBoundsAndContentMargin() {
-        var placements = List.of(new KittyImages.Placement(7, Path.of("image.png"), 0, 5, 10, 3, 2, 8));
+        var placements = List.of(new KittyImages.Placement(7, Path.of("image.png"), 0, 5, 10, 3, 2, 2.0));
         assertEquals(7, ReaderPager.hoveredImage(placements, 5, 0));
         assertEquals(7, ReaderPager.hoveredImage(placements, 14, 2));
         assertEquals(-1, ReaderPager.hoveredImage(placements, 4, 0));

@@ -9,5 +9,6 @@ dependencies {
     implementation(project(":glowadoc-terminal"))
     implementation(project(":glowadoc-highlight-common"))
     implementation(project(":glowadoc-diagrams-common"))
+    implementation(project(":glowadoc-images"))
     implementation(libs.tamboui.tui)
 }

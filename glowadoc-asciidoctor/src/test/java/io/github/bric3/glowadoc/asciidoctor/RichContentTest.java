@@ -179,6 +179,30 @@ class RichContentTest {
     Path directory;
 
     @Test
+    void preservesGroupedBadgeImagesAndTheirLinks() {
+        try (var reader = new AsciiDocReader()) {
+            var document = reader.read(
+                    """
+                    image:https://example.org/build.svg?branch=main&style=flat[Build,link=https://example.org/actions]
+                    image:https://img.shields.io/badge/license-MPL%2D%2D2.0-blue[Licence,link=LICENSE]
+                    image:https://example.org/version[Release,link=https://example.org/releases]
+                    """,
+                    directory
+            );
+            var images = all(document.blocks())
+                .filter(block -> block.kind() == Block.Kind.IMAGE)
+                .toList();
+            assertEquals(3, images.size());
+            assertEquals("https://example.org/build.svg?branch=main&style=flat", images.getFirst().target());
+            assertEquals("Build", images.getFirst().text());
+            assertEquals("https://example.org/actions", images.getFirst().spans().getFirst().style().link());
+            assertEquals("https://img.shields.io/badge/license-MPL%2D%2D2.0-blue", images.get(1).target());
+            assertEquals("LICENSE", images.get(1).spans().getFirst().style().link());
+            assertEquals("https://example.org/version", images.getLast().target());
+        }
+    }
+
+    @Test
     void appliesExternalAttributesAndPreservesStandaloneInlineImageTargets() {
         try (var reader = new AsciiDocReader()) {
             var document = reader.read(

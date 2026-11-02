@@ -85,10 +85,11 @@ jbang --java 27 tools/Benchmark.java --runs 20 --pty --empty-cache -- java --sun
 
 == SVG decision
 
-Keep PNG output from PlantUML and Merman. This checkout has no direct resvg dependency or invocation;
-substituting JSVG would add a new SVG input path rather than replace an existing Java renderer.
+PlantUML and Merman retain PNG output. `glowadoc-images` uses JSVG 2.2.0 for local SVG images and
+trusted remote badges, loading them after the first text frame. This checkout has no direct resvg
+dependency or invocation.
 
-The opt-in `tools/SvgProbe.java` evaluates JSVG 2.2.0 without adding it to the application.
+The opt-in `tools/SvgProbe.java` evaluates JSVG independently of the application.
 It checks colour, alpha, transparency, denied external images and disabled external entities with a
 secure StAX reader. It renders supplied files headlessly with explicit document and pixel limits.
 HTML in `foreignObject` did not paint in the probe, so JSVG does not meet the fidelity gate for a
@@ -102,6 +103,8 @@ jbang --java 27 tools/SvgProbe.java diagram.svg
 ----
 
 Supplied files produce PNGs under `build/review/svg`. Empty or unsupported inputs fail the probe.
-Consider a future lazy SVG adapter for an explicitly supported SVG subset; keep parsing and rasterisation
-off the first-text path. Resvg/JSVG pixel equivalence, real-terminal appearance and Native Image support
-were not established by this evaluation.
+Application tests cover local and downloaded SVGs, blocked external resources, malformed inputs,
+download limits, cancellation and linked fallbacks. A packaged PTY test verifies that grouped SVG badges
+render after text, share or wrap rows and retain mouse links after cell-size changes.
+Resvg/JSVG pixel equivalence, real-terminal appearance and
+Native Image support remain unverified.

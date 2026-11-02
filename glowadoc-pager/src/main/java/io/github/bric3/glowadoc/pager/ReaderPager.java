@@ -16,8 +16,10 @@ import io.github.bric3.glowadoc.document.Appearance;
 import io.github.bric3.glowadoc.document.Block;
 import io.github.bric3.glowadoc.document.Controls;
 import io.github.bric3.glowadoc.document.Document;
+import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
 import io.github.bric3.glowadoc.highlight.DeferredHighlighter;
+import io.github.bric3.glowadoc.images.ImageLoader;
 import io.github.bric3.glowadoc.render.ContentArea;
 import io.github.bric3.glowadoc.render.Layout;
 import io.github.bric3.glowadoc.render.Palette;
@@ -67,14 +69,23 @@ public final class ReaderPager {
     private boolean anchorAssets;
     private List<RenderedLine> lines = List.of();
 
-    private record ImageAsset(Path path, KittyImages.Size size) {}
+    private record ImageAsset(int id, Path path, KittyImages.Size size, int column) {}
 
-    private final Map<Integer, ImageAsset> assets = new HashMap<>();
+    private record ImageItem(int id, Optional<Path> path, KittyImages.Size size, Span span, int row, int column) {}
+
+    private final Map<Integer, List<ImageAsset>> assets = new HashMap<>();
     private final Map<Integer, Block> diagramBlocks = new HashMap<>();
+
+    private record PendingImage(Block block, Path local) {}
+
+    private final Map<Integer, List<PendingImage>> imageBlocks = new HashMap<>();
+    private ImageLoader imageLoader;
     private int top;
     private int left;
     private int width;
     private int height;
+    private int imageCellWidth;
+    private int imageCellHeight;
     private int retainedTop;
     private Appearance appearance;
     private boolean searching;
@@ -133,8 +144,10 @@ public final class ReaderPager {
             try (var runner = TuiRunner.create(config);
                     var kitty = new KittyImages(session.backend());
                     var progress = new Progress(session.backend(), progressMode, System.getenv());
-                    var links = new LinkOpener()
+                    var links = new LinkOpener();
+                    var loadedImages = images ? new ImageLoader() : null
             ) {
+                imageLoader = loadedImages;
                 activeRunner = runner;
                 session.start();
                 runner.run((event, tui) -> {
@@ -147,6 +160,17 @@ public final class ReaderPager {
                         layoutDirty = true;
                         anchorAssets = true;
                         redraw = true;
+                    }
+                    if (imageLoader != null && imageLoader.takeDirty()) {
+                        layoutDirty = true;
+                        anchorAssets = true;
+                        redraw = true;
+                    }
+                    if (imageLoader != null) {
+                        for (String diagnostic : imageLoader.takeDiagnostics()) {
+                            message = diagnostic;
+                            redraw = true;
+                        }
                     }
                     for (String diagnostic : diagrams.takeDiagnostics()) {
                         message = diagnostic;
@@ -296,7 +320,13 @@ public final class ReaderPager {
         }
         height = Math.max(1, frame.height() - 1);
         boolean rebuilt = false;
-        if (layoutDirty || width != nextWidth || appearance != session.appearance() || lines.isEmpty()) {
+        boolean cellSizeChanged =
+                images && (imageCellWidth != session.cellWidth() || imageCellHeight != session.cellHeight());
+        if (layoutDirty
+                || width != nextWidth
+                || appearance != session.appearance()
+                || lines.isEmpty()
+                || cellSizeChanged) {
             boolean preserveViewport = (layoutDirty || width == nextWidth) && !anchorAssets;
             int previousTop = top;
             layoutDirty = false;
@@ -307,9 +337,12 @@ public final class ReaderPager {
             }
             int anchorOffset = Math.max(0, top - anchorStart);
             width = nextWidth;
+            imageCellWidth = session.cellWidth();
+            imageCellHeight = session.cellHeight();
             appearance = session.appearance();
             assets.clear();
             diagramBlocks.clear();
+            imageBlocks.clear();
             lines = new ArrayList<>(layout.render(document, width, appearance, toggled, true));
             if (lines
                 .stream()
@@ -386,18 +419,19 @@ public final class ReaderPager {
         hoveredLink = mouse && session.focused() ? linkAt(pointerX, pointerY) : "";
         for (int y = 0; y < height && top + y < lines.size(); y++) {
             var row = lines.get(top + y);
+            int horizontalOffset = imageRow(y) ? 0 : left;
             var spans = new ArrayList<dev.tamboui.text.Span>();
             int skipped = 0;
             for (var part : search.parts(top + y, row.spans())) {
                 var span = part.span();
                 String text = span.text();
                 int cells = CharWidth.of(text);
-                if (skipped + cells <= left) {
+                if (skipped + cells <= horizontalOffset) {
                     skipped += cells;
                     continue;
                 }
-                if (skipped < left) {
-                    int offset = RenderedLine.textOffset(text, left - skipped);
+                if (skipped < horizontalOffset) {
+                    int offset = RenderedLine.textOffset(text, horizontalOffset - skipped);
                     skipped += CharWidth.of(text.substring(0, offset));
                     text = text.substring(offset);
                 }
@@ -462,23 +496,24 @@ public final class ReaderPager {
             var placements = new ArrayList<KittyImages.Placement>();
             for (var entry : assets.entrySet()) {
                 int first = entry.getKey();
-                var asset = entry.getValue();
-                int count = asset.size().rows();
-                int start = Math.max(top, first);
-                int end = Math.min(top + height, first + count);
-                if (start < end) {
-                    placements.add(
-                            new KittyImages.Placement(
-                                    first + 1,
-                                    asset.path(),
-                                    start - top,
-                                    margin,
-                                    asset.size().columns(),
-                                    end - start,
-                                    start - first,
-                                    count
-                            )
-                    );
+                for (var asset : entry.getValue()) {
+                    int count = asset.size().rows();
+                    int start = Math.max(top, first);
+                    int end = Math.min(top + height, first + count);
+                    if (start < end) {
+                        placements.add(
+                                new KittyImages.Placement(
+                                        asset.id(),
+                                        asset.path(),
+                                        start - top,
+                                        margin + asset.column(),
+                                        asset.size().columns(),
+                                        end - start,
+                                        start - first,
+                                        (double) session.cellHeight() / session.cellWidth()
+                                )
+                        );
+                    }
                 }
             }
             visibleImages = List.copyOf(placements);
@@ -492,7 +527,7 @@ public final class ReaderPager {
                         placement.columns(),
                         placement.rows(),
                         placement.cropRows(),
-                        placement.totalRows(),
+                        placement.cellAspectRatio(),
                         placement.id() != hoveredImage
                 ));
             }
@@ -518,7 +553,7 @@ public final class ReaderPager {
             if (!images || !session.kitty()) {
                 return;
             }
-            requestVisibleDiagrams();
+            requestVisibleAssets();
             try {
                 pendingImages.draw();
             } catch (java.io.IOException e) {
@@ -541,8 +576,17 @@ public final class ReaderPager {
                 && top + y < lines.size()
                 && x >= contentMargin
                 && x < contentMargin + contentColumns
-                ? lines.get(top + y).linkAt(x - contentMargin, left)
+                ? lines.get(top + y).linkAt(x - contentMargin, imageRow(y) ? 0 : left)
                 : "";
+    }
+
+    private boolean imageRow(int row) {
+        for (var placement : visibleImages) {
+            if (row >= placement.row() && row < placement.row() + placement.rows()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static int hoveredImage(List<KittyImages.Placement> placements, int x, int y) {
@@ -557,7 +601,7 @@ public final class ReaderPager {
         return -1;
     }
 
-    private void requestVisibleDiagrams() {
+    private void requestVisibleAssets() {
         int previous = -1;
         for (int i = top; i < Math.min(lines.size(), top + height); i++) {
             int position = lines.get(i).blockIndex();
@@ -569,6 +613,9 @@ public final class ReaderPager {
             if (block != null) {
                 diagrams.request(block, appearance);
             }
+            for (PendingImage image : imageBlocks.getOrDefault(position, List.of())) {
+                imageLoader.request(image.block().target(), image.local(), svgScale());
+            }
         }
     }
 
@@ -579,36 +626,118 @@ public final class ReaderPager {
             if (row.asset() == null) {
                 continue;
             }
-            var block = row.asset();
-            if (block.kind() == Block.Kind.DIAGRAM) {
-                diagramBlocks.put(row.blockIndex(), block);
-            }
-            Optional<Path> path = block.kind() == Block.Kind.DIAGRAM
-                    ? firstFrame ? Optional.empty() : diagrams.cached(block, appearance)
-                    : DiagramRenderer.localImage(document, block.target());
-            if (path.isEmpty()) {
+            var rendered = imageRows(row.asset(), row.blockIndex(), i, session);
+            if (rendered.isEmpty()) {
                 continue;
             }
-            KittyImages.Size size;
-            try {
-                size = KittyImages.measure(path.get(), width, session.cellWidth(), session.cellHeight());
-            } catch (java.io.IOException e) {
-                message = "Image unavailable";
-                continue;
-            }
-            assets.put(i, new ImageAsset(path.get(), size));
             changed = true;
             int end = i + 1;
             while (end < lines.size() && lines.get(end).blockIndex() == row.blockIndex()) {
                 end++;
             }
             lines.subList(i, end).clear();
-            for (int j = 0; j < size.rows(); j++) {
-                lines.add(i + j, new RenderedLine(List.of(), row.blockIndex(), null));
-            }
-            i += size.rows() - 1;
+            lines.addAll(i, rendered);
+            i += rendered.size() - 1;
         }
         return changed;
+    }
+
+    private List<RenderedLine> imageRows(Block block, int position, int start, TerminalSession session) {
+        boolean group = block.imageOnlyParagraph();
+        var children = group ? block.children() : List.of(block);
+        var requests = new ArrayList<PendingImage>();
+        var items = new ArrayList<ImageItem>();
+        int column = 0;
+        int row = 0;
+        int rowHeight = 0;
+        for (int index = 0; index < children.size(); index++) {
+            Block image = children.get(index);
+            if (image.kind() == Block.Kind.DIAGRAM) {
+                diagramBlocks.put(position, image);
+            }
+            Optional<Path> path = imagePath(image, requests);
+            String label = clip("[image: " + image.text() + "]", width);
+            var size = new KittyImages.Size(Math.max(1, CharWidth.of(label)), 1);
+            if (path.isPresent()) {
+                try {
+                    size = KittyImages.measure(path.get(), width, session.cellWidth(), session.cellHeight());
+                } catch (java.io.IOException e) {
+                    message = "Image unavailable";
+                    path = Optional.empty();
+                }
+            }
+            if (path.isEmpty() && !group) {
+                continue;
+            }
+            if (column > 0 && column + 1 + size.columns() > width) {
+                row += rowHeight;
+                rowHeight = 0;
+                column = 0;
+            }
+            if (column > 0) {
+                column++;
+            }
+            String link = image
+                .spans()
+                .stream()
+                .map(span -> span.style().link())
+                .filter(target -> !target.isEmpty())
+                .findFirst()
+                .orElse("");
+            Style style = new Style(false, false, false, path.isEmpty() && !link.isEmpty(), "", "", link);
+            Span span = new Span(path.isPresent() ? " ".repeat(size.columns()) : label, style);
+            // Image children have consecutive document positions, keeping placement IDs stable.
+            int id = group ? position + index + 2 : position + 1;
+            items.add(new ImageItem(id, path, size, span, row, column));
+            column += size.columns();
+            rowHeight = Math.max(rowHeight, size.rows());
+        }
+        imageBlocks.put(position, List.copyOf(requests));
+        var rendered = new ArrayList<RenderedLine>();
+        for (int y = 0; y < row + rowHeight; y++) {
+            var spans = new ArrayList<Span>();
+            int used = 0;
+            for (var item : items) {
+                if (y < item.row() || y >= item.row() + item.size().rows()) {
+                    continue;
+                }
+                if (item.column() > used) {
+                    spans.add(new Span(" ".repeat(item.column() - used)));
+                }
+                spans.add(item.span());
+                used = item.column() + item.size().columns();
+            }
+            rendered.add(new RenderedLine(spans, position, null));
+        }
+        if (group) {
+            rendered.add(new RenderedLine(List.of(), position, null));
+        }
+        for (var item : items) {
+            if (item.path().isPresent()) {
+                assets
+                    .computeIfAbsent(start + item.row(), ignored -> new ArrayList<>())
+                    .add(new ImageAsset(item.id(), item.path().get(), item.size(), item.column()));
+            }
+        }
+        return rendered;
+    }
+
+    private Optional<Path> imagePath(Block block, List<PendingImage> requests) {
+        Optional<Path> path = block.kind() == Block.Kind.DIAGRAM
+                ? firstFrame ? Optional.empty() : diagrams.cached(block, appearance)
+                : DiagramRenderer.localImage(document, block.target());
+        if (block.kind() == Block.Kind.IMAGE
+                && imageLoader != null
+                && ImageLoader.supports(block.target(), path.orElse(null))) {
+            requests.add(new PendingImage(block, path.orElse(null)));
+            return firstFrame ? Optional.empty() : imageLoader.cached(block.target(), svgScale());
+        }
+        return path;
+    }
+
+    private double svgScale() {
+        // Keep SVG logical pixels proportional to a 16 px text line on every display density.
+        return imageCellHeight / 16.0;
     }
 
     private void updateSearch(String query) {

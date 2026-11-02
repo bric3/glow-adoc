@@ -79,10 +79,13 @@ final class HtmlContent {
                 if (parentElement != null
                         && parentElement.normalName().equals("paragraph")
                         && parentElement.ownText().isBlank()
-                        && parentElement.childrenSize() == 1) {
+                        && parentElement
+                            .children()
+                            .stream()
+                            .allMatch(child -> child.normalName().equals("inline-image"))) {
                     tag = "image";
                 } else {
-                    out.append(escape("[image: " + element.text() + "]"));
+                    out.append("[image: ").append(nodes(element)).append("]");
                     continue;
                 }
             }

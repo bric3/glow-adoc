@@ -620,6 +620,86 @@ class PackagedCliTest {
         }
     }
 
+    @TableTest("""
+        width | sameRow
+        80    | true
+        20    | false
+        """)
+    void rendersGroupedSvgBadgesAfterTextAndRetainsMouseLinks(int width, boolean sameRow) throws Exception {
+        Files.writeString(
+                directory.resolve("badge.svg"),
+                "<svg xmlns='http://www.w3.org/2000/svg' width='90' height='20'><rect width='90' height='20' fill='green'/></svg>"
+        );
+        Path input = directory.resolve("badges.adoc");
+        Files.writeString(
+                input,
+                """
+                FIRST_TEXT
+
+                image:badge.svg[Build,link=https://example.org/build]
+                image:missing.svg[Missing,link=https://example.org/missing]
+                image:badge.svg[License,link=https://example.org/license]
+
+                AFTER_BADGES
+                """
+        );
+        Path transcript = directory.resolve("badge-transcript");
+        var process = startPty(
+                input.toString(),
+                transcript,
+                true,
+                Map.of("SSH_CONNECTION", "test"),
+                "--timings",
+                "--width=" + width,
+                "--image-dim=false"
+        );
+        try {
+            await(process, transcript, "timing first-frame:");
+            assertTrue(screen(Files.readString(transcript)).contains("FIRST_TEXT"));
+            process.getOutputStream().write("_Gi=2147483000;OK\\".getBytes());
+            process.getOutputStream().flush();
+            await(process, transcript, "timing first-image:");
+            awaitScreen(process, transcript, "AFTER_BADGES");
+            String output = Files.readString(transcript);
+            assertTrue(output.indexOf("timing first-frame:") < output.indexOf("a=t,t=d,f=100"));
+            var position = Pattern.compile("\\[(\\d+);(\\d+)H_Ga=p").matcher(output);
+            assertTrue(position.find(), "SVG badge placement");
+            int firstRow = Integer.parseInt(position.group(1));
+            int firstColumn = Integer.parseInt(position.group(2));
+            String coordinates = position.group(2) + ";" + position.group(1);
+            assertTrue(position.find(), "Second SVG badge placement");
+            assertEquals(
+                    sameRow,
+                    firstRow == Integer.parseInt(position.group(1)),
+                    "Adjacent badges share a row when they fit"
+            );
+            if (sameRow) {
+                assertTrue(Integer.parseInt(position.group(2)) > firstColumn);
+            }
+            int beforeResize = Files.readString(transcript).length();
+            process.getOutputStream().write("[6;32;16t".getBytes());
+            process.getOutputStream().flush();
+            assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+                while (!Files.readString(transcript).substring(beforeResize).contains(",c=12")) {
+                    Thread.sleep(10);
+                }
+            });
+            process.getOutputStream().write(("[C".repeat(8) + "[<0;" + coordinates + "M[<0;" + coordinates + "m")
+                .getBytes()
+            );
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "SSH:");
+            assertTrue(Files.readString(transcript).contains("https://example.org/build"));
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
     @Test
     void handlesThemeNotificationsAndKittyImages() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeTrue(Files.isExecutable(Path.of("/usr/bin/script")));

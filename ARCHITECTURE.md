@@ -16,6 +16,7 @@ terminal rows, and direct output or the pager displays them.
 | glowadoc-highlight-lumis4j | Lumis4J, ANSI style decoding and persisted highlight spans               |
 | glowadoc-render            | Wrapping, tables, decoration and stable block positions                  |
 | glowadoc-terminal          | Aesh connection, replies, colours, ANSI and Kitty graphics               |
+| glowadoc-images            | Bounded SVG loading and rasterisation through JSVG                       |
 | glowadoc-pager             | TamboUI events, viewport, folding, search and placements                 |
 | glowadoc-diagrams-common   | Diagram contract, caching, background work and local image resolution    |
 | glowadoc-diagrams-plantuml | Embedded MIT PlantUML                                                    |
@@ -62,9 +63,24 @@ native OSC 8 activation in the client terminal. Closing cancels the opener witho
 
 Image metadata reserves rows. Visible assets upload once per session; stable placement IDs update
 position and crop without retransmitting pixels. PNG bytes stream directly; other formats convert once.
+Placements specify columns; the terminal derives height from the image's aspect ratio. Scroll crops
+use the reported cell proportions, including partial image rows. Cell-size replies trigger layout again.
+SVG raster density follows cell height against a 16 px reference text line. Raster cache keys include
+density, so new cell-size reports rerender vectors; successful source downloads are reused.
+Scaling stays within the SVG dimension and pixel limits.
 Off-screen placements are removed while image data remains available.
 Least-recently-used off-screen images are evicted above the 128 MiB residency target;
 the visible working set remains resident. Exit deletes all owned images.
+
+Image-only paragraphs retain their images and links as one asset group. The pager places images
+beside each other with a one-cell gap and wraps at the reading width. Missing members retain short,
+linked alt labels. Block images remain separate.
+After the first text frame, `glowadoc-images` loads visible local SVG images and HTTPS badges from
+Shields and GitHub Actions on a serial background worker. Requests have a three-second deadline,
+a 256 KiB source limit and no redirects. Other remote hosts retain linked alt text.
+SVG parsing disables DTDs and external entities; JSVG denies external resources and bounds document
+complexity and raster dimensions. Session-local PNGs reuse the existing Kitty pipeline and are deleted
+on exit. Downloads, SVG parsing and rasterisation stay outside the first-text path.
 
 After the first text frame, the pager requests visible diagrams on a serial background worker.
 Completed images replace source and preserve the viewport's block and relative row. Off-screen

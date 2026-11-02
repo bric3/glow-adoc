@@ -3,7 +3,7 @@
 = glow-adoc
 
 image:https://github.com/bric3/glow-adoc/actions/workflows/ci.yml/badge.svg?branch=master[Build,link=https://github.com/bric3/glow-adoc/actions/workflows/ci.yml]
-image:https://img.shields.io/badge/license-MPL--2.0-blue[MPL 2.0,link=LICENSE]
+image:https://img.shields.io/badge/license-MPL%2D%2D2.0-blue[MPL 2.0,link=LICENSE]
 image:https://img.shields.io/github/v/release/bric3/glow-adoc[Latest release,link=https://github.com/bric3/glow-adoc/releases/latest]
 
 glow-adoc makes AsciiDoc comfortable to read in your terminal, with a searchable pager,
@@ -11,13 +11,14 @@ highlighted code, aligned tables, colourful admonitions and collapsible sections
 
 * Search as you type, follow clickable links and navigate with the keyboard or mouse.
 * Read with automatic light/dark themes and text that wraps at 120 columns by default.
-* View local images through Kitty graphics, including over SSH, and render PlantUML diagrams.
+* View local images and live SVG badges through Kitty graphics, including over SSH, and render PlantUML diagrams.
 * Open files or stdin, or write formatted text directly to stdout.
 
 Built with https://github.com/asciidoctor/asciidoctorj[AsciidoctorJ] on
 https://github.com/jruby/jruby[JRuby] for parsing,
 https://github.com/tamboui/tamboui[TamboUI] for the pager,
-https://github.com/roastedroot/lumis4j[Lumis4J] for highlighting and
+https://github.com/roastedroot/lumis4j[Lumis4J] for highlighting,
+https://github.com/weisJ/jsvg[JSVG] for SVG images and
 https://github.com/plantuml/plantuml[PlantUML] for diagrams.
 Mermaid support uses optional https://github.com/Latias94/merman[Merman]: `brew install merman-cli`.
 
@@ -61,6 +62,11 @@ cat document.adoc | glow-adoc -
 
 Press `/` to search, `n/N` to cycle matches, Tab/Enter to toggle sections and `q` to quit.
 Press `m` to switch between mouse controls and terminal text selection.
+
+SVG images and HTTPS badges from `img.shields.io` and GitHub Actions load after the first text frame.
+Adjacent inline images share a row and wrap at the reading width.
+SVGs scale with reported terminal text height for HiDPI displays.
+Unavailable images retain linked alt text. `--images=never` disables images and badge downloads.
 
 == Configure
 

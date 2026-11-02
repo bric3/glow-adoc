@@ -18,7 +18,7 @@ import javax.imageio.ImageIO;
 import javax.xml.stream.XMLInputFactory;
 
 /**
- * Headless, opt-in SVG evaluation; never loads SVG support into the application.
+ * Headless, opt-in SVG evaluation, independent of the application's image loader.
  */
 public class SvgProbe {
     public static void main(String[] args) throws Exception {

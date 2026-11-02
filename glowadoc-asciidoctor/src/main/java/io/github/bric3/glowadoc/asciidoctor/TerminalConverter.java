@@ -10,6 +10,7 @@ import org.asciidoctor.ast.StructuralNode;
 import org.asciidoctor.ast.Table;
 import org.asciidoctor.converter.ConverterFor;
 import org.asciidoctor.converter.StringConverter;
+import org.jsoup.parser.Parser;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -57,11 +58,15 @@ public final class TerminalConverter extends StringConverter {
                             + (text == null || text.isEmpty() ? escape(phrase.getTarget()) : text)
                             + "</link>";
                 }
-                case "inline_image" -> "<inline-image target=\""
-                        + escape(imageTarget(node, phrase.getTarget()))
-                        + "\">"
-                        + escape(String.valueOf(node.getAttribute("alt", "image")))
-                        + "</inline-image>";
+                case "inline_image" -> {
+                    // Inline targets have already passed through special-character substitution.
+                    String target = Parser.unescapeEntities(phrase.getTarget(), true);
+                    yield "<inline-image target=\""
+                            + escape(imageTarget(node, target))
+                            + "\">"
+                            + imageText(node)
+                            + "</inline-image>";
+                }
                 case "inline_break" -> text + "<br/>";
                 case "inline_callout" -> "<callout number=\"" + escape(text) + "\"/>";
                 case "inline_footnote" -> "[" + text + "]";
@@ -170,7 +175,7 @@ public final class TerminalConverter extends StringConverter {
                 return "<image target=\""
                         + escape(imageTarget(node, String.valueOf(node.getAttribute("target", ""))))
                         + "\">"
-                        + escape(String.valueOf(node.getAttribute("alt", "image")))
+                        + imageText(node)
                         + "</image>";
             }
             if (name.equals("listing") || name.equals("literal")) {
@@ -215,6 +220,12 @@ public final class TerminalConverter extends StringConverter {
             };
         }
         return "";
+    }
+
+    private static String imageText(ContentNode node) {
+        String alt = escape(String.valueOf(node.getAttribute("alt", "image")));
+        String link = String.valueOf(node.getAttribute("link", ""));
+        return link.isEmpty() ? alt : "<link target=\"" + escape(link) + "\">" + alt + "</link>";
     }
 
     private static String imageTarget(ContentNode node, String target) {

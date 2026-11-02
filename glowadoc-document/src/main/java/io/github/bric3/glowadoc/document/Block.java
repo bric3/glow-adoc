@@ -90,6 +90,13 @@ public record Block(
         return spans.stream().map(Span::text).collect(Collectors.joining());
     }
 
+    public boolean imageOnlyParagraph() {
+        return kind == Kind.PARAGRAPH
+                && spans.isEmpty()
+                && !children.isEmpty()
+                && children.stream().allMatch(child -> child.kind() == Kind.IMAGE);
+    }
+
     public static Block text(Kind kind, String text) {
         return new Block(kind, "", List.of(new Span(text)), List.of(), "", "");
     }

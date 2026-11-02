@@ -16,6 +16,7 @@ com.github.jnr:jnr-netdb:1.2.0=runtimeClasspath,testRuntimeClasspath
 com.github.jnr:jnr-posix:3.2.4=runtimeClasspath,testRuntimeClasspath
 com.github.jnr:jnr-unixsocket:0.39.5=runtimeClasspath,testRuntimeClasspath
 com.github.jnr:jnr-x86asm:1.0.2=runtimeClasspath,testRuntimeClasspath
+com.github.weisj:jsvg:2.2.0=runtimeClasspath,testRuntimeClasspath
 com.headius:backport9:1.13=runtimeClasspath,testRuntimeClasspath
 com.headius:invokebinder:1.16=runtimeClasspath,testRuntimeClasspath
 com.headius:options:1.6=runtimeClasspath,testRuntimeClasspath

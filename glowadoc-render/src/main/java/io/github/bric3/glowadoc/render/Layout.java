@@ -223,6 +223,16 @@ public final class Layout {
         int position = positions.get(block);
         Palette palette = Palette.forAppearance(appearance);
         var lines = new ArrayList<RenderedLine>();
+        if (block.imageOnlyParagraph()) {
+            for (Block child : block.children()) {
+                for (var line : render(child, width, appearance, positions, toggled, interactive)) {
+                    lines.add(new RenderedLine(line.spans(), position, null));
+                }
+            }
+            var first = lines.getFirst();
+            lines.set(0, new RenderedLine(first.spans(), position, block));
+            return lines;
+        }
         if (block.kind() == Block.Kind.TABLE) {
             for (var row : TextLayout.wrap(theme(block.format().titleSpans(), palette), width, false)) {
                 if (!row.isEmpty()) {
@@ -285,7 +295,14 @@ public final class Layout {
                 .toList();
         }
         if (block.kind() == Block.Kind.IMAGE) {
-            spans = List.of(new Span("[image: " + block.text() + "] " + block.target()));
+            Style link =
+                    spans
+                .stream()
+                .map(Span::style)
+                .filter(style -> !style.link().isEmpty())
+                .findFirst()
+                .orElse(Style.PLAIN);
+            spans = List.of(new Span("[image: " + block.text() + "] " + block.target(), link));
         }
         if (!spans.isEmpty()) {
             for (var row : TextLayout.wrap(spans, inner, source || block.kind() == Block.Kind.VERSE)) {

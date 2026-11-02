@@ -14,11 +14,19 @@ glow-adoc -a image-assets="$PWD/static/assets" content/posts/post.adoc
 Use `$HOME` for absolute CLI paths rather than relying on tilde expansion after `=`.
 Relative attribute values remain AsciiDoc values; declare an image root as shown in the README.
 
-Graphics require the pager, `--images=auto`, readable supported files and a Kitty capability reply.
-Direct output and mixed inline images retain descriptions.
+Graphics require the pager, `--images=auto` and a Kitty capability reply.
+Image-only paragraphs display images; mixed prose and direct output retain descriptions.
 Multiplexers and terminal frontends can block or omit graphics support.
 A libghostty-based parser does not establish that its frontend renders images.
 Images are limited to 20 megapixels. Only allowed directories are read; symlinks cannot escape them.
+Images scale within the reading width and 1000 rows while preserving proportions. An image that
+would exceed that height at one column retains its description.
+SVG badge size follows the reported terminal cell height. New cell-size replies request a new raster
+density; missing replies use the 8 x 16 fallback.
+SVGs are limited to 256 KiB and two megapixels; external resources and HTML `foreignObject` are unsupported.
+Remote badges load only from `img.shields.io` and GitHub Actions over HTTPS. HTTP errors, redirects,
+timeouts and unsupported sources retain linked alt text. Encode URL punctuation such as `--` as
+`%2D%2D` to prevent Asciidoctor's typographic substitutions from changing inline image targets.
 
 == SSH
 

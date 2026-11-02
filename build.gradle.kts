@@ -20,6 +20,7 @@ tasks.register("checkAll") {
         ":glowadoc-highlight-common:test",
         ":glowadoc-render:test",
         ":glowadoc-terminal:test",
+        ":glowadoc-images:test",
         ":glowadoc-pager:test",
         ":glowadoc-diagrams-common:test",
         ":glowadoc-diagrams-plantuml:test",
