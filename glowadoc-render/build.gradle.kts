@@ -6,6 +6,6 @@ plugins {
 
 dependencies {
     api(project(":glowadoc-document"))
-    api(project(":glowadoc-highlight"))
+    api(project(":glowadoc-highlight-common"))
     implementation("dev.tamboui:tamboui-core:0.6.0")
 }

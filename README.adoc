@@ -23,6 +23,7 @@ Mermaid support uses optional https://github.com/Latias94/merman[Merman]: `brew 
 == Install
 
 The pager runs on macOS and Linux with Java 27+. A Nerd Font enables the default icons.
+If mise is available, it must provide an installed Java 27.
 
 === Homebrew
 
@@ -43,7 +44,8 @@ From a checkout, with Java 27 installed:
 export PATH="$HOME/.local/bin:$PATH"
 ----
 
-Installation pretrains a local AOT cache and writes `~/.local/bin/glow-adoc`.
+Installation pretrains a local AOT cache and writes a small launcher to `~/.local/bin/glow-adoc`.
+The jar lives in `~/.local/share/glow-adoc/glow-adoc.jar`, or under `$XDG_DATA_HOME`.
 Use `:glowadoc-cli-jvm:installWithoutAot` to skip training.
 
 == Read

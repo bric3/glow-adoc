@@ -18,10 +18,10 @@ pin the complete graph and downloaded bytes.
 | TamboUI core 0.6.0         | `glowadoc-render`            | Terminal text widths and layout types; MIT.                                 |
 | TamboUI TUI 0.6.0          | `glowadoc-pager`             | Pager event loop and rendering; MIT.                                        |
 | TamboUI Aesh backend 0.6.0 | `glowadoc-terminal`          | Terminal connection; MIT.                                                   |
-| Aesh 3.18.6                | `glowadoc-cli`               | Command parsing; Apache-2.0.                                                |
-| TOMLJ 1.1.1                | `glowadoc-cli`               | Configuration parsing; Apache-2.0.                                          |
+| Aesh 3.18.6                | `glowadoc-cli-common`        | Command parsing; Apache-2.0.                                                |
+| TOMLJ 1.1.1                | `glowadoc-cli-common`        | Configuration parsing; Apache-2.0.                                          |
 | Lumis4J 0.0.10             | `glowadoc-highlight-lumis4j` | Syntax highlighting; Apache-2.0, with upstream terms for bundled resources. |
-| PlantUML MIT 1.2026.6      | `glowadoc-diagrams`          | Embedded diagrams; MIT, with bundled-resource notices.                      |
+| PlantUML MIT 1.2026.6      | `glowadoc-diagrams-plantuml` | Embedded diagrams; MIT, with bundled-resource notices.                      |
 
 Use `net.sourceforge.plantuml:plantuml-mit`. Its feature set excludes ditaa.
 See [PlantUML's distributions](https://plantuml.com/download) and the

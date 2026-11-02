@@ -12,13 +12,15 @@ terminal rows, and direct output or the pager displays them.
 | glowadoc-document          | Immutable blocks, spans, styles, appearance and safe text/link handling  |
 | glowadoc-cache             | Private bounded entries, integrity checks and packaged artifact identity |
 | glowadoc-asciidoctor       | AsciidoctorJ, includes, shortcodes and conversion                        |
-| glowadoc-highlight         | Highlighter contract and deferred, cached highlighting                   |
+| glowadoc-highlight-common  | Highlighter contract and deferred, cached highlighting                   |
 | glowadoc-highlight-lumis4j | Lumis4J, ANSI style decoding and persisted highlight spans               |
 | glowadoc-render            | Wrapping, tables, decoration and stable block positions                  |
 | glowadoc-terminal          | Aesh connection, replies, colours, ANSI and Kitty graphics               |
 | glowadoc-pager             | TamboUI events, viewport, folding, search and placements                 |
-| glowadoc-diagrams          | Embedded MIT PlantUML and bounded Merman processes                       |
-| glowadoc-cli               | Arguments, configuration and assembly                                    |
+| glowadoc-diagrams-common   | Diagram contract, caching, background work and local image resolution    |
+| glowadoc-diagrams-plantuml | Embedded MIT PlantUML                                                    |
+| glowadoc-diagrams-merman   | Mermaid diagrams through bounded Merman processes                        |
+| glowadoc-cli-common        | Shared arguments, configuration and assembly                             |
 | glowadoc-cli-jvm           | Bootstrap, jars, launcher, install and AOT                               |
 | glowadoc-cli-native        | Experimental complete-application Native Image                           |
 
@@ -69,6 +71,13 @@ Completed images replace source and preserve the viewport's block and relative r
 diagrams wait until displayed. Theme changes retain the previous image until its replacement is ready.
 Background diagnostics pass through the event loop; closing cancels work and terminates renderer processes.
 
+The CLI supplies PlantUML and Merman implementations of `DiagramBackend` to the common renderer.
+The pager depends only on `glowadoc-diagrams-common`; renderer-specific dependencies stay in their
+adapter modules. The common renderer owns caching, the 100 KB source limit and the 15-second render
+deadline. Adapters bound image output to 10 MB; Merman also bounds diagnostic output to 64 KB.
+Additional engines such as svgbob can use the same contract. Adding one also requires recognising
+its AsciiDoc block style and registering the adapter in the CLI. No svgbob renderer is bundled.
+
 ## Resources and distribution
 
 Includes stay within the document directory. Images also use configured roots and absolute directories
@@ -82,7 +91,15 @@ Unsupported capabilities and failed renderers retain readable text.
 The Gradle daemon uses Java 27; application bytecode targets 25 and the bootstrap targets 8.
 Shadow preserves service registrations, JRuby resources and multi-release metadata.
 The executable jar prepends a POSIX launcher with Java-manager selection.
-The launcher delegates to the first available manager, then falls back to `java` on PATH.
+Both launcher templates live in `glowadoc-cli-jvm/src/main/scripts` and are declared file inputs
+to the packaging and installation tasks.
+Local installation writes a small script to `~/.local/bin/glow-adoc` and the jar to
+`$XDG_DATA_HOME/glow-adoc/glow-adoc.jar`, defaulting to `~/.local/share/glow-adoc/glow-adoc.jar`.
+The script reads the jar through zsh's sh emulation when available, falling back to `/bin/sh`.
+This avoids the large-file startup cost observed with `/bin/sh` on macOS. The portable executable
+jar remains available; `java -jar` also opens it directly.
+The launcher requests Java 27 from mise, or delegates to the next available manager's selected JDK,
+then falls back to `java` on PATH.
 It performs no version probes or installed-version searches; the Java 8-compatible bootstrap checks
 the Java 27 minimum. A generation hash of the launcher template and Shadow jar filters impossible
 AOT lookups. Possible hits still require the full executable hash and runtime identity. When the launcher hashes the jar
@@ -91,13 +108,17 @@ digest only for the matching runtime jar and a valid SHA-256 value; ordinary Jav
 Artifact ownership comes from live class-resource jar URLs. Archived protection domains can retain
 training-time paths, so their CodeSource URLs cannot identify a relocated runtime jar.
 
-AOT training uses a bundled, project-owned corpus. `install` trains a staged executable before
+AOT training uses a bundled, project-owned corpus. `install` trains a staged `glow-adoc.jar` before
 installing it; `installWithoutAot` skips training. The CLI extracts the declared corpus includes and
 assets into a private temporary directory and removes it after rendering. Training and installation
-preserve the executable basename and timestamp so HotSpot
+preserve the jar basename and timestamp so HotSpot
 can relocate the cache. Training and possible hits enter the selected manager's environment before
-resolving Java and reading its release metadata. Cache identity includes executable bytes and filename,
-Java path and release metadata, OS/architecture and JVM option environment. The installation directory
+resolving Java and reading its release metadata. An available `JAVA_HOME` inside that environment
+resolves manager shims and gives aliases of the same JDK a stable cache identity. A different JDK
+selected directly on PATH takes precedence over an inherited `JAVA_HOME`.
+Unmanaged launches keep Java on PATH and skip the extra shell invocation.
+Cache identity includes jar bytes and filename, Java path and release metadata, OS/architecture
+and JVM option environment. The installation directory
 is excluded from identity; full executable bytes still validate candidates. Missing metadata disables
 automatic AOT and prevents training. A missing cache selects ordinary startup.
 Source uses MPL 2.0; dependencies retain their own licences and notices.

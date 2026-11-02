@@ -14,13 +14,15 @@ tasks.register("checkAll") {
     dependsOn(
         ":glowadoc-cache:test",
         ":glowadoc-cli-jvm:build",
-        ":glowadoc-cli:test",
+        ":glowadoc-cli-common:test",
         ":glowadoc-asciidoctor:test",
         ":glowadoc-highlight-lumis4j:test",
-        ":glowadoc-highlight:test",
+        ":glowadoc-highlight-common:test",
         ":glowadoc-render:test",
         ":glowadoc-terminal:test",
         ":glowadoc-pager:test",
-        ":glowadoc-diagrams:test",
+        ":glowadoc-diagrams-common:test",
+        ":glowadoc-diagrams-plantuml:test",
+        ":glowadoc-diagrams-merman:test",
     )
 }

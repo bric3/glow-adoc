@@ -13,7 +13,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":glowadoc-cli"))
+    implementation(project(":glowadoc-cli-common"))
 }
 
 application {
@@ -76,6 +76,7 @@ val executableJar = tasks.register<ExecutableJar>("executableJar") {
     group = "distribution"
     description = "Create a shell-prefixed executable copy of the Shadow jar."
     inputJar = tasks.shadowJar.flatMap { it.archiveFile }
+    launcherScript = layout.projectDirectory.file("src/main/scripts/java-launcher.sh")
     outputJar = layout.buildDirectory.file("libs/glow-adoc-${project.version}-app.jar")
 }
 
@@ -97,7 +98,12 @@ val installWithoutAot = tasks.register<InstallExecutable>("installWithoutAot") {
     group = "distribution"
     description = "Install glow-adoc to ~/.local/bin without AOT training."
     jar = executableJar.flatMap { it.outputJar }
+    launcherScript = layout.projectDirectory.file("src/main/scripts/installed-launcher.sh")
     executable = layout.file(providers.systemProperty("user.home").map { File("$it/.local/bin/glow-adoc") })
+    val dataHome = providers.environmentVariable("XDG_DATA_HOME")
+        .filter { File(it).isAbsolute }
+        .orElse(providers.systemProperty("user.home").map { "$it/.local/share" })
+    installedJar = layout.file(dataHome.map { File(it, "glow-adoc/glow-adoc.jar") })
 }
 
 tasks.assemble {
@@ -140,7 +146,7 @@ val aotTrain = tasks.register<AotTrain>("aotTrain") {
     group = "distribution"
     description = "Pre-train an installable executable with the bundled AsciiDoc workload."
     jar = executableJar.flatMap { it.outputJar }
-    executable = layout.buildDirectory.file("aot/glow-adoc")
+    executable = layout.buildDirectory.file("aot/glow-adoc.jar")
 }
 
 installWithoutAot.configure {

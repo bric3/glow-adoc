@@ -25,6 +25,10 @@ abstract class ExecutableJar : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val inputJar: RegularFileProperty
 
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val launcherScript: RegularFileProperty
+
     @get:OutputFile
     abstract val outputJar: RegularFileProperty
 
@@ -33,9 +37,7 @@ abstract class ExecutableJar : DefaultTask() {
         val target = outputJar.get().asFile
         target.parentFile.mkdirs()
         target.outputStream().use { output ->
-            val template = requireNotNull(ExecutableJar::class.java.getResourceAsStream("/java-launcher.sh"))
-                .bufferedReader(Charsets.UTF_8)
-                .use { it.readText() }
+            val template = launcherScript.get().asFile.readText(Charsets.UTF_8)
             // The build hint filters AOT misses; complete executable hashes still validate candidates.
             val generation = MessageDigest.getInstance("SHA-256")
             generation.update(template.toByteArray(Charsets.UTF_8))

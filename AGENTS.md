@@ -17,6 +17,7 @@
 - Use `io.github.bric3.glowadoc` as the base package for owned Java and Kotlin types, including tests, build logic and tools.
 - Prefix subproject and included build names with `glowadoc-`. Name application module directories after their projects.
 - Read [Architecture](ARCHITECTURE.md) before changing boundaries. Keep AsciidoctorJ in `glowadoc-asciidoctor`, Lumis4J in `glowadoc-highlight-lumis4j`, and terminal/UI types in their adapters.
+- Keep diagram engines in their adapter modules. The pager depends only on `glowadoc-diagrams-common`.
 - Put behaviour with its data and knowledge. Prefer existing APIs and narrow dependencies; avoid speculative abstractions.
 - Use four-space indentation and 120 columns. Spotless runs Prince of Space, then the TableTest formatter, for Java and ktlint IntelliJ style for Kotlin. Honour `.editorconfig`.
 - Prefer TableTest for input/output matrices, using argument converters when useful. Keep ordinary JUnit tests for lifecycle and asynchronous scenarios.

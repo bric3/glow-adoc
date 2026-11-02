@@ -7,7 +7,6 @@ dev.tamboui:tamboui-annotations:0.6.0=compileClasspath,runtimeClasspath,testComp
 dev.tamboui:tamboui-core:0.6.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 dev.tamboui:tamboui-tui:0.6.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 dev.tamboui:tamboui-widgets:0.6.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
-net.sourceforge.plantuml:plantuml-mit:1.2026.6=runtimeClasspath,testRuntimeClasspath
 org.aesh:terminal-api:3.16.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.aesh:terminal-detect:3.16.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.aesh:terminal-tty:3.16.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath

@@ -8,7 +8,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":glowadoc-cli"))
+    implementation(project(":glowadoc-cli-common"))
 }
 
 application {

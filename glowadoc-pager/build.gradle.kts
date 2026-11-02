@@ -7,7 +7,7 @@ plugins {
 dependencies {
     implementation(project(":glowadoc-render"))
     implementation(project(":glowadoc-terminal"))
-    implementation(project(":glowadoc-highlight"))
-    implementation(project(":glowadoc-diagrams"))
+    implementation(project(":glowadoc-highlight-common"))
+    implementation(project(":glowadoc-diagrams-common"))
     implementation(libs.tamboui.tui)
 }

@@ -69,7 +69,9 @@ class JavaLauncherTest {
         javaAt(bin.resolve("java"), "PATH");
         assertEquals(0, run("a file with spaces.adoc"));
         assertEquals("mise", arguments().getFirst());
-        assertFalse(Files.readString(directory.resolve("manager-calls")).contains("where"));
+        String calls = Files.readString(directory.resolve("manager-calls"));
+        assertTrue(calls.startsWith("mise\nexec\njava@27\n--\njava\n"), calls);
+        assertFalse(calls.contains("where"));
     }
 
     @TableTest("""
@@ -228,6 +230,22 @@ class JavaLauncherTest {
         assertFalse(output.contains("artifact-hash-start"), output);
     }
 
+    @TableTest("""
+        option
+        --help
+        --version
+        """)
+    void helpAndVersionSkipAotWhenTimingsPrecedesThem(String option) throws Exception {
+        usePathJava("selected");
+        environment.put("XDG_CACHE_HOME", directory.resolve("informational-aot").toString());
+        assertEquals(0, run("--train-aot"));
+        assertEquals(0, run("--timings", option));
+        assertFalse(arguments().contains("-XX:AOTMode=auto"));
+        assertFalse(Files.readString(directory.resolve("output.txt")).contains("artifact-hash-start"));
+        assertEquals(0, run("--", option));
+        assertTrue(arguments().contains("-XX:AOTMode=auto"));
+    }
+
     @Test
     void missingJdkMetadataSkipsAutomaticAotWithoutProbingJava() throws Exception {
         Path selected = usePathJava("selected");
@@ -317,6 +335,78 @@ class JavaLauncherTest {
         manager(name, selected, "export JAVA_TOOL_OPTIONS='-javaagent:example.jar'\n");
         assertEquals(0, run("document.adoc"));
         assertFalse(arguments().contains("-XX:AOTMode=auto"));
+    }
+
+    @TableTest("""
+        name
+        mise
+        asdf
+        jenv
+        """)
+    void aotUsesManagerJavaHomeWhenJavaIsAShim(String name) throws Exception {
+        Path selected = javaHome("managed JDK", "managed");
+        Path shims = Files.createDirectory(directory.resolve("shims"));
+        script(shims.resolve("java"), "exit 93\n");
+        manager(
+                name,
+                selected,
+                "JAVA_HOME="
+                + quote(selected.toString())
+                + "\nexport JAVA_HOME\nPATH="
+                + quote(shims.toString())
+                + ":$PATH\nexport PATH\n"
+        );
+        environment.put("XDG_CACHE_HOME", directory.resolve("shim-aot").toString());
+        assertEquals(0, run("--train-aot"));
+        assertEquals(0, run("document.adoc"));
+        assertEquals("managed", arguments().getFirst());
+        assertTrue(arguments().contains("-XX:AOTMode=auto"));
+    }
+
+    @Test
+    void aotIgnoresUnselectedJavaHomeWhenUsingPath() throws Exception {
+        usePathJava("PATH selected");
+        environment.put("JAVA_HOME", javaHome("other JDK", "unselected").toString());
+        environment.put("XDG_CACHE_HOME", directory.resolve("path-aot").toString());
+        assertEquals(0, run("--train-aot"));
+        assertEquals(0, run("document.adoc"));
+        assertEquals("PATH selected", arguments().getFirst());
+        assertTrue(arguments().contains("-XX:AOTMode=auto"));
+    }
+
+    @TableTest("""
+        name
+        mise
+        asdf
+        jenv
+        """)
+    void aotKeepsTheManagersPathJavaWhenJavaHomeIsStale(String name) throws Exception {
+        Path selected = javaHome("managed JDK", "managed");
+        manager(name, selected, "");
+        environment.put("JAVA_HOME", javaHome("other JDK", "unselected").toString());
+        environment.put("XDG_CACHE_HOME", directory.resolve("manager-path-aot").toString());
+        assertEquals(0, run("--train-aot"));
+        assertEquals(0, run("document.adoc"));
+        assertEquals("managed", arguments().getFirst());
+        assertTrue(arguments().contains("-XX:AOTMode=auto"));
+    }
+
+    @TableTest("""
+        name
+        mise
+        asdf
+        jenv
+        """)
+    void aotReusesTheManagersJavaHomeAcrossPathAliases(String name) throws Exception {
+        Path selected = javaHome("managed JDK", "managed");
+        Path alias = Files.createSymbolicLink(directory.resolve("current JDK"), selected);
+        String setup = "export JAVA_HOME=" + quote(selected.toString()) + "\n";
+        manager(name, alias, setup);
+        environment.put("XDG_CACHE_HOME", directory.resolve("manager-alias-aot").toString());
+        assertEquals(0, run("--train-aot"));
+        manager(name, selected, setup);
+        assertEquals(0, run("document.adoc"));
+        assertTrue(arguments().contains("-XX:AOTMode=auto"));
     }
 
     @TableTest("""
@@ -423,6 +513,7 @@ class JavaLauncherTest {
                         "\n",
                         "for option do",
                         "  case \"$option\" in",
+                        "    -jar) break ;;",
                         "    -version|--version|-XshowSettings*) exit 92 ;;",
                         "    -XX:AOTCacheOutput=*) printf cache > \"${option#*=}\" ;;",
                         "  esac",
@@ -446,6 +537,7 @@ class JavaLauncherTest {
                         "[ \"$MISE_OFFLINE:$MISE_AUTO_INSTALL:$MISE_EXEC_AUTO_INSTALL\" = 1:0:0 ]" + " || exit 90",
                         "if [ \"$1\" = exec ]; then",
                         "  shift",
+                        "  if [ " + quote(name) + " = mise ] && [ \"${1:-}\" = java@27 ]; then shift; fi",
                         "  [ \"${1:-}\" != -- ] || shift",
                         "  [ " + quote(name) + " != asdf ] || [ \"$1\" = java ] || exit 94",
                         "elif [ " + quote(name) + " = asdf ] && [ \"$1:$2\" = env:java ]; then",

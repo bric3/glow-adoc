@@ -18,8 +18,12 @@ class GlowAdoc < Formula
     (bin/"glow-adoc").write <<~SH
       #!/bin/sh
       export JAVA_HOME="#{Formula["openjdk@27"].opt_prefix}"
-      exec "#{libexec}/glow-adoc.jar" "$@"
+      if [ -x /bin/zsh ]; then
+        exec /bin/zsh --emulate sh "#{libexec}/glow-adoc.jar" "$@"
+      fi
+      exec /bin/sh "#{libexec}/glow-adoc.jar" "$@"
     SH
+    (bin/"glow-adoc").chmod 0755
   end
 
   test do

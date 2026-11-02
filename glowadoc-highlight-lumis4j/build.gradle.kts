@@ -6,6 +6,6 @@ plugins {
 
 dependencies {
     implementation(project(":glowadoc-cache"))
-    api(project(":glowadoc-highlight"))
+    api(project(":glowadoc-highlight-common"))
     implementation(libs.lumis)
 }

@@ -65,10 +65,14 @@ Pre-train locally before installation:
 ./gradlew :glowadoc-cli-jvm:install
 ----
 
-The task trains a staged executable named `glow-adoc`, then installs it with its original timestamp.
+The task trains a staged executable named `glow-adoc.jar`, then installs it with its original timestamp.
 The JVM permits relocation when the filename and timestamp match. The launcher validates the full
 executable bytes, filename and runtime before selecting that cache; its directory is not part of the key.
-`:glowadoc-cli-jvm:installWithoutAot` copies the executable without training. An existing compatible cache
+The jar lives under `$XDG_DATA_HOME/glow-adoc`, defaulting to `~/.local/share/glow-adoc`.
+The small script in `~/.local/bin/glow-adoc` reads it with zsh's sh emulation when available,
+falling back to `/bin/sh`. This avoids the measured macOS startup cost of large executable files under `/bin/sh`.
+Portable executable jars retain their embedded launcher.
+`:glowadoc-cli-jvm:installWithoutAot` installs both files without training. An existing compatible cache
 can still be selected at runtime.
 
 To train an existing installation:
@@ -110,9 +114,12 @@ uses the JVM's auto fallback and may report diagnostics on stderr.
 
 The launcher supplies the same compressed-reference compatibility flags during training and loading.
 Explicit AOT flags, Java agents and flight-recording options in these variables bypass automatic selection.
-Help and version skip cache hashing. Direct `java -jar` invocation does not select these caches automatically.
+Help and version skip cache hashing, including when preceded by `--timings`.
+Direct `java -jar` invocation does not select these caches automatically.
 Training and possible matches enter the manager's environment before resolving the runtime and JVM
-option variables. This adds a shell invocation only on these AOT paths. Ordinary launches delegate
+option variables. Inside that environment, an available `JAVA_HOME` supplies the actual JDK and
+avoids a second manager shim. With no manager, Java on PATH supplies the runtime and `JAVA_HOME`
+does not override it. Only managed AOT paths need a second shell invocation. Ordinary launches delegate
 directly to the manager. AOT requires JDK `release` metadata and `sha256sum` or `shasum`; without
 them, ordinary startup still works and explicit training reports an error.
 Remove obsolete cache files from the cache directory when they are no longer needed.
@@ -166,11 +173,12 @@ and requires `--timings` in the application command. Marker observations include
 marker immediately before command execution, excluding PTY, shell and `stty` setup. The ordinary
 run rows retain the complete process-start timer.
 
-Normal startup uses `mise exec -- java`, SDKMAN!'s current candidate, `asdf exec java`,
+Normal startup uses `mise exec java@27 -- java`, SDKMAN!'s current candidate, `asdf exec java`,
 `jenv exec java`, or jabba's configured JDK, in that order. The first available manager owns runtime
 selection and errors. With no manager, the launcher runs `java` on PATH; `JAVA_HOME` alone does not
 select a runtime. No version probe, JDK search or installation runs. The Java bootstrap checks the
-actual running JVM's minimum version. Manager execution can still take time.
+actual running JVM's minimum version. Mise requests an installed Java 27 even when the working
+directory selects another Java version. Manager execution can still take time.
 
 Only AOT training and possible hits read the installed JDK's `release` file, containing version,
 vendor and build metadata. Checksum parsing uses shell builtins. When AOT lookup has already hashed the artifact,
@@ -204,6 +212,40 @@ java --sun-misc-unsafe-memory-access=allow \
 ----
 
 == Local measurements
+
+=== Launcher file size, 2026-11-02
+
+On macOS ARM64, identical shell scripts ran `exec /usr/bin/true` with increasing binary padding.
+The small script averaged 9.5 ms; adding 70 MiB raised the mean to 523.5 ms across 12 launches.
+The 32 MiB case varied substantially. Java and mise were absent from this control.
+See link:benchmarks/launcher-script-size.csv[size-control samples].
+
+A minimal four-line launcher prepended to the jar still averaged 621.9 ms for `--version`.
+A small standalone script invoking the same jar averaged about 100 ms. Invoking the jar through
+zsh's sh emulation also took about 100 ms. Explicit `mise exec java@27` alone did not consistently
+remove the delay. These observations describe this machine; they do not identify the operating
+system component responsible for the large-file cost.
+
+Local installation therefore uses a small entry point and a separate jar, while keeping the
+portable executable jar. Manager selection and AOT validation remain in the embedded launcher.
+
+The real temporary installation produced a 297-byte entry point. Its jar matched the training
+copy's bytes and timestamp; required-mode AOT loading and repeat-open conversion caching passed
+after relocation, including paths containing spaces and apostrophes.
+Across 15 fresh launches, `--version` averaged 105.7 ms, compared with 617.7 ms for the frozen
+embedded launcher. See link:benchmarks/launcher-split-version.csv[version-command samples].
+
+Ten fresh processes rendering cached `fixtures/showcase.adoc` with `--no-pager --color=never`
+averaged 1287.8 ms before the change and 353.9 ms afterwards. Both variants had trained AOT
+and conversion caches; three warmups preceded each measurement. This measures complete direct
+output, including launcher overhead. See link:benchmarks/launcher-split-cached-output.csv[cached-output samples].
+
+Five PTY launches with AOT, `--no-cache`, a dark theme and images disabled opened
+`fixtures/showcase.adoc` in 1115.8 ms median before the change and 1096.2 ms afterwards.
+The existing PTY harness executes through a shell; these results do not establish a repeatable
+document-startup improvement for that path. Conversion and JVM work remain in these measurements.
+See link:benchmarks/launcher-split-before.csv[baseline first-text samples] and
+link:benchmarks/launcher-split-after.csv[installed first-text samples].
 
 === Bundled training corpus, 2026-11-01
 
@@ -486,7 +528,7 @@ This supports deferring highlighting; it does not establish an exact CPU attribu
 |Full image retransmission |Removed from scrolling; only placement commands change.
 |Eager syntax highlighting |Deferred until the first readable pager frame.
 |Highlighting during reflow |Cached by source/language/appearance.
-|Launcher subprocesses and repeated probes |Retain manager priority and runtime validation; version-only launch was approximately 0.2 seconds.
+|Launcher subprocesses and repeated probes |Request Java 27 from mise without version probes; split installation reduced direct version-only launch to approximately 0.1 seconds locally.
 |Java executable discovery cache |Deferred: invalidation adds complexity to a small measured contribution.
 |JRuby compilation and JVM compiler limits |Benchmark separately; flags that help parsing can slow highlighting.
 |Invokedynamic, heap and GC settings |Included in the experiment matrix; no unmeasured default changes.
@@ -498,7 +540,7 @@ This supports deferring highlighting; it does not establish an exact CPU attribu
 |Repeated Lumis/Wasm initialisation |Reuse validated highlight spans across launches; first-time highlighting still loads Wasm.
 |Regex engine |Retain JDK graphemes; Reggie 0.5.0 differs on `\X`. RGB validation uses `HexFormat`. See link:REGGIE.adoc[evaluation].
 |Shadow compression |Uncompressed jar tested; larger archive and no first-frame gain. Retain compression.
-|Classpath splitting |Retain the single executable jar; no measured reason to change delivery.
+|Classpath splitting |Retain one application jar; installation separates only the small launcher.
 |Service scanning |Existing generated Aesh metadata is retained.
 |XML/jsoup pipeline |Retained for HTML/inline correctness; parser replacement is outside this change.
 |JRuby/AsciidoctorJ upgrades |Deferred pending compatibility and performance evidence for a specific version pair.

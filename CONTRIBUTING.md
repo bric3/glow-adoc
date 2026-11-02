@@ -14,7 +14,7 @@ Read [Architecture](ARCHITECTURE.md) before changing module boundaries.
 ```
 
 Run focused module tests while iterating. Enable the optional Mermaid integration with
-`GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :glowadoc-diagrams:test`. Builds must not install Merman.
+`GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :glowadoc-diagrams-merman:test`. Builds must not install Merman.
 
 PTY tests verify events and protocol output. Check appearance, fonts, graphics, cancellation and
 restoration separately in a real terminal. Include SSH checks when changing transport behaviour.
@@ -51,12 +51,16 @@ Use Conventional Commits. Commit, push and publication require explicit authoris
 Verify both jars. Test installation with a temporary home:
 
 ```sh
+XDG_DATA_HOME="$PWD/glowadoc-cli-jvm/build/install-check/data" \
+XDG_CACHE_HOME="$PWD/glowadoc-cli-jvm/build/install-check/cache" \
 ./gradlew -Duser.home="$PWD/glowadoc-cli-jvm/build/install-check" :glowadoc-cli-jvm:install
 ./glowadoc-cli-jvm/build/install-check/.local/bin/glow-adoc --version
 ```
 
 AOT training uses the executable launcher's selected JDK: `./gradlew :glowadoc-cli-jvm:aotTrain`.
 `install` trains before installation; `installWithoutAot` skips training. Native Image requires a separate runtime smoke test.
+Check the small script and its separate jar. The installed jar's bytes, basename and timestamp
+must match the staged `glow-adoc.jar` so AOT loading survives relocation.
 
 Dependency changes require licence review, updated locks and verified checksums:
 

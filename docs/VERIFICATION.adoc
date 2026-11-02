@@ -7,7 +7,7 @@
 [source,sh]
 ----
 ./gradlew checkAll
-GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :glowadoc-diagrams:test
+GLOW_TEST_MERMAN=/path/to/merman-cli ./gradlew :glowadoc-diagrams-merman:test
 ----
 
 The second command enables an optional integration with a separately reviewed executable.
@@ -38,8 +38,9 @@ and mismatched artifact paths.
 Corpus checks verify packaged resources, include expansion, temporary-file cleanup and execution
 without an external document or project configuration. Relocation checks preserve executable names
 and reject renamed cache candidates.
-Verify `install` using a temporary home and cache root, then load the installed executable
-with `-XX:AOTMode=required`. Check that executable timestamps match the staged training copy.
+Verify `install` using temporary home, data and cache roots, then load the installed jar
+with `-XX:AOTMode=required`. Check that jar bytes, basename and timestamp match the staged training copy.
+The executable in `~/.local/bin` must remain a small script; test paths containing spaces and quotes.
 Repeat opens must still hit the conversion cache after relocation. Cache tests simulate archived
 classes retaining different training-time CodeSource URLs while their resources share the runtime jar.
 JDK metadata and manager-supplied JVM option changes invalidate AOT caches. Editing the executable with its generation hint
