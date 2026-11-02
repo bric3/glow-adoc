@@ -4,6 +4,10 @@ pluginManagement {
     includeBuild("build-logic")
 }
 
+plugins {
+    id("glow.versioning")
+}
+
 dependencyResolutionManagement {
     repositoriesMode = RepositoriesMode.FAIL_ON_PROJECT_REPOS
     repositories {

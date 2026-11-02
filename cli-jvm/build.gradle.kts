@@ -79,6 +79,20 @@ val executableJar = tasks.register<ExecutableJar>("executableJar") {
     outputJar = layout.buildDirectory.file("libs/glow-adoc-${project.version}-app.jar")
 }
 
+val releaseMetadata = tasks.register<WriteProperties>("releaseMetadata") {
+    destinationFile = layout.buildDirectory.file("release-metadata/version.properties")
+    property("version", project.version.toString())
+}
+
+tasks.register<Sync>("releaseArtifacts") {
+    group = "distribution"
+    description = "Stage release jars, version metadata and notices."
+    into(layout.buildDirectory.dir("release"))
+    from(tasks.shadowJar.flatMap { it.archiveFile })
+    from(executableJar.flatMap { it.outputJar })
+    from(releaseMetadata.flatMap { it.destinationFile })
+}
+
 val installWithoutAot = tasks.register<InstallExecutable>("installWithoutAot") {
     group = "distribution"
     description = "Install glow-adoc to ~/.local/bin without AOT training."
@@ -111,6 +125,7 @@ tasks.named("shadowDistZip") {
 }
 
 tasks.test {
+    environment("COLORTERM", "truecolor")
     environment("XDG_CACHE_HOME", layout.buildDirectory.dir("test-cache").get().asFile.absolutePath)
     jvmArgumentProviders.add(
         objects.newInstance<PackagedCliArguments>().apply {

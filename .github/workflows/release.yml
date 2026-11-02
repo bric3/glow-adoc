@@ -1,34 +1,53 @@
 # SPDX-License-Identifier: MPL-2.0
 
-name: Draft release
+name: Release
 on:
   push:
-    tags: ['v*']
+    branches: [master]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag to rebuild (v0.1.0)
+        required: true
+        type: string
 permissions:
   contents: read
+concurrency:
+  group: release
+  cancel-in-progress: false
 jobs:
-  draft:
+  release:
+    if: github.event_name != 'release' || !github.event.release.prerelease
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.sha }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '27'
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-      - name: Build release artifacts
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: ./gradlew checkAll -Pversion="${RELEASE_TAG#v}"
-      - name: Generate checksums
-        run: sha256sum cli-jvm/build/libs/*.jar > checksums.txt
-      - name: Create draft for manual publication
+      - uses: jbangdev/setup-jbang@cc28889678db839e29433f42f9ff25f148b6d8de
+      - name: Build and verify artifacts
+        run: ./gradlew checkAll :cli-jvm:releaseArtifacts
+      - name: Verify release lifecycle
+        run: jbang tools/Release.java --self-test
+      - name: Update snapshot draft
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" --draft --verify-tag --title "$RELEASE_TAG" --notes-file docs/RELEASE-NOTES.md cli-jvm/build/libs/*.jar checksums.txt
+        run: jbang tools/Release.java snapshot cli-jvm/build/release
+      - name: Replace snapshot assets with final build
+        if: github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: jbang tools/Release.java final cli-jvm/build/release

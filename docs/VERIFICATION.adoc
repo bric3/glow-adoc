@@ -25,6 +25,8 @@ attributes, application-byte changes, includes, time-dependent substitutions, pr
 corrupt XML, external entities and unavailable storage.
 
 PTY checks cover keys/mouse, search, folding, themes, images and terminal restoration.
+Version-policy tests use temporary Git repositories and check configuration-cache invalidation after tags and commits.
+`jbang tools/Release.java --self-test` checks draft updates, published-release protection, upload failure and retry.
 Image tests assert unchanged frames emit no commands, scrolling reuses uploaded pixels,
 crops use source coordinates, off-screen data can be evicted and exit releases owned images.
 Launcher checks cover manager priority, direct delegation, PATH fallback, spaces, arguments,

@@ -20,6 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
@@ -33,11 +34,12 @@ jobs:
         run: ./gradlew :cli-jvm:aotTrain
       - name: Exercise AOT cache
         run: |
-          cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT-app.jar --timings --no-cache --no-pager --color=always fixtures/showcase.adoc 2> cli-jvm/build/aot-check.log
+          executable_jar=$(realpath cli-jvm/build/libs/glow-adoc-*-app.jar)
+          "$executable_jar" --timings --no-cache --no-pager --color=always fixtures/showcase.adoc 2> cli-jvm/build/aot-check.log
           grep 'timing aot-cache:' cli-jvm/build/aot-check.log
           selected_java=$(sed -n 's/^glow-adoc timing java: //p' cli-jvm/build/aot-check.log)
           aot_cache=$(sed -n 's/^glow-adoc timing aot-cache: //p' cli-jvm/build/aot-check.log)
-          "$selected_java" --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=required -XX:AOTCache="$aot_cache" -jar "$PWD/cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT-app.jar" --no-cache --no-pager --color=always fixtures/showcase.adoc
+          "$selected_java" --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=required -XX:AOTCache="$aot_cache" -jar "$executable_jar" --no-cache --no-pager --color=always fixtures/showcase.adoc
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

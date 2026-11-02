@@ -7,6 +7,7 @@ plugins {
 tasks.register("checkAll") {
     group = "verification"
     description = "Run checks in all application modules."
+    dependsOn(gradle.includedBuild("build-logic").task(":test"))
     dependsOn(
         ":cache:test",
         ":cli-jvm:build",
