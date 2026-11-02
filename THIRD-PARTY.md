@@ -2,56 +2,113 @@
 
 # Third-party software
 
-Project source uses [MPL 2.0](LICENSE). Dependencies, native libraries, gems, grammars, themes and
-bundled resources retain their upstream licences. Preserve those obligations when distributing the jars.
+Project source uses [MPL 2.0](LICENSE). External components retain their upstream terms.
+Versions below describe the distributed runtime; lockfiles and `gradle/verification-metadata.xml`
+pin the complete graph and downloaded bytes.
 
-## Dependency terms
+> Direct dependencies are external libraries declared by application modules. Transitive dependencies
+> are brought in by those libraries. Both groups contribute code and resources to the shaded jars.
 
-The review covers the resolved runtime graph, published POMs and upstream distributions.
-Exact versions and checksums are recorded in lockfiles and `gradle/verification-metadata.xml`.
+## Direct runtime dependencies
 
-| Components                                      | Published licence terms                             |
-| ----------------------------------------------- | --------------------------------------------------- |
-| AsciidoctorJ and its API                        | Apache-2.0                                          |
-| Aesh command and terminal libraries             | Apache-2.0                                          |
-| TamboUI modules                                 | MIT                                                 |
-| Lumis4J and Chicory                             | Apache-2.0; bundled resources retain upstream terms |
-| PlantUML plantuml-mit                           | MIT; upstream attribution is in licenses/           |
-| TOMLJ                                           | Apache-2.0                                          |
-| jsoup                                           | MIT                                                 |
-| ANTLR runtime and ASM                           | BSD-3-Clause                                        |
-| JRuby base and standard library                 | EPL-2.0 OR GPL-2.0 OR LGPL-2.1                      |
-| JNR POSIX                                       | EPL-2.0 OR GPL-2.0 OR LGPL-2.1                      |
-| Dirgra                                          | EPL-1.0                                             |
-| Other JNR, Headius, Joda-Time and JiteScript    | Predominantly Apache-2.0; retain component notices  |
-| JFFI                                            | Apache-2.0 and LGPL terms; inspect bundled notices  |
-| JCodings, Joni, JNR x86 assembler, Checker Qual | MIT                                                 |
-| JZlib and CRaC                                  | BSD variants                                        |
+| Dependency                 | Declared by                  | Purpose and published terms                                                 |
+| -------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
+| AsciidoctorJ 3.0.1         | `glowadoc-asciidoctor`       | AsciiDoc conversion; Apache-2.0.                                            |
+| jsoup 1.23.2               | `glowadoc-asciidoctor`       | HTML passthrough parsing; MIT.                                              |
+| TamboUI core 0.6.0         | `glowadoc-render`            | Terminal text widths and layout types; MIT.                                 |
+| TamboUI TUI 0.6.0          | `glowadoc-pager`             | Pager event loop and rendering; MIT.                                        |
+| TamboUI Aesh backend 0.6.0 | `glowadoc-terminal`          | Terminal connection; MIT.                                                   |
+| Aesh 3.18.6                | `glowadoc-cli`               | Command parsing; Apache-2.0.                                                |
+| TOMLJ 1.1.1                | `glowadoc-cli`               | Configuration parsing; Apache-2.0.                                          |
+| Lumis4J 0.0.10             | `glowadoc-highlight-lumis4j` | Syntax highlighting; Apache-2.0, with upstream terms for bundled resources. |
+| PlantUML MIT 1.2026.6      | `glowadoc-diagrams`          | Embedded diagrams; MIT, with bundled-resource notices.                      |
 
-JRuby/JNR POSIX offer EPL alternatives. Source-availability and notice obligations still apply.
-MPL compatibility does not remove another component's licence requirements.
+Use `net.sourceforge.plantuml:plantuml-mit`. Its feature set excludes ditaa.
+See [PlantUML's distributions](https://plantuml.com/download) and the
+[stored distribution notice](licenses/plantuml-mit.txt).
 
-Use `net.sourceforge.plantuml:plantuml-mit`. The default PlantUML artifact is GPL-licensed.
-The MIT distribution supplies UML/Smetana rendering and excludes ditaa.
-Review feature support and distribution obligations before changing variants.
+## Transitive runtime dependencies
 
-References: [MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/),
-[PlantUML distributions](https://plantuml.com/download),
-[MIT artifact](https://central.sonatype.com/artifact/net.sourceforge.plantuml/plantuml-mit/1.2026.6).
+| Component                                       | Introduced by        | Purpose and published terms                                                                               |
+| ----------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------- |
+| AsciidoctorJ API                                | AsciidoctorJ         | Converter interfaces; Apache-2.0.                                                                         |
+| JRuby runtime 9.4.14.0                          | AsciidoctorJ         | Run the Ruby Asciidoctor engine; EPL-2.0 selected from the upstream alternatives.                         |
+| Ruby standard library and bundled gems          | JRuby                | Ruby libraries; Ruby/BSD and component-specific terms in the packaged notices.                            |
+| JZlib 1.1.5                                     | JRuby base           | Ruby zlib/gzip implementation; BSD.                                                                       |
+| CRaC API 1.5.0                                  | JRuby base           | JRuby checkpoint/restore integration; BSD-2-Clause.                                                       |
+| Joda-Time 2.12.7                                | JRuby base           | Ruby `Time`, `Date` and time-zone handling; Apache-2.0.                                                   |
+| JiteScript 0.4.1                                | JRuby base           | Generate JVM bytecode for Ruby execution, including dynamic scopes; Apache-2.0.                           |
+| ASM modules                                     | JRuby and JNR        | JVM bytecode support; BSD-3-Clause.                                                                       |
+| JNR POSIX 3.1.20                                | JRuby                | POSIX integration; EPL-2.0 selected from the upstream alternatives.                                       |
+| JNR FFI, constants, sockets and network helpers | JRuby/JNR            | Native runtime integration; Apache-2.0.                                                                   |
+| JFFI 1.3.13                                     | JNR FFI              | Native calls; Apache-2.0 selected from the upstream alternatives, with component-specific native notices. |
+| JNR x86 assembler                               | JNR FFI              | Native-call stubs; MIT.                                                                                   |
+| JCodings and Joni                               | JRuby                | Encodings and regular expressions; MIT.                                                                   |
+| Dirgra                                          | JRuby                | Graph analysis; EPL-1.0.                                                                                  |
+| Headius backport9, invokebinder and options     | JRuby                | JVM compatibility, method binding and options; Apache-2.0.                                                |
+| Chicory runtime, Wasm, WASI and logging         | Lumis4J              | Execute the bundled highlighter; Apache-2.0.                                                              |
+| TamboUI widgets and annotations                 | TamboUI TUI          | UI support; MIT.                                                                                          |
+| Aesh terminal and readline modules              | Aesh/TamboUI backend | Terminal input and capabilities; Apache-2.0.                                                              |
+| ANTLR runtime and Checker Qual                  | TOMLJ                | Parser runtime and annotations; BSD-3-Clause and MIT respectively.                                        |
 
-## Packaged notices
+### Selected licence alternatives
 
-Both jars include:
+glow-adoc distributes JRuby and JNR POSIX under EPL-2.0. Their pinned
+[JRuby notice](https://github.com/jruby/jruby/blob/9.4.14.0/COPYING) and
+[JNR POSIX notice](https://github.com/jnr/jnr-posix/blob/jnr-posix-3.1.20/LICENSE.txt)
+explicitly permit this choice. These links also provide access to their corresponding source trees.
+Dirgra remains under its own EPL-1.0 terms.
 
-- Project licence and this document under `META-INF/glow-adoc/`.
-- Reference licence texts and PlantUML attribution under `META-INF/third-party/`.
-- Per-artifact copies of licence, notice, copying, copyright and author files, including nested gem notices.
+JFFI is distributed under the Apache-2.0 option in its
+[pinned licence](https://github.com/jnr/jffi/blob/jffi-1.3.13/LICENSE).
+JRuby's notice also identifies JFFI and JNR FFI as redistributed under Apache-2.0.
 
-The collector keeps identical filenames from different dependencies separate.
-It does not determine the licence of every native or generated payload.
-Before publication, review notices against the exact upstream versions, add missing notices and
-provide corresponding copyleft sources where required.
+These choices are recorded here and packaged with the application. They require no Gradle flag,
+replacement artifact or rebuild of the dependencies. Preserve original upstream notices, including
+the alternative terms they contain. Ruby libraries, bundled gems and native components retain their
+own terms; selecting EPL for JRuby does not relicense them or glow-adoc's MPL-2.0 sources.
 
-Merman is separately installed and is not bundled. Its dependencies and notices belong to its distribution.
-Build/test dependencies are not included merely because Gradle uses them.
-The Gradle wrapper retains its upstream Apache header. Upstream notice texts in `licenses/` are preserved.
+### Why the JRuby libraries are present
+
+The dependency chain is `glowadoc-asciidoctor -> AsciidoctorJ -> JRuby -> jruby-base`.
+[JRuby's pinned POM](https://github.com/jruby/jruby/blob/9.4.14.0/core/pom.xml) declares JZlib,
+CRaC, Joda-Time and JiteScript. Our Java sources do not need to import them for JRuby to use them:
+`RubyTime` references Joda-Time, `DynamicScopeGenerator` references JiteScript, zlib extensions
+reference JZlib, and `CheckpointMain` references CRaC. These references are visible with `jdeps`.
+
+glow-adoc does not enable CRaC checkpointing. The CRaC API is present because JRuby declares it.
+Excluding these libraries requires a separate JRuby compatibility evaluation; absence of direct
+application imports does not establish that an exclusion is safe.
+
+Inspect the installed graph with:
+
+```sh
+./gradlew :glowadoc-cli-jvm:dependencies --configuration runtimeClasspath
+./gradlew :glowadoc-cli-jvm:dependencyInsight --configuration runtimeClasspath --dependency jzlib
+```
+
+## Licence files and packaged notices
+
+[`licenses/`](licenses/README.md) contains checked-in reference texts and the PlantUML distribution
+notice. It was introduced in the initial implementation and is maintained manually. Gradle copies it
+into `META-INF/third-party/`; it does not generate or choose these licences.
+
+`CollectDependencyNotices` separately extracts licence, notice, copying, copyright and author files
+from resolved runtime jars, including nested JRuby gems. These generated copies live under
+`glowadoc-cli-jvm/build/dependency-notices/` and are packaged under artifact-specific directories in
+`META-INF/third-party/`, so identical filenames from different dependencies survive shading.
+The project licence and this inventory are packaged under `META-INF/glow-adoc/`.
+
+Bundled gems, native libraries, grammars, themes and other resources retain their own terms.
+Reference texts supplement their notices. MPL does not replace dependency licences; see the
+[MPL FAQ](https://www.mozilla.org/en-US/MPL/2.0/FAQ/).
+
+## Build, test and optional tools
+
+Gradle, Kotlin, Shadow, Semver, Spotless, Prince of Space, Yumi Licenser, ktlint, JUnit, TableTest
+and the Aesh annotation processor are build/test tools and are not included in the runtime merely
+because the build uses them. Version pins and checksums cover their resolved dependencies too.
+
+Merman is installed separately and is not bundled. JMH, Reggie and JSVG are used only by explicitly
+invoked JBang tools; those tool dependencies are not application runtime dependencies.
+The Gradle wrapper retains its upstream Apache header.
