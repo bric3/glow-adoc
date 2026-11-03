@@ -1185,7 +1185,7 @@ class PackagedCliTest {
         Path transcript = directory.resolve("mouse-switch-transcript");
         var process = startPty(document.toString(), transcript, false, "--mouse=false");
         try {
-            await(process, transcript, "m mouse");
+            awaitScreen(process, transcript, "m mouse");
             assertFalse(Files.readString(transcript).contains("\u001B[?1006h"));
             process.getOutputStream().write('m');
             process.getOutputStream().flush();

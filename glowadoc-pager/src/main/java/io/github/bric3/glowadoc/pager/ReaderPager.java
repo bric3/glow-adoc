@@ -470,27 +470,41 @@ public final class ReaderPager {
         String matches = search.query().isEmpty()
                 ? ""
                 : search.count() == 0 ? "  No match" : "  " + search.ordinal() + "/" + search.count() + " matches";
-        String status = searching
-                ? "/" + search.query() + matches
-                : "q quit  / search  Tab/Enter fold  "
-                + (mouse ? "m select  " : "m mouse  ")
-                + matches
-                + (message.isEmpty() ? "" : "  " + message);
         var statusStyle = colour ? Ansi.style(palette.statusStyle(), true, truecolour) : base.reversed();
+        var keyStyle = colour
+                ? Ansi.style(Style.PLAIN.bolded().colours(palette.accent(), palette.stripe()), true, truecolour)
+                : statusStyle.bold();
+        var controls = searching
+                ? Line.styled("/" + search.query() + matches, statusStyle)
+                : Line.from(
+                        dev.tamboui.text.Span.styled("q", keyStyle),
+                        dev.tamboui.text.Span.styled(" quit  ", statusStyle),
+                        dev.tamboui.text.Span.styled("/", keyStyle),
+                        dev.tamboui.text.Span.styled(" search  ", statusStyle),
+                        dev.tamboui.text.Span.styled("Tab/Enter", keyStyle),
+                        dev.tamboui.text.Span.styled(" fold  ", statusStyle),
+                        dev.tamboui.text.Span.styled("m", keyStyle),
+                        dev.tamboui.text.Span.styled(
+                                (mouse ? " select  " : " mouse  ") + matches + (message.isEmpty() ? "" : "  "
+                                + message),
+                                statusStyle
+                        )
+        );
         String positionText = " " + (top + 1) + "/" + lines.size() + " ";
         int positionWidth = Math.min(available, CharWidth.of(positionText));
-        String controls = clip(status, available - positionWidth);
         var positionStyle = colour
                 ? Ansi.style(Style.PLAIN.colours(palette.surface(), palette.accent()), true, truecolour)
                 : statusStyle.bold();
-        var statusSpans = List.of(
-                dev.tamboui.text.Span.styled(
-                        controls + " ".repeat(Math.max(0, available - positionWidth - CharWidth.of(controls))),
-                        statusStyle
-                ),
-                dev.tamboui.text.Span.styled(clip(positionText, positionWidth), positionStyle)
-        );
-        frame.buffer().setLine(0, frame.height() - 1, Line.from(statusSpans), available);
+        frame.buffer().setString(0, frame.height() - 1, " ".repeat(available - positionWidth), statusStyle);
+        frame.buffer().setLine(0, frame.height() - 1, controls, available - positionWidth);
+        frame
+            .buffer()
+            .setLine(
+                    available - positionWidth,
+                    frame.height() - 1,
+                    Line.styled(clip(positionText, positionWidth), positionStyle),
+                    positionWidth
+            );
         // Graphics are emitted after TamboUI has flushed its text frame.
         pendingImages = () -> {
             var placements = new ArrayList<KittyImages.Placement>();
