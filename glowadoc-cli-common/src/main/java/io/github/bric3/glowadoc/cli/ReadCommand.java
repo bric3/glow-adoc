@@ -39,7 +39,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-@CommandDefinition(name = "glow-adoc", description = "Read AsciiDoc in the terminal", generateHelp = true)
+@CommandDefinition(name = "glow-adoc", description = "Render AsciiDoc in the terminal", generateHelp = true)
 public final class ReadCommand implements Command<CommandInvocation> {
     @Argument(description = "AsciiDoc file, or - for stdin")
     String file;
