@@ -9,6 +9,7 @@ dependencies {
     api(project(":glowadoc-document"))
     implementation(libs.asciidoctor)
     implementation(libs.jsoup)
+    implementation(libs.snakeyaml)
 
     constraints {
         // AsciidoctorJ 3.x declares JRuby 9; keep its runtime components on one tested release.

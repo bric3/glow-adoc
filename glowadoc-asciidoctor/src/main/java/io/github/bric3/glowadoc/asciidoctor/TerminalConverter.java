@@ -74,10 +74,8 @@ public final class TerminalConverter extends StringConverter {
             };
         }
         if (node instanceof org.asciidoctor.ast.Document doc) {
-            return "<document>"
-                    + (doc.getDoctitle() == null ? "" : tag("heading", doc.getDoctitle()))
-                    + doc.getContent()
-                    + "</document>";
+            String title = doc.hasAttribute("doctitle") ? doc.getDoctitle() : null;
+            return "<document>" + (title == null ? "" : tag("heading", title)) + doc.getContent() + "</document>";
         }
         if (node instanceof Section section) {
             return "<heading id=\""

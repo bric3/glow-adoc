@@ -28,6 +28,7 @@ Direct output also supports Windows. Exit status is zero on success and non-zero
 |`--table-grid auto/all/rows/cols/none` |auto |Select internal table borders.
 |`--table-section-borders thin/heavy` |thin |Style enabled header/footer rules.
 |`--shortcodes hide/show` |hide |Show or hide Hugo shortcode tags.
+|`--front-matter-title true/false` |true |Use a YAML string title when there is no AsciiDoc document title.
 |`-a, --attribute NAME=VALUE` |none |Repeatable external attributes; last value wins.
 |`--image-root PATH` |none |Repeatable image directory, relative to the working directory.
 |`--config FILE` |discovery |Read this file over application defaults.
@@ -83,6 +84,13 @@ ratios that cannot fit one column retain text fallbacks.
 Text wraps to the content width; the final terminal column is reserved. Code scrolls horizontally.
 Detected YAML front matter preserves indentation and line boundaries without a box.
 A horizontal rule separates it from the document body.
+Its top-level string `title` supplies a document heading when the source has no AsciiDoc document title.
+An explicit `= Document title` or `:doctitle:` takes precedence. Section headings stay in their original
+positions. `--front-matter-title=false`, or `front-matter-title = false` in TOML, disables the YAML heading
+while preserving the metadata display. Quoted and multiline YAML titles retain AsciiDoc inline formatting.
+Invalid metadata, non-string titles and metadata beyond the parsing limits retain the document body
+without an added heading. Title parsing is limited to 262,144 UTF-16 code units and 50 nested collections.
+Collection aliases and duplicate keys are rejected.
 Table cells wrap; structures wider than the viewport remain scrollable. Auto borders follow AsciiDoc frame/grid attributes.
 Source titles use italic text inside the top border. Callout pills use regular numbers on a contrasting
 background, with rounded ends in Nerd mode. Circle mode uses ❶ through ❿, then parenthesised numbers.

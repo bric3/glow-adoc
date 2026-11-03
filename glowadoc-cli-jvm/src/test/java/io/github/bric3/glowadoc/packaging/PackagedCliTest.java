@@ -292,6 +292,8 @@ class PackagedCliTest {
             assertTrue(jar.getEntry("META-INF/glow-adoc/THIRD-PARTY.md") != null);
             assertTrue(jar.getEntry("META-INF/third-party/plantuml-mit.txt") != null);
             assertTrue(jar.getEntry("io/github/bric3/traceur/ditaa/DitaaRenderer.class") != null);
+            assertTrue(jar.getEntry("org/yaml/snakeyaml/Yaml.class") != null);
+            assertTrue(jar.getEntry("META-INF/third-party/Apache-2.0.txt") != null);
             assertTrue(jar
                 .stream()
                 .anyMatch(entry -> entry.getName().startsWith("META-INF/third-party/traceur-ditaa-0.1.0/"))
@@ -377,6 +379,41 @@ class PackagedCliTest {
         assertTrue(version.waitFor(10, TimeUnit.SECONDS));
         assertEquals(0, version.exitValue(), versionOutput);
         assertTrue(versionOutput.contains("glow-adoc"));
+    }
+
+    @TableTest(
+            """
+        configTitle | cliTitle | expectedTitle
+        true        | ''       | true
+        false       | ''       | false
+        true        | false    | false
+        false       | true     | true
+        """
+    )
+    void frontMatterTitleOptionOverridesConfigurationAndInvalidatesCachedConversions(
+            boolean configTitle,
+            String cliTitle,
+            boolean expectedTitle
+    ) throws Exception {
+        Path input = directory.resolve("front-matter.adoc");
+        Files.writeString(input, "---\ntitle: YAML_TITLE\n---\n\nIntroduction.\n\n== SECTION_TITLE\n\nBody.\n");
+        Path config = directory.resolve("settings.toml");
+        Files.writeString(config, "front-matter-title = " + configTitle + "\n");
+        cachedRead(input, "--config", config.toString(), "--front-matter-title=true");
+        var options = new ArrayList<>(List.of("--config", config.toString()));
+        if (!cliTitle.isEmpty()) {
+            options.add("--front-matter-title=" + cliTitle);
+        }
+        cachedRead(input, options.toArray(String[]::new));
+        String output = Files.readString(directory.resolve("cache-output"));
+        assertEquals(expectedTitle, output
+            .lines()
+            .anyMatch(line -> line.strip().equals("YAML_TITLE")), output);
+        assertEquals(1, output
+            .lines()
+            .filter(line -> line.strip().equals("SECTION_TITLE"))
+            .count(), output);
+        assertTrue(output.contains("title: YAML_TITLE"), output);
     }
 
     @Test

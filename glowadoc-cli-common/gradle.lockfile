@@ -74,4 +74,5 @@ org.ruby-lang:prism-parser-wasm:0.0.4=runtimeClasspath,testRuntimeClasspath
 org.tabletest:tabletest-junit:1.2.2=testCompileClasspath,testRuntimeClasspath
 org.tabletest:tabletest-parser:1.2.1=testCompileClasspath,testRuntimeClasspath
 org.tomlj:tomlj:2.2.0=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
+org.yaml:snakeyaml:2.7=runtimeClasspath,testRuntimeClasspath
 empty=testAnnotationProcessor

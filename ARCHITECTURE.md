@@ -49,8 +49,12 @@ caches results by source/language/appearance and requests reflow. Closing cancel
 an active task releases its highlighter when it finishes. `glowadoc-highlight-lumis4j` also persists validated
 spans by source/language/appearance and artifact identity. A disk hit leaves the Wasm engine uninitialised.
 Literal code splits at line endings; prose retains grapheme-aware wrapping.
-Detected YAML front matter uses literal rows and a horizontal separator. Layout adds external-link
-suffixes before wrapping, retaining link targets on the glyphs. Rendered rows resolve mouse columns
+Detected YAML front matter uses literal rows and a horizontal separator. A bounded safe YAML parser
+reads its string title; the reader assigns it to the Asciidoctor document when no explicit document title
+exists. CLI and TOML settings can disable this heading, and the conversion cache key includes that choice.
+The converter emits explicit document titles and retains section headings in their source positions.
+Layout adds external-link suffixes before wrapping, retaining link targets on the glyphs.
+Rendered rows resolve mouse columns
 to safe external targets, including horizontally scrolled content.
 
 ## Terminal lifecycle

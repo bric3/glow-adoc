@@ -121,6 +121,7 @@ before `.glow-adoc.toml` at each level. It stops at the first match; stdin uses 
 |`--table-frame=all`, `--table-grid=rows` |`table-frame = "all"`, `table-grid = "rows"` |Choose outer and internal table borders.
 |`--table-section-borders=heavy` |`table-section-borders = "heavy"` |Emphasise header and footer separators.
 |`--shortcodes=show` |`shortcodes = "show"` |Show Hugo shortcode tags, which are hidden by default.
+|`--front-matter-title=false` |`front-matter-title = false` |Disable the document heading taken from a YAML title.
 |`-a image-assets=assets` |`[attributes]` with `image-assets = "assets"` |Supply attributes referenced by the document.
 |`--image-root=static` |`image-roots = ["static"]` |Allow images from an additional directory.
 |`--config=settings.toml` |CLI only. |Read an explicit settings file.

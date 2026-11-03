@@ -16,6 +16,7 @@ table-frame = "auto" # auto, all, sides, ends, none.
 table-grid = "auto" # auto, all, rows, cols, none.
 table-section-borders = "thin" # thin, heavy.
 shortcodes = "hide" # hide, show; code/literal examples are preserved.
+front-matter-title = true # Use the YAML title when there is no AsciiDoc document title.
 color = "auto" # auto, always, never.
 theme = "auto" # auto, light, dark.
 images = "auto" # auto, never.

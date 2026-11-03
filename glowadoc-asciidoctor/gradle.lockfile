@@ -57,4 +57,5 @@ org.ruby-lang:prism-parser-api:0.0.4=compileClasspath,runtimeClasspath,testCompi
 org.ruby-lang:prism-parser-wasm:0.0.4=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.tabletest:tabletest-junit:1.2.2=testCompileClasspath,testRuntimeClasspath
 org.tabletest:tabletest-parser:1.2.1=testCompileClasspath,testRuntimeClasspath
+org.yaml:snakeyaml:2.7=compileClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 empty=annotationProcessor,testAnnotationProcessor

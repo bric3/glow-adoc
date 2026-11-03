@@ -57,6 +57,11 @@ public final class ReadCommand implements Command<CommandInvocation> {
     String images;
     @Option(description = "hide or show Hugo shortcode tags")
     String shortcodes;
+    @Option(
+            name = "front-matter-title",
+            description = "true or false: use the YAML title when there is no AsciiDoc title (default true)"
+    )
+    String frontMatterTitle;
     @Option(description = "unicode, nerd or ascii glyphs")
     String icons;
     @Option(name = "table-stripes", description = "true or false: alternate table row backgrounds")
@@ -166,6 +171,13 @@ public final class ReadCommand implements Command<CommandInvocation> {
                             "icons",
                             Set.of("unicode", "nerd", "ascii")
             );
+            boolean selectedFrontMatterTitle = frontMatterTitle == null
+                    ? settings.frontMatterTitle()
+                    : Boolean.parseBoolean(Configuration.choice(
+                            frontMatterTitle,
+                            "front-matter-title",
+                            Set.of("true", "false")
+            ));
             boolean selectedStripes = tableStripes == null
                     ? settings.tableStripes()
                     : Boolean.parseBoolean(Configuration.choice(tableStripes, "table-stripes", Set.of("true", "false")));
@@ -263,7 +275,14 @@ public final class ReadCommand implements Command<CommandInvocation> {
                     new DitaaBackend()
             ), message -> System.err.println("glow-adoc: " + message))
             ) {
-                var parsed = reader.read(source, base, selectedShortcodes.equals("show"), selectedAttributes);
+                var parsed =
+                        reader.read(
+                                source,
+                                base,
+                                selectedShortcodes.equals("show"),
+                                selectedFrontMatterTitle,
+                                selectedAttributes
+                );
                 timing("converted", started);
                 var document = new Document(parsed.blocks(), parsed.baseDirectory(), selectedImageRoots);
                 var layout = new Layout(

@@ -15,6 +15,7 @@ pin the complete graph and downloaded bytes.
 | -------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
 | AsciidoctorJ 3.0.1         | `glowadoc-asciidoctor`       | AsciiDoc conversion; Apache-2.0.                                            |
 | jsoup 1.23.2               | `glowadoc-asciidoctor`       | HTML passthrough parsing; MIT.                                              |
+| SnakeYAML 2.7              | `glowadoc-asciidoctor`       | YAML front matter titles; Apache-2.0.                                       |
 | JSVG 2.2.0                 | `glowadoc-images`            | SVG parsing and rasterisation; MIT.                                         |
 | TamboUI core 0.6.0         | `glowadoc-render`            | Terminal text widths and layout types; MIT.                                 |
 | TamboUI TUI 0.6.0          | `glowadoc-pager`             | Pager event loop and rendering; MIT.                                        |
@@ -28,6 +29,9 @@ pin the complete graph and downloaded bytes.
 Use `net.sourceforge.plantuml:plantuml-mit`. Its feature set excludes ditaa.
 See [PlantUML's distributions](https://plantuml.com/download) and the
 [stored distribution notice](licenses/plantuml-mit.txt).
+
+SnakeYAML 2.7 declares Apache-2.0 in its POM and manifest but omits a licence file from the jar.
+The packaged [Apache-2.0 reference](licenses/Apache-2.0.txt) supplies the licence text.
 
 [Traceur Ditaa](https://github.com/bric3/traceur-ditaa/tree/v0.1.0) renders `[ditaa]` blocks separately.
 Its [published POM](https://repo.maven.apache.org/maven2/io/github/bric3/traceur/traceur-ditaa/0.1.0/traceur-ditaa-0.1.0.pom)

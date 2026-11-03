@@ -77,10 +77,12 @@ class ConfigurationTest {
         assertEquals("pill", defaults.callouts());
         assertEquals("auto", defaults.tableFrame());
         assertEquals("auto", defaults.tableGrid());
+        assertTrue(defaults.frontMatterTitle());
         Files.writeString(
                 config,
                 "page-background = true\n"
                 + "mouse = false\n"
+                + "front-matter-title = false\n"
                 + "progress = 'never'\nimage-dim = false\ncallouts = 'circle'\n"
                 + "table-frame = 'ends'\n"
                 + "table-grid = 'rows'\n"
@@ -92,6 +94,7 @@ class ConfigurationTest {
         assertEquals("circle", settings.callouts());
         assertTrue(settings.pageBackground());
         assertFalse(settings.mouse());
+        assertFalse(settings.frontMatterTitle());
         assertEquals("ends", settings.tableFrame());
         assertEquals("rows", settings.tableGrid());
         assertEquals("heavy", settings.tableSectionBorders());

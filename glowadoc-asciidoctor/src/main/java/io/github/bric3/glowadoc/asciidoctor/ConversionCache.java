@@ -36,6 +36,16 @@ final class ConversionCache {
     }
 
     String key(String source, Path base, boolean showShortcodes, Map<String, String> attributes) {
+        return key(source, base, showShortcodes, true, attributes);
+    }
+
+    String key(
+            String source,
+            Path base,
+            boolean showShortcodes,
+            boolean frontMatterTitle,
+            Map<String, String> attributes
+    ) {
         // Time-dependent substitutions must be evaluated by Asciidoctor on every read.
         if (temporal(source) || attributes.values().stream().anyMatch(ConversionCache::temporal)) {
             return null;
@@ -48,6 +58,7 @@ final class ConversionCache {
                 ZoneId.systemDefault().getId(),
                 base.toString(),
                 Boolean.toString(showShortcodes),
+                Boolean.toString(frontMatterTitle),
                 source
         ));
         for (String name : List.of("TZ", "LANG", "LC_ALL", "LC_TIME", "SOURCE_DATE_EPOCH")) {

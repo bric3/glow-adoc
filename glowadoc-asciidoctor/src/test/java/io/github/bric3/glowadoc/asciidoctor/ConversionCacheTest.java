@@ -35,11 +35,37 @@ class ConversionCacheTest {
             var expected = first.read(source, directory);
             try (var next = new AsciiDocReader(cache, stages::add)) {
                 assertEquals(expected, next.read(source, directory));
-                assertEquals(2, expected.blocks().size());
+                assertEquals(3, expected.blocks().size());
                 assertEquals("yaml", expected.blocks().getFirst().language());
             }
         }
         assertEquals(List.of("conversion-cache-hit"), stages);
+    }
+
+    @Test
+    void changingTheFrontMatterTitleOptionInvalidatesTheCache() {
+        var cache = new ConversionCache(directory.resolve("post.adoc"), directory.resolve("cache"), "front-matter");
+        String source = "---\ntitle: YAML title\n---\n\n== Section\n\nBody\n";
+        var stages = new ArrayList<String>();
+        try (var reader = new AsciiDocReader(cache, stages::add)) {
+            var titled = reader.read(source, directory, false, true, Map.of());
+            assertTrue(titled
+                .blocks()
+                .stream()
+                .anyMatch(block -> block.text().equals("YAML title")));
+            stages.clear();
+            var untitled = reader.read(source, directory, false, false, Map.of());
+            assertFalse(untitled
+                .blocks()
+                .stream()
+                .anyMatch(block -> block.text().equals("YAML title")));
+            assertFalse(stages.contains("conversion-cache-hit"));
+        }
+        stages.clear();
+        try (var reader = new AsciiDocReader(cache, stages::add)) {
+            reader.read(source, directory, false, false, Map.of());
+            assertEquals(List.of("conversion-cache-hit"), stages);
+        }
     }
 
     @Test

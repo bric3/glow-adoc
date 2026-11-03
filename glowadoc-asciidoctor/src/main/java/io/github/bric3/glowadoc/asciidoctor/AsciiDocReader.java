@@ -16,6 +16,10 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
 import org.xml.sax.helpers.DefaultHandler;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
+import org.yaml.snakeyaml.error.YAMLException;
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
@@ -111,12 +115,23 @@ public final class AsciiDocReader implements AutoCloseable {
     }
 
     public Document read(String source, Path baseDirectory, boolean showShortcodes, Map<String, String> attributes) {
+        return read(source, baseDirectory, showShortcodes, true, attributes);
+    }
+
+    public Document read(
+            String source,
+            Path baseDirectory,
+            boolean showShortcodes,
+            boolean frontMatterTitle,
+            Map<String, String> attributes
+    ) {
         try {
             this.showShortcodes = showShortcodes;
             includeRoot = baseDirectory.toRealPath();
             int frontMatterEnd = frontMatterEnd(source);
             String frontMatter = Controls.visible(source.substring(source.startsWith("﻿") ? 1 : 0, frontMatterEnd));
-            String key = cache == null ? null : cache.key(source, includeRoot, showShortcodes, attributes);
+            String key =
+                    cache == null ? null : cache.key(source, includeRoot, showShortcodes, frontMatterTitle, attributes);
             String cached = cache == null ? null : cache.read(key);
             if (cached != null) {
                 try {
@@ -134,8 +149,8 @@ public final class AsciiDocReader implements AutoCloseable {
                 .attribute("allow-uri-read", false)
                 // The terminal highlighter owns source styling.
                 .attribute("source-highlighter", "none");
-            String xml = engine()
-                .convert(
+            var converted = engine()
+                .load(
                         Controls.visible(
                                 showShortcodes ? source.substring(frontMatterEnd) : Shortcodes.hide(source.substring(
                                         frontMatterEnd
@@ -150,7 +165,14 @@ public final class AsciiDocReader implements AutoCloseable {
                             .attributes(conversionAttributes.build())
                             .build()
                 );
-            xml = HtmlContent.normalise(xml);
+            if (frontMatterTitle && !converted.hasAttribute("doctitle")) {
+                String title = frontMatterTitle(frontMatter);
+                if (!title.isEmpty()) {
+                    converted.setTitle(title);
+                    converted.setAttribute("doctitle", title, true);
+                }
+            }
+            String xml = HtmlContent.normalise(converted.convert());
             Document document = parse(xml, baseDirectory, frontMatter);
             // Includes can change independently of the top-level source and attributes.
             if (cache != null && !includesUsed) {
@@ -160,6 +182,32 @@ public final class AsciiDocReader implements AutoCloseable {
         } catch (Exception e) {
             throw new IllegalArgumentException("Cannot read AsciiDoc: " + e.getMessage(), e);
         }
+    }
+
+    private static String frontMatterTitle(String frontMatter) {
+        if (frontMatter.isEmpty() || frontMatter.length() > 256 * 1024) {
+            return "";
+        }
+        int start = frontMatter.indexOf('\n') + 1;
+        int end = frontMatter.lastIndexOf('\n');
+        if (start >= end) {
+            return "";
+        }
+        var options = new LoaderOptions();
+        options.setAllowDuplicateKeys(false);
+        options.setMaxAliasesForCollections(0);
+        options.setNestingDepthLimit(50);
+        options.setCodePointLimit(256 * 1024);
+        try {
+            String yaml = frontMatter.substring(start, end);
+            Object metadata = new Yaml(new SafeConstructor(options)).load(yaml);
+            if (metadata instanceof Map<?, ?> values && values.get("title") instanceof String title) {
+                return Controls.visible(title).strip();
+            }
+        } catch (YAMLException ignored) {
+            // Invalid metadata retains its literal display and does not prevent reading the body.
+        }
+        return "";
     }
 
     private static int frontMatterEnd(String source) {

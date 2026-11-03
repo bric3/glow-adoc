@@ -33,7 +33,8 @@ public record Configuration(
         List<Path> imageRoots,
         String progress,
         boolean imageDim,
-        String callouts
+        String callouts,
+        boolean frontMatterTitle
 ) {
     static final int DEFAULT_WIDTH = 120;
     private static final Configuration DEFAULTS = new Configuration(
@@ -56,7 +57,8 @@ public record Configuration(
             List.of(),
             "auto",
             true,
-            "pill"
+            "pill",
+            true
     );
 
     public Configuration {
@@ -126,7 +128,8 @@ public record Configuration(
                 "image-roots",
                 "progress",
                 "image-dim",
-                "callouts"
+                "callouts",
+                "front-matter-title"
         );
         for (String key : toml.keySet()) {
             if (!allowed.contains(key)) {
@@ -194,7 +197,8 @@ public record Configuration(
                 roots,
                 choice(toml.getString("progress", defaults::progress), "progress", Set.of("auto", "always", "never")),
                 toml.getBoolean("image-dim", defaults::imageDim),
-                choice(toml.getString("callouts", defaults::callouts), "callouts", Set.of("pill", "circle", "ascii"))
+                choice(toml.getString("callouts", defaults::callouts), "callouts", Set.of("pill", "circle", "ascii")),
+                toml.getBoolean("front-matter-title", defaults::frontMatterTitle)
         );
     }
 
