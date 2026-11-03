@@ -82,6 +82,14 @@ cat document.adoc | glow-adoc -
 
 Press `/` to search, `n/N` to cycle matches, Tab/Enter to toggle sections and `q` to quit.
 Press `m` to switch between mouse controls and terminal text selection.
+Press `t` to open the document structure over dimmed text.
+Use Up/Down or `j/k` to select a section. The highlight follows the mouse.
+Left collapses an expanded section; on a collapsed section or a leaf, it selects the parent.
+Right expands a collapsed section and keeps the selection in place. The `-`/`+` keys also collapse and expand sections.
+Page Up/Down and Home/End navigate longer menus.
+Enter or a click anywhere on an entry jumps to the section and closes the menu.
+Click its triangle to toggle its children.
+The mouse wheel scrolls the menu. Esc closes it without moving the document.
 
 SVG images and HTTPS badges from `img.shields.io` and GitHub Actions load after the first text frame.
 Adjacent inline images share a row and wrap at the reading width.

@@ -147,6 +147,7 @@ final class HtmlContent {
                             "alignment",
                             "weight",
                             "colspan",
+                            "level",
                             "rowspan",
                             "language",
                             "target",

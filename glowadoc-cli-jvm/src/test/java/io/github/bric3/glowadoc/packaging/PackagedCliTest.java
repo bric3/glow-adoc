@@ -692,6 +692,150 @@ class PackagedCliTest {
         }
     }
 
+    @TableTest("""
+        colour | motion
+        always | 35
+        always | 32
+        never  | 35
+        never  | 32
+        """)
+    void structureMenuNavigatesByKeyboardAndMouseAndRestoresImages(String colour, int motion) throws Exception {
+        Path document = directory.resolve("structure.adoc");
+        ImageIO.write(
+                new BufferedImage(100, 50, BufferedImage.TYPE_INT_RGB),
+                "png",
+                directory.resolve("image.png").toFile()
+        );
+        String body = "A paragraph in this section.\n\n".repeat(30);
+        Files.writeString(
+                document,
+                "= Document\n\n== Root\n\nimage::image.png[]\n\nNOTE: CALLOUT_BACKGROUND\n\n"
+                + body
+                + "=== Child\n\n"
+                + body
+                + "==== Deep\n\n"
+                + body
+                + "== Next\n\n"
+                + body
+        );
+        Path transcript = directory.resolve("structure-transcript");
+        var process =
+                startPty(
+                        document.toString(),
+                        transcript,
+                        true,
+                        "--color=" + colour,
+                        "--theme=dark",
+                        "--image-dim=false"
+        );
+        try {
+            awaitScreen(process, transcript, "t structure");
+            process.getOutputStream().write("\u001B_Gi=2147483000;OK\u001B\\".getBytes());
+            process.getOutputStream().flush();
+            await(process, transcript, "a=p,i=");
+            String originalTop = screen(Files.readString(transcript)).split("\n")[0];
+            String originalStatus = screen(Files.readString(transcript)).split("\n")[23];
+            int before = Files.readString(transcript).length();
+            process.getOutputStream().write('t');
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "▼ Root");
+            await(process, transcript, "\u001B[?1003h");
+            await(process, transcript, "a=d,d=i,");
+            assertEquals(
+                    originalStatus,
+                    screen(Files.readString(transcript)).split("\n")[23],
+                    "Opening the menu retains the main status bar"
+            );
+            String opened = Files.readString(transcript).substring(before);
+            assertTrue(
+                    Pattern.compile("\u001B\\[(?:[0-9]+;)*2(?:;[0-9]+)*m").matcher(opened).find(),
+                    "Document is dimmed"
+            );
+            assertFalse(opened.contains("a=p,i="), "Images must not cover the menu");
+            int barStart = opened.indexOf("\u001B[24;1H");
+            assertTrue(barStart >= 0, "The main status bar must be repainted when dimmed");
+            int barEnd = opened.indexOf("\u001B[?2026l", barStart);
+            String bar = opened.substring(barStart, barEnd < 0 ? opened.length() : barEnd);
+            if (colour.equals("never")) {
+                // Dim is inherited from the document; remove the status bar's bright reverse-video fill.
+                assertFalse(
+                        Pattern.compile("\u001B\\[(?:[0-9]+;)*7(?:;[0-9]+)*m").matcher(bar).find(),
+                        "The monochrome status bar must lose its reverse-video fill"
+                );
+            } else {
+                assertTrue(
+                        Pattern.compile("\u001B\\[(?:[0-9]+;)*2(?:;[0-9]+)*m").matcher(bar).find(),
+                        "The main status bar must dim behind the menu"
+                );
+            }
+            if (colour.equals("always")) {
+                assertTrue(opened.contains("48;2;21;25;31"), "The callout's middle background must dim");
+            }
+            process.getOutputStream().write("-".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "▶ Root");
+            process.getOutputStream().write('+');
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "▼ Root");
+            process.getOutputStream().write("\u001B[B\u001B[D".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "▶ Child");
+            process.getOutputStream().write("\u001B[D-".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "▶ Root");
+            process.getOutputStream().write(27);
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " Structure ", false);
+            await(process, transcript, "a=p,i=", 2);
+            assertEquals(originalTop, screen(Files.readString(transcript)).split("\n")[0]);
+            process.getOutputStream().write("t+\u001B[B\u001B[C\u001B[H".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "▼ Child");
+            process.getOutputStream().write("\u001B[F\r".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " Structure ", false);
+            assertTrue(screen(Files.readString(transcript)).split("\n")[0].contains("Next"));
+            process.getOutputStream().write("\u001B[<0;70;1M\u001B[<0;70;1m".getBytes());
+            process.getOutputStream().flush();
+            process.getOutputStream().write("t\u001B[H".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "▼ Root");
+            int beforeHover = Files.readString(transcript).length();
+            process.getOutputStream().write(("\u001B[<" + motion + ";12;11M").getBytes());
+            process.getOutputStream().flush();
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+                while (!Files.readString(transcript).substring(beforeHover).contains("Child")) {
+                    Thread.sleep(10);
+                }
+            });
+            process.getOutputStream().write('\r');
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " Structure ", false);
+            assertTrue(
+                    screen(Files.readString(transcript)).split("\n")[0].contains("Child"),
+                    "Enter activates the hovered node"
+            );
+            process.getOutputStream().write("t\u001B[H".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "▼ Root");
+            process.getOutputStream().write("\u001B[<0;5;10M\u001B[<0;5;10m".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, "▶ Root");
+            process.getOutputStream().write("\u001B[<0;70;11M\u001B[<0;70;11m".getBytes());
+            process.getOutputStream().flush();
+            awaitScreen(process, transcript, " Structure ", false);
+            assertTrue(screen(Files.readString(transcript)).split("\n")[0].contains("Root"));
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+            assertTrue(Files.readString(transcript).contains("\u001B[?1049l"));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+        }
+    }
+
     @Test
     void pagerAcceptsSearchAndQuitInPseudoTerminal() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeTrue(Files.isExecutable(Path.of("/usr/bin/script")));
@@ -1392,8 +1536,12 @@ class PackagedCliTest {
     }
 
     private static void awaitScreen(Process process, Path transcript, String text) throws Exception {
+        awaitScreen(process, transcript, text, true);
+    }
+
+    private static void awaitScreen(Process process, Path transcript, String text, boolean present) throws Exception {
         for (int i = 0; i < 200; i++) {
-            if (Files.exists(transcript) && screen(Files.readString(transcript)).contains(text)) {
+            if (Files.exists(transcript) && screen(Files.readString(transcript)).contains(text) == present) {
                 return;
             }
             if (!process.isAlive()) {
@@ -1402,7 +1550,7 @@ class PackagedCliTest {
             Thread.sleep(50);
         }
         fail(
-                "Missing screen text "
+                (present ? "Missing screen text " : "Unexpected screen text ")
                 + text
                 + ": "
                 + screen(Files.readString(transcript))

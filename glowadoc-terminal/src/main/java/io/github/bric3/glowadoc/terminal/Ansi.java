@@ -2,6 +2,7 @@
 package io.github.bric3.glowadoc.terminal;
 
 import dev.tamboui.style.Color;
+import dev.tamboui.style.Modifier;
 import io.github.bric3.glowadoc.document.Controls;
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
@@ -41,13 +42,45 @@ public final class Ansi {
     }
 
     private static Color color(String hex, boolean truecolour) {
-        var rgb = Color.Rgb.fromHex(hex);
+        return color(Color.Rgb.fromHex(hex), truecolour);
+    }
+
+    private static Color color(Color.Rgb rgb, boolean truecolour) {
         if (truecolour) {
             return rgb;
         }
         return Color.indexed(
                 16 + 36 * Math.round(rgb.r() / 255f * 5) + 6 * Math.round(rgb.g() / 255f * 5) + Math.round(
                         rgb.b() / 255f * 5
+                )
+        );
+    }
+
+    public static dev.tamboui.style.Style dim(
+            dev.tamboui.style.Style style,
+            Color.Rgb background,
+            boolean colour,
+            boolean truecolour
+    ) {
+        var result = style.notBold().dim();
+        if (!colour) {
+            return result.notReversed();
+        }
+        var fill = style.bg().orElse(background);
+        if (style.effectiveModifiers().contains(Modifier.REVERSED)) {
+            fill = style.fg().orElse(background);
+            result = result.notReversed().fg(style.bg().orElse(background));
+        }
+        // SGR dim affects text only; blend filled cells as well, including callout pills.
+        var rgb = fill.toRgb();
+        return result.bg(
+                color(
+                        new Color.Rgb(
+                                (rgb.r() * 2 + background.r() * 3) / 5,
+                                (rgb.g() * 2 + background.g() * 3) / 5,
+                                (rgb.b() * 2 + background.b() * 3) / 5
+                        ),
+                        truecolour
                 )
         );
     }

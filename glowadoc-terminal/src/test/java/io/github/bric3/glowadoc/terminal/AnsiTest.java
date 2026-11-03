@@ -6,10 +6,31 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.bric3.glowadoc.document.Span;
 import io.github.bric3.glowadoc.document.Style;
+import dev.tamboui.style.Color;
+import dev.tamboui.style.Modifier;
 import org.junit.jupiter.api.Test;
 import java.util.List;
 
 class AnsiTest {
+    @Test
+    void dimmingBlendsBackgroundsAndNormalisesReverseVideo() {
+        var style = dev.tamboui.style.Style.EMPTY.fg(Color.WHITE).bg(Color.rgb(200, 100, 50)).bold();
+        var canvas = Color.Rgb.fromHex("#000000");
+        var dimmed = Ansi.dim(style, canvas, true, true);
+        assertEquals(Color.rgb(80, 40, 20), dimmed.bg().orElseThrow());
+        assertFalse(dimmed.effectiveModifiers().contains(Modifier.BOLD));
+        assertTrue(dimmed.effectiveModifiers().contains(Modifier.DIM));
+        var reversed = Ansi.dim(style.reversed(), canvas, true, true);
+        assertEquals(Color.rgb(200, 100, 50), reversed.fg().orElseThrow());
+        assertFalse(reversed.effectiveModifiers().contains(Modifier.REVERSED));
+        assertFalse(Ansi.dim(style, canvas, true, false).bg().orElseThrow() instanceof Color.Rgb);
+        assertEquals(style.bg(), Ansi.dim(style, canvas, false, false).bg());
+        assertFalse(
+                Ansi.dim(style.reversed(), canvas, false, false).effectiveModifiers().contains(Modifier.REVERSED),
+                "Monochrome status bars must lose their bright reverse-video fill when dimmed"
+        );
+    }
+
     @Test
     void emitsStrikeAndDoesNotUnderlineInlineCode() {
         var spans = List.of(

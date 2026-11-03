@@ -11,7 +11,8 @@ public record Block(
         List<Block> children,
         String language,
         String target,
-        Format format
+        Format format,
+        int headingLevel
 ) {
     public enum Kind {
         HEADING,
@@ -79,6 +80,18 @@ public record Block(
 
     public Block(Kind kind, String id, List<Span> spans, List<Block> children, String language, String target) {
         this(kind, id, spans, children, language, target, Format.DEFAULT);
+    }
+
+    public Block(
+            Kind kind,
+            String id,
+            List<Span> spans,
+            List<Block> children,
+            String language,
+            String target,
+            Format format
+    ) {
+        this(kind, id, spans, children, language, target, format, 0);
     }
 
     public Block {

@@ -18,6 +18,36 @@ class AsciiDocReaderTest {
     @TempDir
     Path directory;
 
+    @Test
+    void preservesSectionLevelsSeparatelyFromDocumentTitles() {
+        try (var reader = new AsciiDocReader()) {
+            var headings = reader
+                .read(
+                        """
+                    = Document
+
+                    == First
+
+                    === Child
+
+                    ==== Grandchild
+
+                    == Second
+                    """,
+                        directory
+                )
+                .blocks()
+                .stream()
+                .filter(block -> block.kind() == Block.Kind.HEADING)
+                .toList();
+            assertEquals(
+                    List.of("Document", "First", "Child", "Grandchild", "Second"),
+                    headings.stream().map(Block::text).toList()
+            );
+            assertEquals(List.of(0, 1, 2, 3, 1), headings.stream().map(Block::headingLevel).toList());
+        }
+    }
+
     @TableTest(
             """
         kind     | bold

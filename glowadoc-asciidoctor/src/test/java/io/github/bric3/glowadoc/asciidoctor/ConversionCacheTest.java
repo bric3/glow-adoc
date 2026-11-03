@@ -72,7 +72,7 @@ class ConversionCacheTest {
     void reusesConvertedContentWithoutInitialisingJruby() throws Exception {
         Path input = directory.resolve("post.adoc");
         var cache = new ConversionCache(input, directory.resolve("cache"), "implementation");
-        String source = "= Title\n\nA *bold* {name} and `code`.\n\n|===\n|a |b\n|===\n";
+        String source = "= Title\n\n== Section\n\n=== Child\n\nA *bold* {name} and `code`.\n\n|===\n|a |b\n|===\n";
         var stages = new ArrayList<String>();
         try (var first = new AsciiDocReader(cache, stages::add)) {
             var expected = first.read(source, directory, false, Map.of("name", "reader"));

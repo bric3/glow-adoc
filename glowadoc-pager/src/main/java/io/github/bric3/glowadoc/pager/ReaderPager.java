@@ -90,6 +90,8 @@ public final class ReaderPager {
     private Appearance appearance;
     private boolean searching;
     private final Search search = new Search();
+    private final StructureMenu structure;
+    private int pendingJump = -1;
     private int searchOriginTop;
     private int searchOriginLeft;
     private String message = "";
@@ -117,6 +119,7 @@ public final class ReaderPager {
             Consumer<String> milestone
     ) {
         this.document = document;
+        this.structure = new StructureMenu(document);
         this.layout = layout;
         this.diagrams = diagrams;
         this.colour = colour;
@@ -193,11 +196,13 @@ public final class ReaderPager {
                     }
                     if (event instanceof KeyEvent key) {
                         pressedLink = "";
-                        if (key.isCtrlC() || (!searching && key.isChar('q'))) {
+                        if (key.isCtrlC() || (!searching && !structure.isOpen() && key.isChar('q'))) {
                             tui.quit();
                             return false;
                         }
-                        if (searching) {
+                        if (structure.isOpen()) {
+                            jumpToSection(structure.key(key));
+                        } else if (searching) {
                             if (key.isKey(KeyCode.ENTER)) {
                                 searching = false;
                             } else if (key.isKey(KeyCode.ESCAPE)) {
@@ -209,6 +214,12 @@ public final class ReaderPager {
                             } else if (key.code() == KeyCode.CHAR && !key.hasCtrl()) {
                                 updateSearch(search.query() + key.string());
                             }
+                        } else if (key.isChar('t')) {
+                            structure.open(
+                                    lines.isEmpty() ? 0 : lines.get(Math.min(top, lines.size() - 1)).blockIndex()
+                            );
+                            hoveredLink = "";
+                            hoveredImage = -1;
                         } else if (key.isFocusNext() || key.isFocusPrevious()) {
                             focus(key.isFocusPrevious() ? -1 : 1);
                         } else if (key.isKey(KeyCode.ENTER) && focused >= 0) {
@@ -253,6 +264,9 @@ public final class ReaderPager {
                                 message = "Mouse capture unavailable";
                             }
                         }
+                        redraw = true;
+                    } else if (mouse && event instanceof MouseEvent pointer && structure.isOpen()) {
+                        jumpToSection(structure.mouse(pointer));
                         redraw = true;
                     } else if (mouse && event instanceof MouseEvent pointer) {
                         pointerX = pointer.x();
@@ -373,6 +387,17 @@ public final class ReaderPager {
         } else if (images && session.kitty() && assets.isEmpty()) {
             rebuilt = prepareImages(session);
         }
+        if (pendingJump >= 0) {
+            for (int i = 0; i < lines.size(); i++) {
+                if (lines.get(i).blockIndex() == pendingJump) {
+                    top = i;
+                    retainedTop = i;
+                    left = 0;
+                    break;
+                }
+            }
+            pendingJump = -1;
+        }
         top = clampTop(top);
         if (rebuilt) {
             hasLinks = lines
@@ -380,7 +405,10 @@ public final class ReaderPager {
                 .flatMap(line -> line.spans().stream())
                 .anyMatch(span -> Controls.safeLink(span.style().link()));
         }
-        boolean tracking = hasLinks || imageDim && images && session.kitty() && appearance == Appearance.DARK;
+        boolean tracking =
+                structure.isOpen()
+                || hasLinks
+                || imageDim && images && session.kitty() && appearance == Appearance.DARK;
         if (tracking != hoverTracking) {
             hoverTracking = tracking;
             if (mouse) {
@@ -416,7 +444,7 @@ public final class ReaderPager {
         int margin = area.margin();
         contentMargin = margin;
         contentColumns = available - margin;
-        hoveredLink = mouse && session.focused() ? linkAt(pointerX, pointerY) : "";
+        hoveredLink = mouse && session.focused() && !structure.isOpen() ? linkAt(pointerX, pointerY) : "";
         for (int y = 0; y < height && top + y < lines.size(); y++) {
             var row = lines.get(top + y);
             int horizontalOffset = imageRow(y) ? 0 : left;
@@ -481,6 +509,8 @@ public final class ReaderPager {
                         dev.tamboui.text.Span.styled(" quit  ", statusStyle),
                         dev.tamboui.text.Span.styled("/", keyStyle),
                         dev.tamboui.text.Span.styled(" search  ", statusStyle),
+                        dev.tamboui.text.Span.styled("t", keyStyle),
+                        dev.tamboui.text.Span.styled(" structure  ", statusStyle),
                         dev.tamboui.text.Span.styled("Tab/Enter", keyStyle),
                         dev.tamboui.text.Span.styled(" fold  ", statusStyle),
                         dev.tamboui.text.Span.styled("m", keyStyle),
@@ -505,8 +535,24 @@ public final class ReaderPager {
                     Line.styled(clip(positionText, positionWidth), positionStyle),
                     positionWidth
             );
+        if (structure.isOpen()) {
+            var canvas = Color.Rgb.fromHex(session.background().isEmpty() ? palette.canvas() : session.background());
+            for (int y = 0; y < frame.height(); y++) {
+                for (int x = 0; x < frame.width(); x++) {
+                    var cell = frame.buffer().get(x, y);
+                    frame.buffer().set(x, y, cell.style(Ansi.dim(cell.style(), canvas, colour, truecolour)));
+                }
+            }
+            structure.draw(frame.buffer(), appearance, colour, truecolour);
+        }
         // Graphics are emitted after TamboUI has flushed its text frame.
         pendingImages = () -> {
+            if (structure.isOpen()) {
+                visibleImages = List.of();
+                hoveredImage = -1;
+                kitty.render(List.of());
+                return;
+            }
             var placements = new ArrayList<KittyImages.Placement>();
             for (var entry : assets.entrySet()) {
                 int first = entry.getKey();
@@ -811,6 +857,18 @@ public final class ReaderPager {
         }
         layoutDirty = true;
         anchorAssets = false;
+    }
+
+    private void jumpToSection(int position) {
+        if (position >= 0) {
+            structure.reveal(toggled);
+            pendingJump = position;
+            focused = -1;
+            layoutDirty = true;
+        }
+        if (!structure.isOpen()) {
+            pointerX = pointerY = -1;
+        }
     }
 
     private int clampTop(int requested) {

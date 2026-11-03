@@ -320,7 +320,8 @@ public final class AsciiDocReader implements AutoCloseable {
                         element.getAttribute("open").equals("true"),
                         attribute(element, "frame", "all"),
                         attribute(element, "grid", "all")
-                )
+                ),
+                number(element, "level", 0)
         );
     }
 

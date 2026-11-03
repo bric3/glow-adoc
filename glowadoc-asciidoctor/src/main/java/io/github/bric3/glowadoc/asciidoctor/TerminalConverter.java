@@ -80,6 +80,8 @@ public final class TerminalConverter extends StringConverter {
         if (node instanceof Section section) {
             return "<heading id=\""
                     + escape(section.getId())
+                    + "\" level=\""
+                    + section.getLevel()
                     + "\">"
                     + section.getTitle()
                     + "</heading>"
