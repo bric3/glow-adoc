@@ -280,6 +280,111 @@ class LayoutTest {
         assertFalse(plain.contains("❶"));
     }
 
+    @TableTest(
+            """
+        icons   | callouts | first   | eleventh | textColumn
+        nerd    | pill     | ' 1 ' | ' 11 ' | 9
+        unicode | pill     | ' 1 '   | ' 11 '   | 7
+        nerd    | circle   | '❶'    | '(11)'   | 7
+        ascii   | pill     | '(1)'   | '(11)'   | 7
+        nerd    | ascii    | '(1)'   | '(11)'   | 7
+        """
+    )
+    void alignsCalloutDescriptionsAndWrappedLines(
+            String icons,
+            String callouts,
+            String first,
+            String eleventh,
+            int textColumn
+    ) {
+        var items = List
+            .of("1", "11")
+            .stream()
+            .map(number -> new Block(
+                    Block.Kind.ITEM,
+                    "",
+                    List.of(Span.callout(number), new Span(" alpha bravo charlie delta")),
+                    List.of(),
+                    "",
+                    ""
+            ))
+            .toList();
+        var options = new RenderOptions(icons, false, false, "auto", "auto", "thin", callouts);
+        var document = new Document(List.of(new Block(Block.Kind.LIST, "", List.of(), items, "", "")), Path.of("."));
+        var rows = new Layout((s, l, a) -> List.of(new Span(s)), options)
+            .render(document, textColumn + 13, Appearance.DARK)
+            .stream()
+            .filter(row -> !row.text().isBlank())
+            .toList();
+        assertEquals(
+                List.of(
+                        "  " + first + " ".repeat(textColumn - 2 - CharWidth.of(first)) + "alpha bravo",
+                        " ".repeat(textColumn) + "charlie delta",
+                        "  " + eleventh + " ".repeat(textColumn - 2 - CharWidth.of(eleventh)) + "alpha bravo",
+                        " ".repeat(textColumn) + "charlie delta"
+                ),
+                rows.stream().map(RenderedLine::text).toList()
+        );
+        assertEquals(List.of(1, 1, 2, 2), rows.stream().map(RenderedLine::blockIndex).toList());
+        assertTrue(rows
+            .stream()
+            .allMatch(row -> CharWidth.of(row.text()) <= textColumn + 13));
+    }
+
+    @Test
+    void alignsAdditionalParagraphsAndPreservesEmptyCalloutItems() {
+        var paragraph = new Block(
+                Block.Kind.PARAGRAPH,
+                "",
+                List.of(new Span("more details", Style.PLAIN.bolded())),
+                List.of(),
+                "",
+                ""
+        );
+        var first =
+                new Block(
+                        Block.Kind.ITEM,
+                        "",
+                        List.of(Span.callout("1"), new Span(" first")),
+                        List.of(paragraph),
+                        "",
+                        ""
+        );
+        var empty = new Block(Block.Kind.ITEM, "", List.of(Span.callout("11")), List.of(), "", "");
+        var rows =
+                render(container(Block.Kind.LIST, first, empty), 22)
+            .stream()
+            .filter(row -> !row.text().isBlank())
+            .toList();
+        assertEquals(
+                List.of("   1   first", "         more details", "   11 "),
+                rows
+                    .stream()
+                    .map(row -> row.text().stripTrailing())
+                    .toList()
+        );
+        assertEquals(List.of(1, 2, 3), rows.stream().map(RenderedLine::blockIndex).toList());
+        assertTrue(rows
+            .get(1)
+            .spans()
+            .stream()
+            .anyMatch(span -> span.text().equals("more details") && span.style().bold())
+        );
+    }
+
+    @Test
+    void preservesCalloutsWhenNoDescriptionColumnFits() {
+        var item = new Block(Block.Kind.ITEM, "", List.of(Span.callout("1"), new Span(" one two")), List.of(), "", "");
+        assertEquals(
+                List.of("   1 ", "  one", "  two"),
+                render(container(Block.Kind.LIST, item), 8)
+                    .stream()
+                    .filter(row -> !row.text().isBlank())
+                    .map(RenderedLine::text)
+                    .toList()
+        );
+    }
+
     @Test
     void sourceCaptionWrapsWithinItsTopBorder() {
         Block source = new Block(

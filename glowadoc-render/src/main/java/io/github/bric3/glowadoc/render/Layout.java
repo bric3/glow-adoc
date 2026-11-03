@@ -51,7 +51,7 @@ public final class Layout {
         }
         var lines = new ArrayList<RenderedLine>();
         for (Block block : document.blocks()) {
-            lines.addAll(render(block, Math.max(1, width), appearance, positions, toggled, interactive));
+            lines.addAll(render(block, Math.max(1, width), appearance, positions, toggled, interactive, 0));
         }
         // The pager paints its canvas with queried terminal colours.
         if (options.pageBackground() && !interactive) {
@@ -218,14 +218,15 @@ public final class Layout {
             Appearance appearance,
             Map<Block, Integer> positions,
             Set<Integer> toggled,
-            boolean interactive
+            boolean interactive,
+            int listCalloutWidth
     ) {
         int position = positions.get(block);
         Palette palette = Palette.forAppearance(appearance);
         var lines = new ArrayList<RenderedLine>();
         if (block.imageOnlyParagraph()) {
             for (Block child : block.children()) {
-                for (var line : render(child, width, appearance, positions, toggled, interactive)) {
+                for (var line : render(child, width, appearance, positions, toggled, interactive, 0)) {
                     lines.add(new RenderedLine(line.spans(), position, null));
                 }
             }
@@ -259,7 +260,18 @@ public final class Layout {
         if (width < 3) {
             quote = false;
         }
-        int inset = box ? 4 : quote || block.kind() == Block.Kind.ITEM ? 2 : 0;
+        List<Span> calloutMarker = block.kind() == Block.Kind.ITEM
+                && !block.spans().isEmpty()
+                && !block.spans().getFirst().callout().isEmpty()
+                ? theme(List.of(block.spans().getFirst()), palette)
+                : List.of();
+        int calloutInset = calloutMarker.isEmpty() ? 0 : Math.max(listCalloutWidth, TextLayout.width(calloutMarker)
+                + 1);
+        if (calloutInset >= width - 2) {
+            // Keep existing wrapping when no text column fits beside the marker.
+            calloutInset = 0;
+        }
+        int inset = (box ? 4 : quote || block.kind() == Block.Kind.ITEM ? 2 : 0) + calloutInset;
         int inner = Math.max(1, width - inset);
         if (block.kind() == Block.Kind.DETAILS) {
             boolean open = !interactive || block.format().open() != toggled.contains(position);
@@ -287,7 +299,9 @@ public final class Layout {
                 return lines;
             }
         }
-        List<Span> spans = source ? source(block, palette, appearance) : theme(block.spans(), palette);
+        List<Span> spans = source
+                ? source(block, palette, appearance)
+                : theme(block.spans().subList(calloutInset > 0 ? 1 : 0, block.spans().size()), palette);
         if (block.kind() == Block.Kind.HEADING) {
             spans = spans
                 .stream()
@@ -304,13 +318,23 @@ public final class Layout {
                 .orElse(Style.PLAIN);
             spans = List.of(new Span("[image: " + block.text() + "] " + block.target(), link));
         }
-        if (!spans.isEmpty()) {
+        if (!spans.isEmpty() || calloutInset > 0) {
             for (var row : TextLayout.wrap(spans, inner, source || block.kind() == Block.Kind.VERSE)) {
                 lines.add(new RenderedLine(row, position, null));
             }
         }
+        int childCalloutWidth = block.kind() == Block.Kind.LIST
+                ? block
+            .children()
+            .stream()
+            .flatMap(child -> child.spans().stream().limit(1))
+            .filter(span -> !span.callout().isEmpty())
+            .mapToInt(span -> TextLayout.width(theme(List.of(span), palette)) + 1)
+            .max()
+            .orElse(0)
+                : 0;
         for (Block child : block.children()) {
-            lines.addAll(render(child, inner, appearance, positions, toggled, interactive));
+            lines.addAll(render(child, inner, appearance, positions, toggled, interactive, childCalloutWidth));
         }
         if (frontMatter) {
             lines.add(
@@ -470,6 +494,16 @@ public final class Layout {
             for (RenderedLine line : lines) {
                 var row = new ArrayList<Span>();
                 row.add(new Span(quote ? (options.ascii() ? "| " : "│ ") : "  ", palette.borderStyle()));
+                if (calloutInset > 0) {
+                    if (indented.isEmpty()) {
+                        row.addAll(calloutMarker);
+                    }
+                    row.add(
+                            new Span(" "
+                                .repeat(calloutInset - (indented.isEmpty() ? TextLayout.width(calloutMarker) : 0))
+                            )
+                    );
+                }
                 row.addAll(line.spans());
                 indented.add(new RenderedLine(row, line.blockIndex(), line.asset(), line.disclosure()));
             }
