@@ -30,6 +30,77 @@ import org.junit.jupiter.api.Test;
 import org.tabletest.junit.TableTest;
 
 class StructureMenuTest {
+    @TableTest(
+            """
+        appearance | selected | inlineBold | colour
+        DARK       | false    | false      | true
+        DARK       | true     | false      | true
+        DARK       | false    | true       | true
+        DARK       | true     | true       | true
+        LIGHT      | false    | false      | true
+        LIGHT      | true     | false      | true
+        LIGHT      | false    | true       | true
+        LIGHT      | true     | true       | true
+        DARK       | false    | true       | false
+        DARK       | true     | true       | false
+        """
+    )
+    void menuNodesUseHeadingStylesAndPreserveSelectionContrast(
+            Appearance appearance,
+            boolean selected,
+            boolean inlineBold,
+            boolean colour
+    ) {
+        var plain = io.github.bric3.glowadoc.document.Style.PLAIN;
+        var heading = new Block(
+                Block.Kind.HEADING,
+                "",
+                List.of(
+                        new Span("plain "),
+                        new Span("bold", inlineBold ? plain.bolded() : plain),
+                        new Span(" "),
+                        new Span("italic", plain.italicised()),
+                        new Span(" "),
+                        new Span("code", plain.coded()),
+                        new Span(" "),
+                        new Span("gone", plain.struck()),
+                        new Span(" "),
+                        new Span("link", plain.linked("https://example.org"))
+                ),
+                List.of(),
+                "",
+                "",
+                Block.Format.DEFAULT,
+                1
+        );
+        var menu = menu(heading, heading("Other", 1));
+        menu.open(selected ? 0 : 1);
+        var buffer = Buffer.empty(new Rect(0, 0, 80, 24));
+        menu.draw(buffer, appearance, colour, true);
+        int x = menu.bounds().x() + 4;
+        int y = menu.bounds().y() + 1;
+        assertEquals(colour && !inlineBold, buffer.get(x, y).style().effectiveModifiers().contains(Modifier.BOLD));
+        assertEquals(colour, buffer.get(x + 6, y).style().effectiveModifiers().contains(Modifier.BOLD));
+        assertEquals(colour, buffer.get(x + 11, y).style().effectiveModifiers().contains(Modifier.ITALIC));
+        assertEquals(colour, buffer.get(x + 23, y).style().effectiveModifiers().contains(Modifier.CROSSED_OUT));
+        assertEquals(colour, buffer.get(x + 28, y).style().effectiveModifiers().contains(Modifier.UNDERLINED));
+        assertTrue(buffer.get(x + 28, y).style().hyperlink().isEmpty(), "Menu entries activate their section");
+        assertTrue(text(buffer).contains("plain bold italic code gone link"));
+        if (colour) {
+            var palette = Palette.forAppearance(appearance);
+            assertEquals(
+                    Color.hex(selected ? palette.canvas() : palette.accent()),
+                    buffer.get(x, y).style().fg().orElseThrow()
+            );
+            assertEquals(
+                    Color.hex(selected ? palette.accent() : palette.stripe()),
+                    buffer.get(x + 18, y).style().bg().orElseThrow()
+            );
+        } else {
+            assertEquals(selected, buffer.get(x, y).style().effectiveModifiers().contains(Modifier.REVERSED));
+        }
+    }
+
     @Test
     void selectsCurrentSectionAndNavigatesSkippedLevelsAndDuplicateTitles() {
         var menu = menu(

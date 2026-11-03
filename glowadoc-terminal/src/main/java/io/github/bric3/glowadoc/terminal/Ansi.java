@@ -62,26 +62,32 @@ public final class Ansi {
             boolean colour,
             boolean truecolour
     ) {
-        var result = style.notBold().dim();
+        var result = style.notBold();
         if (!colour) {
-            return result.notReversed();
+            return result.notReversed().dim();
         }
+        result = result.notDim();
         var fill = style.bg().orElse(background);
         if (style.effectiveModifiers().contains(Modifier.REVERSED)) {
             fill = style.fg().orElse(background);
             result = result.notReversed().fg(style.bg().orElse(background));
         }
-        // SGR dim affects text only; blend filled cells as well, including callout pills.
-        var rgb = fill.toRgb();
-        return result.bg(
-                color(
-                        new Color.Rgb(
-                                (rgb.r() * 2 + background.r() * 3) / 5,
-                                (rgb.g() * 2 + background.g() * 3) / 5,
-                                (rgb.b() * 2 + background.b() * 3) / 5
-                        ),
-                        truecolour
-                )
+        // Rounded callout ends use foreground paint; their centres use background paint.
+        if (result.fg().isPresent()) {
+            result = result.fg(blend(result.fg().orElseThrow(), background, truecolour));
+        }
+        return result.bg(blend(fill, background, truecolour));
+    }
+
+    private static Color blend(Color colour, Color.Rgb background, boolean truecolour) {
+        var rgb = colour.toRgb();
+        return color(
+                new Color.Rgb(
+                        (rgb.r() * 2 + background.r() * 3) / 5,
+                        (rgb.g() * 2 + background.g() * 3) / 5,
+                        (rgb.b() * 2 + background.b() * 3) / 5
+                ),
+                truecolour
         );
     }
 

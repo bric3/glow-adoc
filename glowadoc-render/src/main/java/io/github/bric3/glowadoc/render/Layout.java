@@ -303,15 +303,7 @@ public final class Layout {
                 ? source(block, palette, appearance)
                 : theme(block.spans().subList(calloutInset > 0 ? 1 : 0, block.spans().size()), palette);
         if (block.kind() == Block.Kind.HEADING) {
-            // Terminals have one bold weight; keep explicit emphasis distinct from the surrounding title.
-            boolean inlineBold = spans.stream().anyMatch(span -> span.style().bold());
-            spans = spans
-                .stream()
-                .map(s -> new Span(
-                        s.text(),
-                        (inlineBold ? s.style() : s.style().bolded()).colours(palette.accent(), s.style().background())
-                ))
-                .toList();
+            spans = palette.headingSpans(spans);
         }
         if (block.kind() == Block.Kind.IMAGE) {
             Style link =

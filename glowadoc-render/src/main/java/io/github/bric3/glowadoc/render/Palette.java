@@ -3,6 +3,8 @@ package io.github.bric3.glowadoc.render;
 
 import io.github.bric3.glowadoc.document.Appearance;
 import io.github.bric3.glowadoc.document.Style;
+import io.github.bric3.glowadoc.document.Span;
+import java.util.List;
 
 public record Palette(String foreground, String surface, String stripe, String border, String accent) {
     public static Palette forAppearance(Appearance appearance) {
@@ -25,6 +27,19 @@ public record Palette(String foreground, String surface, String stripe, String b
 
     public Style statusStyle() {
         return Style.PLAIN.colours(foreground, stripe);
+    }
+
+    public List<Span> headingSpans(List<Span> spans) {
+        // Terminals have one bold weight; keep explicit emphasis distinct from the surrounding title.
+        boolean inlineBold = spans.stream().anyMatch(span -> span.style().bold());
+        return spans
+            .stream()
+            .map(span -> new Span(
+                    span.text(),
+                    (inlineBold ? span.style() : span.style().bolded())
+                        .colours(accent, span.style().code() ? stripe : span.style().background())
+            ))
+            .toList();
     }
 
     public String admonition(String kind) {

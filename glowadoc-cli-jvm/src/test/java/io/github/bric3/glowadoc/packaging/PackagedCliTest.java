@@ -709,7 +709,8 @@ class PackagedCliTest {
         String body = "A paragraph in this section.\n\n".repeat(30);
         Files.writeString(
                 document,
-                "= Document\n\n== Root\n\nimage::image.png[]\n\nNOTE: CALLOUT_BACKGROUND\n\n"
+                "= Document\n\n[source,java]\n----\nint value = 1; // <1>\n----\n\n"
+                + "== Root\n\nimage::image.png[]\n\nNOTE: CALLOUT_BACKGROUND\n\n"
                 + body
                 + "=== Child\n\n"
                 + body
@@ -747,10 +748,19 @@ class PackagedCliTest {
                     "Opening the menu retains the main status bar"
             );
             String opened = Files.readString(transcript).substring(before);
-            assertTrue(
-                    Pattern.compile("\u001B\\[(?:[0-9]+;)*2(?:;[0-9]+)*m").matcher(opened).find(),
-                    "Document is dimmed"
-            );
+            if (colour.equals("never")) {
+                assertTrue(
+                        Pattern.compile("\u001B\\[(?:[0-9]+;)*2(?:;[0-9]+)*m").matcher(opened).find(),
+                        "Monochrome text uses terminal faint"
+                );
+            } else {
+                assertTrue(opened.contains("38;2;103;105;109"), "Document foreground must blend towards the canvas");
+                assertTrue(
+                        Pattern.compile("\u001B\\[[0-9;]*38;2;56;87;115[0-9;]*m").matcher(opened).find(),
+                        "Rounded callout ends must use the same blended colour as the centre fill"
+                );
+                assertTrue(opened.contains("48;2;56;87;115"), "Callout centre must use the blended accent colour");
+            }
             assertFalse(opened.contains("a=p,i="), "Images must not cover the menu");
             int barStart = opened.indexOf("\u001B[24;1H");
             assertTrue(barStart >= 0, "The main status bar must be repainted when dimmed");
@@ -764,8 +774,8 @@ class PackagedCliTest {
                 );
             } else {
                 assertTrue(
-                        Pattern.compile("\u001B\\[(?:[0-9]+;)*2(?:;[0-9]+)*m").matcher(bar).find(),
-                        "The main status bar must dim behind the menu"
+                        bar.contains("38;2;56;87;115") && bar.contains("48;2;25;30;37"),
+                        "The main status bar must blend both foreground and background colours"
                 );
             }
             if (colour.equals("always")) {

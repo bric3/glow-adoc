@@ -4,8 +4,10 @@ package io.github.bric3.glowadoc.pager;
 import dev.tamboui.buffer.Buffer;
 import dev.tamboui.layout.Rect;
 import dev.tamboui.style.Style;
+import dev.tamboui.style.Hyperlink;
 import dev.tamboui.text.CharWidth;
 import dev.tamboui.text.Line;
+import dev.tamboui.text.Span;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
 import dev.tamboui.tui.event.MouseEvent;
@@ -316,7 +318,17 @@ final class StructureMenu {
             buffer.setString(bounds.x() + 1, y, " ".repeat(width - 2), style);
             int x = markerColumn(entry);
             String marker = hasChildren(index) ? collapsed.contains(index) ? "▶ " : "▼ " : "  ";
-            write(buffer, x, y, marker + entry.title(), style, bounds.x() + width - 1 - x);
+            var spans = new ArrayList<Span>();
+            spans.add(Span.styled(marker, style));
+            for (var span : palette.headingSpans(blocks.get(entry.position()).spans())) {
+                // Keep entry activation on the section when heading text contains a link.
+                var titleStyle = base.patch(Ansi.style(span.style(), colour, truecolour)).hyperlink((Hyperlink) null);
+                if (index == selected) {
+                    titleStyle = titleStyle.patch(selection);
+                }
+                spans.add(Span.styled(span.text(), titleStyle));
+            }
+            buffer.setLine(x, y, Line.from(spans), bounds.x() + width - 1 - x);
         }
         int footer = bounds.y() + height - 2;
         buffer.setString(bounds.x() + 1, footer, " ".repeat(width - 2), status);
