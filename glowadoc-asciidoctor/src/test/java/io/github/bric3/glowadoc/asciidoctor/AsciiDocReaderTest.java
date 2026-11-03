@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.bric3.glowadoc.document.Block;
 import org.junit.jupiter.api.Test;
+import org.tabletest.junit.TableTest;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -112,6 +113,28 @@ class AsciiDocReaderTest {
                         && b.language().equals("mermaid")
                         && b.text().contains("A --> B"))
             );
+        }
+    }
+
+    @TableTest(
+            """
+        language | delimiter
+        plantuml | '----'
+        plantuml | '....'
+        mermaid  | '----'
+        mermaid  | '....'
+        ditaa    | '----'
+        ditaa    | '....'
+        """
+    )
+    void preservesDiagramSource(String language, String delimiter) {
+        String source = "  +-------------+\n  | A < B & cGRE|\n  +-------------+";
+        try (var reader = new AsciiDocReader()) {
+            var document = reader.read("[" + language + "]\n" + delimiter + "\n" + source + "\n" + delimiter, directory);
+            var block = document.blocks().getFirst();
+            assertEquals(Block.Kind.DIAGRAM, block.kind());
+            assertEquals(language, block.language());
+            assertEquals(source, block.text());
         }
     }
 

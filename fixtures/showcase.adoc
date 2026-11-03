@@ -57,6 +57,13 @@ flowchart LR
   Source --> Reader --> Terminal
 ----
 
+[ditaa]
+----
++--------+     +--------+
+| Source | --> | Reader |
++--------+     +--------+
+----
+
 == Unicode
 
 Diacritics: café. Wide text: 日本語. Emoji: 👩‍💻.

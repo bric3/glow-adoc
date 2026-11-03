@@ -7,6 +7,7 @@ import io.github.bric3.glowadoc.document.Appearance;
 import net.sourceforge.plantuml.FileFormat;
 import net.sourceforge.plantuml.FileFormatOption;
 import net.sourceforge.plantuml.SourceStringReader;
+import net.sourceforge.plantuml.core.AbstractDiagram;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,7 +19,7 @@ public final class PlantUmlBackend implements DiagramBackend {
     }
 
     @Override
-    public void render(String source, Path output, Appearance appearance) throws IOException {
+    public void render(String source, Path output, Appearance appearance, double scale) throws IOException {
         if (source.matches("(?is).*![a-z]*(?:include|import|theme).*")) {
             throw new IOException("PlantUML includes, imports and themes are disabled");
         }
@@ -36,7 +37,16 @@ public final class PlantUmlBackend implements DiagramBackend {
                 : "#ffffff\nskinparam defaultFontColor #202020\n")
                 + source.substring(newline + 1);
         try (var out = new LimitedOutputStream(Files.newOutputStream(output), 10_000_000)) {
-            var result = new SourceStringReader(source).outputImage(out, new FileFormatOption(FileFormat.PNG));
+            var reader = new SourceStringReader(source);
+            if (!reader.getBlocks().isEmpty()
+                    && reader.getBlocks().getFirst().getDiagram() instanceof AbstractDiagram diagram) {
+                // Compose density with the document's scale; FileFormatOption does not scale UML PNGs.
+                var documentScale = diagram.getScale();
+                diagram.setScale((width, height) -> scale * (documentScale == null
+                        ? 1
+                        : documentScale.getScale(width, height)));
+            }
+            var result = reader.outputImage(out, new FileFormatOption(FileFormat.PNG));
             if (result == null || result.getDescription().contains("Error")) {
                 throw new IOException("Invalid or unsupported PlantUML diagram");
             }

@@ -26,7 +26,7 @@ public final class MermanBackend implements DiagramBackend {
     }
 
     @Override
-    public void render(String source, Path output, Appearance appearance) throws Exception {
+    public void render(String source, Path output, Appearance appearance, double scale) throws Exception {
         Path directory = output.getParent();
         Path input = Files.createTempFile(directory, "source-", ".mmd");
         try {
@@ -37,6 +37,8 @@ public final class MermanBackend implements DiagramBackend {
                     input.toString(),
                     "--format",
                     "png",
+                    "--scale",
+                    Double.toString(scale),
                     "--theme",
                     appearance == Appearance.DARK ? "dark" : "default",
                     "--resource-profile",

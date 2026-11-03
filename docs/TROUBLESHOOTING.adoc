@@ -67,7 +67,8 @@ Use `--color=never` for plain styling and `--icons=unicode` or `--icons=ascii` w
 
 == Diagrams remain source
 
-The embedded MIT PlantUML distribution excludes ditaa.
+Use `[ditaa]` blocks for the embedded Traceur Ditaa renderer.
+The MIT PlantUML distribution does not handle `@startditaa` blocks.
 For Mermaid, check `merman-cli --version` and PATH, or set `merman` in user/explicit configuration.
 Renderer failures retain source. PlantUML includes/imports/themes are disabled.
 Diagram execution has a 15-second deadline and bounded output.

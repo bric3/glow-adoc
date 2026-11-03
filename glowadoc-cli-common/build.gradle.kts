@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":glowadoc-terminal"))
     implementation(project(":glowadoc-pager"))
     implementation(project(":glowadoc-diagrams-common"))
+    implementation(project(":glowadoc-diagrams-ditaa"))
     implementation(project(":glowadoc-diagrams-plantuml"))
     implementation(project(":glowadoc-diagrams-merman"))
     implementation(libs.aesh)

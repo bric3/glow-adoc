@@ -21,4 +21,12 @@ flowchart LR
 ----
 
 .Worker queue
+[ditaa]
+----
++---------+     +--------+
+| Request | --> | Worker |
++---------+     +--------+
+----
+
+.Worker queue
 image::resources/worker.svg[Worker queue,width=240]

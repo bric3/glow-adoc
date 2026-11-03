@@ -33,6 +33,7 @@ include(
     "glowadoc-images",
     "glowadoc-pager",
     "glowadoc-diagrams-common",
+    "glowadoc-diagrams-ditaa",
     "glowadoc-diagrams-plantuml",
     "glowadoc-diagrams-merman",
     "glowadoc-cli-common",

@@ -19,6 +19,7 @@ terminal rows, and direct output or the pager displays them.
 | glowadoc-images            | Bounded SVG loading and rasterisation through JSVG                       |
 | glowadoc-pager             | TamboUI events, viewport, folding, search and placements                 |
 | glowadoc-diagrams-common   | Diagram contract, caching, background work and local image resolution    |
+| glowadoc-diagrams-ditaa    | Embedded MPL-2.0 Traceur Ditaa                                           |
 | glowadoc-diagrams-plantuml | Embedded MIT PlantUML                                                    |
 | glowadoc-diagrams-merman   | Mermaid diagrams through bounded Merman processes                        |
 | glowadoc-cli-common        | Shared arguments, configuration and assembly                             |
@@ -65,8 +66,9 @@ Image metadata reserves rows. Visible assets upload once per session; stable pla
 position and crop without retransmitting pixels. PNG bytes stream directly; other formats convert once.
 Placements specify columns; the terminal derives height from the image's aspect ratio. Scroll crops
 use the reported cell proportions, including partial image rows. Cell-size replies trigger layout again.
-SVG raster density follows cell height against a 16 px reference text line. Raster cache keys include
-density, so new cell-size reports rerender vectors; successful source downloads are reused.
+SVG images and diagram backends share a raster density based on cell height against a 16 px reference
+text line. Their cache keys include density, so cell-size reports request a new raster at the required
+resolution. SVG source downloads are reused. Ditaa, PlantUML and Merman apply density while rendering.
 Scaling stays within the SVG dimension and pixel limits.
 Off-screen placements are removed while image data remains available.
 Least-recently-used off-screen images are evicted above the 128 MiB residency target;
@@ -87,7 +89,7 @@ Completed images replace source and preserve the viewport's block and relative r
 diagrams wait until displayed. Theme changes retain the previous image until its replacement is ready.
 Background diagnostics pass through the event loop; closing cancels work and terminates renderer processes.
 
-The CLI supplies PlantUML and Merman implementations of `DiagramBackend` to the common renderer.
+The CLI supplies PlantUML, Traceur Ditaa and Merman implementations of `DiagramBackend` to the common renderer.
 The pager depends only on `glowadoc-diagrams-common`; renderer-specific dependencies stay in their
 adapter modules. The common renderer owns caching, the 100 KB source limit and the 15-second render
 deadline. Adapters bound image output to 10 MB; Merman also bounds diagnostic output to 64 KB.

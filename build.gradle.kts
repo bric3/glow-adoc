@@ -23,6 +23,7 @@ tasks.register("checkAll") {
         ":glowadoc-images:test",
         ":glowadoc-pager:test",
         ":glowadoc-diagrams-common:test",
+        ":glowadoc-diagrams-ditaa:test",
         ":glowadoc-diagrams-plantuml:test",
         ":glowadoc-diagrams-merman:test",
     )

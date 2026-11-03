@@ -28,5 +28,6 @@ A 23-document corpus pass reduced the median of per-document highlighted-output 
 2565 ms to 279 ms on repeated opens. The PlantUML showcase's repeat first frame fell from
 1371 ms to 318 ms. Full ANSI output remained identical across the corpus.
 
-Mermaid graphics require separately installed Merman. PlantUML uses the MIT distribution; ditaa is unavailable.
+Mermaid graphics require separately installed Merman. PlantUML uses the MIT distribution.
+Ditaa blocks use the embedded MPL-2.0 Traceur Ditaa renderer.
 Native Image remains experimental. See the README for installation and the CLI reference for options.

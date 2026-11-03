@@ -3,6 +3,7 @@ package io.github.bric3.glowadoc.cli;
 
 import io.github.bric3.glowadoc.asciidoctor.AsciiDocReader;
 import io.github.bric3.glowadoc.diagrams.DiagramRenderer;
+import io.github.bric3.glowadoc.diagrams.ditaa.DitaaBackend;
 import io.github.bric3.glowadoc.diagrams.merman.MermanBackend;
 import io.github.bric3.glowadoc.diagrams.plantuml.PlantUmlBackend;
 import io.github.bric3.glowadoc.document.Appearance;
@@ -257,7 +258,9 @@ public final class ReadCommand implements Command<CommandInvocation> {
                     "plantuml",
                     new PlantUmlBackend(),
                     "mermaid",
-                    new MermanBackend(settings.merman())
+                    new MermanBackend(settings.merman()),
+                    "ditaa",
+                    new DitaaBackend()
             ), message -> System.err.println("glow-adoc: " + message))
             ) {
                 var parsed = reader.read(source, base, selectedShortcodes.equals("show"), selectedAttributes);

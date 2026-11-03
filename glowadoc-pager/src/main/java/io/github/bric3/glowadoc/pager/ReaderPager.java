@@ -625,10 +625,10 @@ public final class ReaderPager {
             previous = position;
             Block block = diagramBlocks.get(position);
             if (block != null) {
-                diagrams.request(block, appearance);
+                diagrams.request(block, appearance, imageScale());
             }
             for (PendingImage image : imageBlocks.getOrDefault(position, List.of())) {
-                imageLoader.request(image.block().target(), image.local(), svgScale());
+                imageLoader.request(image.block().target(), image.local(), imageScale());
             }
         }
     }
@@ -738,19 +738,19 @@ public final class ReaderPager {
 
     private Optional<Path> imagePath(Block block, List<PendingImage> requests) {
         Optional<Path> path = block.kind() == Block.Kind.DIAGRAM
-                ? firstFrame ? Optional.empty() : diagrams.cached(block, appearance)
+                ? firstFrame ? Optional.empty() : diagrams.cached(block, appearance, imageScale())
                 : DiagramRenderer.localImage(document, block.target());
         if (block.kind() == Block.Kind.IMAGE
                 && imageLoader != null
                 && ImageLoader.supports(block.target(), path.orElse(null))) {
             requests.add(new PendingImage(block, path.orElse(null)));
-            return firstFrame ? Optional.empty() : imageLoader.cached(block.target(), svgScale());
+            return firstFrame ? Optional.empty() : imageLoader.cached(block.target(), imageScale());
         }
         return path;
     }
 
-    private double svgScale() {
-        // Keep SVG logical pixels proportional to a 16 px text line on every display density.
+    private double imageScale() {
+        // Keep rendered image pixels proportional to a 16 px text line on every display density.
         return imageCellHeight / 16.0;
     }
 

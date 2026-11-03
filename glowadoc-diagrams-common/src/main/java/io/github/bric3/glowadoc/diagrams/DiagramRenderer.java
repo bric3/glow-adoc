@@ -33,7 +33,13 @@ public final class DiagramRenderer implements AutoCloseable {
     private final Map<String, DiagramBackend> backends;
     private final Path directory;
 
-    private record Key(String language, String source, Appearance appearance) {}
+    private record Key(String language, String source, Appearance appearance, double scale) {
+        Key {
+            if (!Double.isFinite(scale) || scale <= 0) {
+                throw new IllegalArgumentException("Diagram scale must be finite and positive");
+            }
+        }
+    }
 
     private final Map<Key, Future<Optional<Path>>> cache = new ConcurrentHashMap<>();
     private final ExecutorService renders = Executors.newSingleThreadExecutor(Thread.ofVirtual().factory());
@@ -49,8 +55,8 @@ public final class DiagramRenderer implements AutoCloseable {
         directory = Files.createTempDirectory("glow-adoc-");
     }
 
-    public Optional<Path> render(Block block, Appearance appearance) {
-        var task = task(block, appearance, false);
+    public Optional<Path> render(Block block, Appearance appearance, double scale) {
+        var task = task(block, appearance, scale, false);
         try {
             return task.get();
         } catch (InterruptedException e) {
@@ -67,28 +73,29 @@ public final class DiagramRenderer implements AutoCloseable {
     /**
      * Enqueue a render without delaying the terminal frame.
      */
-    public Optional<Path> request(Block block, Appearance appearance) {
+    public Optional<Path> request(Block block, Appearance appearance, double scale) {
         if (!closed) {
-            task(block, appearance, true);
+            task(block, appearance, scale, true);
         }
-        return cached(block, appearance);
+        return cached(block, appearance, scale);
     }
 
     /**
      * Keep the previous theme's image visible while its replacement is rendering.
      */
-    public Optional<Path> cached(Block block, Appearance appearance) {
+    public Optional<Path> cached(Block block, Appearance appearance, double scale) {
         if (closed) {
             return Optional.empty();
         }
-        Key key = new Key(block.language(), block.text(), appearance);
+        Key key = new Key(block.language(), block.text(), appearance, scale);
         var future = cache.get(key);
         if (future == null || !future.isDone()) {
             future = cache.get(
                     new Key(
                             key.language(),
                             key.source(),
-                            appearance == Appearance.DARK ? Appearance.LIGHT : Appearance.DARK
+                            appearance == Appearance.DARK ? Appearance.LIGHT : Appearance.DARK,
+                            scale
                     )
             );
         }
@@ -118,11 +125,11 @@ public final class DiagramRenderer implements AutoCloseable {
         return result;
     }
 
-    private Future<Optional<Path>> task(Block block, Appearance appearance, boolean background) {
+    private Future<Optional<Path>> task(Block block, Appearance appearance, double scale, boolean background) {
         if (closed) {
             return CompletableFuture.completedFuture(Optional.empty());
         }
-        Key key = new Key(block.language(), block.text(), appearance);
+        Key key = new Key(block.language(), block.text(), appearance, scale);
         return cache.computeIfAbsent(key, ignored -> {
             var task = new FutureTask<Optional<Path>>(() -> renderNow(key, background)) {
                 @Override
@@ -155,7 +162,7 @@ public final class DiagramRenderer implements AutoCloseable {
                 throw new IOException("Unknown diagram language: " + key.language());
             }
             var task = workers.submit(() -> {
-                backend.render(key.source(), output, key.appearance());
+                backend.render(key.source(), output, key.appearance(), key.scale());
                 return output;
             });
             try {

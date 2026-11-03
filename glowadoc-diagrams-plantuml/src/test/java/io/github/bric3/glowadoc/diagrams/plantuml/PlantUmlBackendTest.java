@@ -23,8 +23,28 @@ class PlantUmlBackendTest {
         """)
     void rendersPlantuml(Appearance appearance) throws Exception {
         try (var renderer = new DiagramRenderer(Map.of("plantuml", new PlantUmlBackend()), message -> fail(message))) {
-            var png = renderer.render(diagram("Alice -> Bob: Hello"), appearance).orElseThrow();
+            var png = renderer.render(diagram("Alice -> Bob: Hello"), appearance, 1.0).orElseThrow();
             assertNotNull(ImageIO.read(png.toFile()));
+        }
+    }
+
+    @TableTest(
+            """
+        scale | documentScale
+        1.5   | ''
+        2.0   | ''
+        3.0   | ''
+        2.0   | 'scale 0.5'
+        2.0   | 'scale 100 width'
+        """
+    )
+    void rasterisesAtTheRequestedDensity(double scale, String documentScale) throws Exception {
+        try (var renderer = new DiagramRenderer(Map.of("plantuml", new PlantUmlBackend()), message -> fail(message))) {
+            Block block = diagram("@startuml\n" + documentScale + "\nAlice -> Bob: Hello\n@enduml");
+            var normal = ImageIO.read(renderer.render(block, Appearance.LIGHT, 1.0).orElseThrow().toFile());
+            var scaled = ImageIO.read(renderer.render(block, Appearance.LIGHT, scale).orElseThrow().toFile());
+            assertEquals(normal.getWidth() * scale, scaled.getWidth(), 1.0);
+            assertEquals(normal.getHeight() * scale, scaled.getHeight(), 1.0);
         }
     }
 
@@ -40,7 +60,7 @@ class PlantUmlBackendTest {
     void keepsSourceForUnsafeOrInvalidDiagrams(String source) throws Exception {
         var diagnostics = new ArrayList<String>();
         try (var renderer = new DiagramRenderer(Map.of("plantuml", new PlantUmlBackend()), diagnostics::add)) {
-            assertTrue(renderer.render(diagram(source), Appearance.LIGHT).isEmpty());
+            assertTrue(renderer.render(diagram(source), Appearance.LIGHT, 1.0).isEmpty());
             assertEquals(1, diagnostics.size());
             assertTrue(diagnostics.getFirst().contains("showing source"));
         }

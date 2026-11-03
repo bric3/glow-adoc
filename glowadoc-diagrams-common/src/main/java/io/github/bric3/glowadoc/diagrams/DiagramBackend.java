@@ -9,7 +9,10 @@ import java.nio.file.Path;
  */
 @FunctionalInterface
 public interface DiagramBackend extends AutoCloseable {
-    void render(String source, Path output, Appearance appearance) throws Exception;
+    /**
+     * Scale maps logical image pixels to raster pixels for the terminal's cell density.
+     */
+    void render(String source, Path output, Appearance appearance, double scale) throws Exception;
 
     @Override
     default void close() {}

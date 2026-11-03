@@ -34,7 +34,7 @@ class MermanBackendTest {
         var diagnostics = new ArrayList<String>();
         try (var renderer =
                 new DiagramRenderer(Map.of("mermaid", new MermanBackend("/nonexistent/glow-merman")), diagnostics::add)) {
-            assertTrue(renderer.render(diagram(), Appearance.DARK).isEmpty());
+            assertTrue(renderer.render(diagram(), Appearance.DARK, 1.0).isEmpty());
             assertEquals(1, diagnostics.size());
             assertTrue(diagnostics.getFirst().contains("showing source"));
         }
@@ -46,7 +46,8 @@ class MermanBackendTest {
             assertThrows(IOException.class, () -> backend.render(
                     "flowchart LR; A --> B",
                     directory.resolve("image.png"),
-                    Appearance.LIGHT
+                    Appearance.LIGHT,
+                    1.0
             ));
             try (var files = Files.list(directory)) {
                 assertEquals(0, files.count());
@@ -66,15 +67,16 @@ class MermanBackendTest {
         long pid;
         try (var renderer =
                 new DiagramRenderer(Map.of("mermaid", new MermanBackend(command("render"))), message -> fail(message))) {
-            Path light = renderer.render(block, Appearance.LIGHT).orElseThrow();
+            Path light = renderer.render(block, Appearance.LIGHT, 2.0).orElseThrow();
             assertNotNull(ImageIO.read(light.toFile()));
             assertEquals(
                     light,
-                    assertTimeoutPreemptively(Duration.ofSeconds(1), () -> renderer.request(block, Appearance.DARK)).orElseThrow()
+                    assertTimeoutPreemptively(Duration.ofSeconds(1), () -> renderer.request(block, Appearance.DARK, 2.0)).orElseThrow()
             );
             awaitFile(directory.resolve("dark.started"));
             pid = Long.parseLong(Files.readString(directory.resolve("dark.started")));
-            assertEquals(light, renderer.cached(block, Appearance.DARK).orElseThrow());
+            assertEquals(light, renderer.cached(block, Appearance.DARK, 2.0).orElseThrow());
+            assertEquals("2.0", Files.readString(directory.resolve("dark.scale")));
             assertFalse(renderer.takeDirty());
         }
         assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
@@ -94,18 +96,27 @@ class MermanBackendTest {
     void keepsSourceForFailedOrExcessiveOutput(String mode) throws Exception {
         var diagnostics = new ArrayList<String>();
         try (var renderer = new DiagramRenderer(Map.of("mermaid", new MermanBackend(command(mode))), diagnostics::add)) {
-            assertTrue(renderer.render(diagram(), Appearance.LIGHT).isEmpty());
+            assertTrue(renderer.render(diagram(), Appearance.LIGHT, 1.0).isEmpty());
             assertEquals(1, diagnostics.size());
             assertTrue(diagnostics.getFirst().contains("showing source"));
         }
     }
 
-    @Test
-    void rendersWithInstalledMermanWhenRequested() throws Exception {
+    @TableTest("""
+        scale
+        1.5
+        2.0
+        3.0
+        """)
+    void rendersWithInstalledMermanWhenRequested(double scale) throws Exception {
         String command = System.getenv("GLOW_TEST_MERMAN");
         org.junit.jupiter.api.Assumptions.assumeTrue(command != null);
         try (var renderer = new DiagramRenderer(Map.of("mermaid", new MermanBackend(command)), message -> fail(message))) {
-            assertNotNull(ImageIO.read(renderer.render(diagram(), Appearance.DARK).orElseThrow().toFile()));
+            var normal = ImageIO.read(renderer.render(diagram(), Appearance.DARK, 1.0).orElseThrow().toFile());
+            var scaled = ImageIO.read(renderer.render(diagram(), Appearance.DARK, scale).orElseThrow().toFile());
+            assertNotNull(scaled);
+            assertEquals(normal.getWidth() * scale, scaled.getWidth(), 1.0);
+            assertEquals(normal.getHeight() * scale, scaled.getHeight(), 1.0);
         }
     }
 
@@ -170,6 +181,7 @@ class MermanBackendTest {
                 throw new IllegalArgumentException("Merman resource limits missing");
             }
             String theme = arguments.get(arguments.indexOf("--theme") + 1);
+            Files.writeString(directory.resolve(theme + ".scale"), arguments.get(arguments.indexOf("--scale") + 1));
             Files.writeString(directory.resolve(theme + ".started"), Long.toString(ProcessHandle.current().pid()));
             while (!Files.exists(directory.resolve(theme + ".ready"))) {
                 Thread.sleep(10);

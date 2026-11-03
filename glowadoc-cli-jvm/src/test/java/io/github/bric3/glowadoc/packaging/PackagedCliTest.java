@@ -281,12 +281,21 @@ class PackagedCliTest {
         }
     }
 
-    @Test
-    void packagesProjectLicenceAndDistinctUpstreamNotices() throws Exception {
-        try (var jar = new JarFile(System.getProperty("glow.jar"))) {
+    @TableTest("""
+        jarProperty
+        glow.jar
+        glow.executable
+        """)
+    void packagesProjectLicenceAndDistinctUpstreamNotices(String jarProperty) throws Exception {
+        try (var jar = new JarFile(System.getProperty(jarProperty))) {
             assertTrue(jar.getEntry("META-INF/glow-adoc/LICENSE") != null);
             assertTrue(jar.getEntry("META-INF/glow-adoc/THIRD-PARTY.md") != null);
             assertTrue(jar.getEntry("META-INF/third-party/plantuml-mit.txt") != null);
+            assertTrue(jar.getEntry("io/github/bric3/traceur/ditaa/DitaaRenderer.class") != null);
+            assertTrue(jar
+                .stream()
+                .anyMatch(entry -> entry.getName().startsWith("META-INF/third-party/traceur-ditaa-0.1.0/"))
+            );
             assertTrue(jar
                 .stream()
                 .anyMatch(entry -> entry.getName().startsWith("META-INF/third-party/jruby-stdlib-")));
@@ -298,6 +307,45 @@ class PackagedCliTest {
                 .anyMatch(entry -> entry.getName().startsWith("META-INF/third-party/")
                         && entry.getName().endsWith(".class"))
             );
+        }
+    }
+
+    @TableTest("""
+        cellHeight | cellWidth
+        24         | 12
+        32         | 16
+        48         | 24
+        """)
+    void pagerRendersDitaaAtTerminalDensity(int cellHeight, int cellWidth) throws Exception {
+        Path input = directory.resolve("ditaa.adoc");
+        Files.writeString(input, "FIRST_TEXT\n\n[ditaa]\n----\n+-----+\n| Box |\n+-----+\n----\n");
+        Path transcript = directory.resolve("ditaa-transcript");
+        var process = startPty(input.toString(), transcript, true, "--timings");
+        try {
+            await(process, transcript, "timing first-frame:");
+            assertTrue(screen(Files.readString(transcript)).contains("FIRST_TEXT"));
+            process.getOutputStream().write("\u001B_Gi=2147483000;OK\u001B\\".getBytes());
+            process.getOutputStream().flush();
+            await(process, transcript, "a=t,t=d,f=100");
+            String output = Files.readString(transcript);
+            assertTrue(output.indexOf("timing first-frame:") < output.indexOf("a=t,t=d,f=100"));
+            assertFalse(output.contains("showing source"));
+            await(process, transcript, ",c=14;");
+            int beforeResize = Files.readString(transcript).length();
+            process.getOutputStream().write(("\u001B[6;" + cellHeight + ";" + cellWidth + "t").getBytes());
+            process.getOutputStream().flush();
+            assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
+                while (!Files.readString(transcript).substring(beforeResize).contains(",c=14;")) {
+                    Thread.sleep(10);
+                }
+            });
+            process.getOutputStream().write('q');
+            process.getOutputStream().flush();
+            assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(transcript));
+        } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
         }
     }
 

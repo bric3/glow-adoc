@@ -11,15 +11,16 @@ highlighted code, aligned tables, colourful admonitions and collapsible sections
 
 * Search as you type, follow clickable links and navigate with the keyboard or mouse.
 * Read with automatic light/dark themes and text that wraps at 120 columns by default.
-* View local images and live SVG badges through Kitty graphics, including over SSH, and render PlantUML diagrams.
+* View local images and live SVG badges through Kitty graphics, including over SSH, and render PlantUML and ditaa diagrams.
 * Open files or stdin, or write formatted text directly to stdout.
 
 Built with https://github.com/asciidoctor/asciidoctorj[AsciidoctorJ] on
 https://github.com/jruby/jruby[JRuby] for parsing,
 https://github.com/tamboui/tamboui[TamboUI] for the pager,
 https://github.com/roastedroot/lumis4j[Lumis4J] for highlighting,
-https://github.com/weisJ/jsvg[JSVG] for SVG images and
-https://github.com/plantuml/plantuml[PlantUML] for diagrams.
+https://github.com/weisJ/jsvg[JSVG] for SVG images,
+https://github.com/plantuml/plantuml[PlantUML] and
+https://github.com/bric3/traceur-ditaa[Traceur Ditaa] for diagrams.
 Mermaid support uses optional https://github.com/Latias94/merman[Merman]: `brew install merman-cli`.
 
 == Install
@@ -81,8 +82,23 @@ Press `m` to switch between mouse controls and terminal text selection.
 
 SVG images and HTTPS badges from `img.shields.io` and GitHub Actions load after the first text frame.
 Adjacent inline images share a row and wrap at the reading width.
-SVGs scale with reported terminal text height for HiDPI displays.
+SVGs and generated diagrams scale with reported terminal text height for HiDPI displays.
 Unavailable images retain linked alt text. `--images=never` disables images and badge downloads.
+
+Use `[ditaa]` on a listing or literal block to render ASCII diagrams:
+
+[source,asciidoc]
+....
+[ditaa]
+----
++--------+     +--------+
+| Source | --> | Reader |
++--------+     +--------+
+----
+....
+
+Diagrams render after the first text frame in terminals with Kitty graphics support.
+Ditaa uses Traceur's default colours in both themes. Direct output and unavailable graphics retain the source.
 
 == Configure
 

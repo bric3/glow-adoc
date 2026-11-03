@@ -181,7 +181,7 @@ public final class TerminalConverter extends StringConverter {
             if (name.equals("listing") || name.equals("literal")) {
                 String language = String.valueOf(node.getAttribute("language", ""));
                 String style = block.getStyle();
-                boolean diagram = "plantuml".equals(style) || "mermaid".equals(style);
+                boolean diagram = "plantuml".equals(style) || "mermaid".equals(style) || "ditaa".equals(style);
                 return "<"
                         + (diagram ? "diagram" : "source")
                         + " language=\""

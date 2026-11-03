@@ -23,10 +23,15 @@ pin the complete graph and downloaded bytes.
 | TOMLJ 2.2.0                | `glowadoc-cli-common`        | Configuration parsing; Apache-2.0.                                          |
 | Lumis4J 0.0.10             | `glowadoc-highlight-lumis4j` | Syntax highlighting; Apache-2.0, with upstream terms for bundled resources. |
 | PlantUML MIT 1.2026.9      | `glowadoc-diagrams-plantuml` | Embedded diagrams; MIT, with bundled-resource notices.                      |
+| Traceur Ditaa 0.1.0        | `glowadoc-diagrams-ditaa`    | Embedded ditaa diagrams; MPL-2.0.                                           |
 
 Use `net.sourceforge.plantuml:plantuml-mit`. Its feature set excludes ditaa.
 See [PlantUML's distributions](https://plantuml.com/download) and the
 [stored distribution notice](licenses/plantuml-mit.txt).
+
+[Traceur Ditaa](https://github.com/bric3/traceur-ditaa/tree/v0.1.0) renders `[ditaa]` blocks separately.
+Its [published POM](https://repo.maven.apache.org/maven2/io/github/bric3/traceur/traceur-ditaa/0.1.0/traceur-ditaa-0.1.0.pom)
+declares MPL-2.0 and no runtime dependencies. Its licence is collected from the jar with the other packaged notices.
 
 ## Transitive and bundled runtime components
 
