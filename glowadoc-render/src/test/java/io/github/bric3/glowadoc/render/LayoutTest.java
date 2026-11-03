@@ -692,6 +692,79 @@ class LayoutTest {
         assertTrue(spans.getLast().style().strike());
     }
 
+    @TableTest(
+            """
+        appearance | width | explicitBold
+        LIGHT      | 80    | false
+        LIGHT      | 80    | true
+        DARK       | 80    | false
+        DARK       | 80    | true
+        LIGHT      | 12    | false
+        LIGHT      | 12    | true
+        DARK       | 12    | false
+        DARK       | 12    | true
+        """
+    )
+    void preservesInlineStylesAndEmphasisContrastInHeadings(Appearance appearance, int width, boolean explicitBold) {
+        var heading = new Block(
+                Block.Kind.HEADING,
+                "",
+                List.of(
+                        new Span("plain "),
+                        new Span("bold", explicitBold ? Style.PLAIN.bolded() : Style.PLAIN),
+                        new Span(" "),
+                        new Span("italic", Style.PLAIN.italicised()),
+                        new Span(" "),
+                        new Span("code", Style.PLAIN.coded()),
+                        new Span(" "),
+                        new Span("gone", Style.PLAIN.struck())
+                ),
+                List.of(),
+                "",
+                ""
+        );
+        var spans = layout
+            .render(new Document(List.of(heading), Path.of(".")), width, appearance)
+            .stream()
+            .flatMap(line -> line.spans().stream())
+            .toList();
+        var plain = spans
+            .stream()
+            .filter(span -> span.text().contains("plain"))
+            .findFirst()
+            .orElseThrow();
+        var bold = spans
+            .stream()
+            .filter(span -> span.text().contains("bold"))
+            .findFirst()
+            .orElseThrow();
+        var italic = spans
+            .stream()
+            .filter(span -> span.text().contains("italic"))
+            .findFirst()
+            .orElseThrow();
+        var code = spans
+            .stream()
+            .filter(span -> span.text().contains("code"))
+            .findFirst()
+            .orElseThrow();
+        var gone = spans
+            .stream()
+            .filter(span -> span.text().contains("gone"))
+            .findFirst()
+            .orElseThrow();
+        assertEquals(!explicitBold, plain.style().bold());
+        assertTrue(bold.style().bold());
+        assertTrue(italic.style().italic());
+        assertTrue(code.style().code());
+        assertEquals(Palette.forAppearance(appearance).stripe(), code.style().background());
+        assertTrue(gone.style().strike());
+        assertTrue(spans
+            .stream()
+            .allMatch(span -> span.style().foreground().equals(Palette.forAppearance(appearance).accent()))
+        );
+    }
+
     @Test
     void retainsFoldingPositionsAndExpandsDirectOutput() {
         var details = new Block(

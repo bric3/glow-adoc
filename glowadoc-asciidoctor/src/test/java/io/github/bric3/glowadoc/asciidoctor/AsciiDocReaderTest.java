@@ -20,6 +20,54 @@ class AsciiDocReaderTest {
 
     @TableTest(
             """
+        kind     | bold
+        document | '*bold*'
+        document | '**bold**'
+        section  | '*bold*'
+        section  | '**bold**'
+        yaml     | '*bold*'
+        yaml     | '**bold**'
+        """
+    )
+    void preservesInlineStylesInTitles(String kind, String bold) {
+        String title = "plain " + bold + " _italic_ `code` [line-through]#gone#";
+        String source = switch (kind) {
+            case "document" -> "= " + title + "\n\nBody.";
+            case "section" -> "== " + title + "\n\nBody.";
+            case "yaml" -> "---\ntitle: '" + title + "'\n---\n\nBody.";
+            default -> throw new IllegalArgumentException(kind);
+        };
+        try (var reader = new AsciiDocReader()) {
+            var heading = reader
+                .read(source, directory)
+                .blocks()
+                .stream()
+                .filter(block -> block.kind() == Block.Kind.HEADING)
+                .findFirst()
+                .orElseThrow();
+            assertEquals("plain bold italic code gone", heading.text());
+            assertTrue(heading
+                .spans()
+                .stream()
+                .anyMatch(span -> span.text().contains("bold") && span.style().bold()));
+            assertTrue(heading
+                .spans()
+                .stream()
+                .anyMatch(span -> span.text().contains("italic") && span.style().italic())
+            );
+            assertTrue(heading
+                .spans()
+                .stream()
+                .anyMatch(span -> span.text().contains("code") && span.style().code()));
+            assertTrue(heading
+                .spans()
+                .stream()
+                .anyMatch(span -> span.text().contains("gone") && span.style().strike()));
+        }
+    }
+
+    @TableTest(
+            """
         documentTitle | introduction | headingCount
         false         | false        | 1
         false         | true         | 1

@@ -91,6 +91,8 @@ while preserving the metadata display. Quoted and multiline YAML titles retain A
 Invalid metadata, non-string titles and metadata beyond the parsing limits retain the document body
 without an added heading. Title parsing is limited to 262,144 UTF-16 code units and 50 nested collections.
 Collection aliases and duplicate keys are rejected.
+Headings preserve inline code backgrounds, italics and strikethrough. Headings with explicit bold
+emphasis use regular weight for the surrounding words; unmarked headings use bold.
 Table cells wrap; structures wider than the viewport remain scrollable. Auto borders follow AsciiDoc frame/grid attributes.
 Source titles use italic text inside the top border. Callout pills use regular numbers on a contrasting
 background, with rounded ends in Nerd mode. Circle mode uses ❶ through ❿, then parenthesised numbers.
