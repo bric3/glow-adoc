@@ -373,6 +373,29 @@ class PackagedCliTest {
     }
 
     @TableTest("""
+        jarProperty
+        glow.jar
+        glow.executable
+        """)
+    void packagesJrubyRuntimeWithoutInstallersOrRubyTls(String jarProperty) throws Exception {
+        try (var jar = new JarFile(System.getProperty(jarProperty))) {
+            assertNotNull(jar.getEntry("org/jruby/Ruby.class"));
+            assertNotNull(jar.getEntry("META-INF/jruby.home/lib/ruby/stdlib/strscan.jar"));
+            assertNotNull(jar.getEntry("stdlib/home.spm"));
+            var unused = jar
+                .stream()
+                .map(entry -> entry.getName())
+                .filter(name -> name.startsWith("META-INF/jruby.home/bin/")
+                        || name.endsWith(".gem")
+                        || name.contains("/jars/mima/")
+                        || name.contains("/org/bouncycastle/")
+                        || name.endsWith("/jopenssl.jar"))
+                .toList();
+            assertEquals(List.of(), unused);
+        }
+    }
+
+    @TableTest("""
         cellHeight | cellWidth
         24         | 12
         32         | 16

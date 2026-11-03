@@ -105,6 +105,11 @@ glow-adoc does not enable CRaC checkpointing. The CRaC API is present because JR
 Excluding these libraries requires a separate JRuby compatibility evaluation; absence of direct
 application imports does not establish that an exclusion is safe.
 
+The shaded jars omit JRuby's command-line launchers, cached gem archives, Mima Maven resolver,
+and Ruby OpenSSL/Bouncy Castle jars. glow-adoc loads bundled gems, confines includes to local files,
+and fetches HTTPS images through Java's HTTP client. Dependency notices are still collected from
+the complete resolved artifacts.
+
 Inspect the installed graph with:
 
 ```sh

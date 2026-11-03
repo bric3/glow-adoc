@@ -53,6 +53,14 @@ tasks.shadowJar {
         "module-info.class",
         "META-INF/versions/*/module-info.class",
     )
+    // Includes use local files; HTTPS images use Java's HTTP client, so Ruby TLS and installers are unused.
+    exclude(
+        "META-INF/jruby.home/bin/**",
+        "META-INF/jruby.home/lib/ruby/gems/shared/cache/**",
+        "META-INF/jruby.home/lib/ruby/stdlib/jars/mima/**",
+        "META-INF/jruby.home/lib/ruby/stdlib/jopenssl.jar",
+        "META-INF/jruby.home/lib/ruby/stdlib/org/bouncycastle/**",
+    )
     manifest {
         attributes(
             "Multi-Release" to "true",
