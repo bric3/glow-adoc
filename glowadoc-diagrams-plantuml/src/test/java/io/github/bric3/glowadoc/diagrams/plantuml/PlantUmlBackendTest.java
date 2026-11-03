@@ -36,6 +36,7 @@ class PlantUmlBackendTest {
         3.0   | ''
         2.0   | 'scale 0.5'
         2.0   | 'scale 100 width'
+        3.0   | 'scale 100.75 width'
         """
     )
     void rasterisesAtTheRequestedDensity(double scale, String documentScale) throws Exception {
@@ -43,8 +44,9 @@ class PlantUmlBackendTest {
             Block block = diagram("@startuml\n" + documentScale + "\nAlice -> Bob: Hello\n@enduml");
             var normal = ImageIO.read(renderer.render(block, Appearance.LIGHT, 1.0).orElseThrow().toFile());
             var scaled = ImageIO.read(renderer.render(block, Appearance.LIGHT, scale).orElseThrow().toFile());
-            assertEquals(normal.getWidth() * scale, scaled.getWidth(), 1.0);
-            assertEquals(normal.getHeight() * scale, scaled.getHeight(), 1.0);
+            // PlantUML truncates PNG dimensions after scaling, so compare in unscaled pixels.
+            assertEquals(normal.getWidth(), scaled.getWidth() / scale, 1.0);
+            assertEquals(normal.getHeight(), scaled.getHeight() / scale, 1.0);
         }
     }
 
