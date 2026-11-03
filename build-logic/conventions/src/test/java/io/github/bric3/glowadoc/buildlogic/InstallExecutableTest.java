@@ -46,6 +46,10 @@ class InstallExecutableTest {
                     launcherScript = layout.projectDirectory.file("install-launcher.sh")
                     executable = layout.projectDirectory.file("home with 'quotes'/.local/bin/glow-adoc")
                     installedJar = layout.projectDirectory.file("home with 'quotes'/.local/share/glow-adoc/glow-adoc.jar")
+                    installedAot = layout.projectDirectory.dir("home with 'quotes'/.local/share/glow-adoc/aot")
+                    if (providers.gradleProperty("withAot").isPresent) {
+                        aotCache = layout.projectDirectory.dir("aot-input")
+                    }
                 }
                 """
         );
@@ -84,14 +88,29 @@ class InstallExecutableTest {
         assertTrue(install().contains("Reusing configuration cache"));
         assertEquals("replacement jar", Files.readString(installedJar));
         assertTrue(Files.isExecutable(launcher));
+
+        Path cache = Files.createDirectory(directory.resolve("aot-input"));
+        Files.writeString(cache.resolve("cache.aot"), "trained cache");
+        Files.writeString(cache.resolve("cache.key"), "cache identity");
+        install("-PwithAot");
+        Path installedCache = installedJar.getParent().resolve("aot");
+        assertEquals("trained cache", Files.readString(installedCache.resolve("cache.aot")));
+        assertEquals("cache identity", Files.readString(installedCache.resolve("cache.key")));
+        assertEquals(318211200000L, Files.getLastModifiedTime(installedJar).toMillis());
+        install();
+        assertTrue(Files.notExists(installedCache.resolve("cache.aot")));
+        assertTrue(Files.notExists(installedCache.resolve("cache.key")));
     }
 
-    private String install() {
+    private String install(String... options) {
+        var args =
+                new java.util.ArrayList<>(List.of("installTest", "--configuration-cache", "--offline", "--stacktrace"));
+        args.addAll(List.of(options));
         return GradleRunner
             .create()
             .withProjectDir(directory.toFile())
             .withPluginClasspath()
-            .withArguments("installTest", "--configuration-cache", "--offline", "--stacktrace")
+            .withArguments(args)
             .build()
             .getOutput();
     }

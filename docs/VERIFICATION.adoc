@@ -40,7 +40,10 @@ Corpus checks verify packaged resources, include expansion, temporary-file clean
 without an external document or project configuration. Relocation checks preserve executable names
 and reject renamed cache candidates.
 Verify `install` using temporary home, data and cache roots, then load the installed jar
-with `-XX:AOTMode=required`. Check that jar bytes, basename and timestamp match the staged training copy.
+with `-XX:AOTMode=required`. Check that jar bytes, basename and fixed UTC timestamp match the staged training copy.
+Both ZIP variants run after extraction, relocation and symlinking. The AOT ZIP also loads in required mode
+after extraction in a different time zone. A TestKit check verifies unchanged training is up to date,
+deleted output is restored from the build cache, and changed JVM options retrain.
 The executable in `~/.local/bin` must remain a small script; test paths containing spaces and quotes.
 Repeat opens must still hit the conversion cache after relocation. Cache tests simulate archived
 classes retaining different training-time CodeSource URLs while their resources share the runtime jar.

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import io.github.bric3.glowadoc.buildlogic.AOT_JAR_TIMESTAMP
 import io.github.bric3.glowadoc.buildlogic.AotTrain
 import io.github.bric3.glowadoc.buildlogic.CollectDependencyNotices
 import io.github.bric3.glowadoc.buildlogic.ExecutableJar
 import io.github.bric3.glowadoc.buildlogic.InstallExecutable
 import io.github.bric3.glowadoc.buildlogic.PackagedCliArguments
+import java.nio.file.FileSystems
+import java.nio.file.Files
 
 plugins {
     id("glowadoc.java")
@@ -81,22 +84,57 @@ val executableJar = tasks.register<ExecutableJar>("executableJar") {
     outputLauncher = layout.buildDirectory.file("launcher/glow-adoc")
 }
 
-val distributionZip = tasks.register<Zip>("distributionZip") {
+val aotRuntime = providers.exec {
+    commandLine("/bin/sh", layout.projectDirectory.file("src/main/scripts/java-launcher.sh"), "--aot-runtime-identity")
+}.standardOutput.asText
+
+val aotTrain = tasks.register<AotTrain>("aotTrain") {
     group = "distribution"
-    description = "Package the launcher and Shadow jar in a versioned ZIP."
-    archiveBaseName = "glow-adoc"
-    destinationDirectory = layout.buildDirectory.dir("distributions")
+    description = "Train a packaged AOT cache with the launcher's selected JDK and bundled AsciiDoc workload."
+    jar = executableJar.flatMap { it.outputJar }
+    runtimeIdentity = aotRuntime.map { it.trim().lineSequence().last() }
+    cacheDirectory = layout.buildDirectory.dir("aot")
+}
+
+val distributionContents = copySpec {
     into("glow-adoc-${project.version}") {
         from(executableJar.flatMap { it.outputLauncher }) {
             into("bin")
             filePermissions { unix("755") }
         }
-        from(tasks.shadowJar.flatMap { it.archiveFile }) {
+        from(executableJar.flatMap { it.outputJar }) {
             into("lib")
             rename { "glow-adoc.jar" }
         }
         from(rootProject.layout.projectDirectory.file("LICENSE"))
         from(rootProject.layout.projectDirectory.file("THIRD-PARTY.md"))
+    }
+}
+
+val distributionWithoutAotZip = tasks.register<Zip>("distributionWithoutAotZip") {
+    group = "distribution"
+    description = "Package the launcher and jar without AOT."
+    archiveBaseName = "glow-adoc"
+    archiveClassifier = "without-aot"
+    destinationDirectory = layout.buildDirectory.dir("distributions")
+    with(distributionContents)
+}
+
+val distributionZip = tasks.register<Zip>("distributionZip") {
+    group = "distribution"
+    description = "Package the launcher, jar and trained AOT cache in a versioned ZIP."
+    archiveBaseName = "glow-adoc"
+    destinationDirectory = layout.buildDirectory.dir("distributions")
+    with(distributionContents)
+    val root = "glow-adoc-${project.version}"
+    from(aotTrain.flatMap { it.cacheDirectory }) {
+        into("$root/lib/aot")
+    }
+    doLast {
+        // ZIP needs a UTC timestamp field so extraction in another time zone preserves AOT validity.
+        FileSystems.newFileSystem(archiveFile.get().asFile.toPath()).use { zip ->
+            Files.setLastModifiedTime(zip.getPath("$root/lib/glow-adoc.jar"), AOT_JAR_TIMESTAMP)
+        }
     }
 }
 
@@ -110,12 +148,11 @@ tasks.register<Sync>("releaseArtifacts") {
     description = "Stage the release ZIP and version metadata."
     into(layout.buildDirectory.dir("release"))
     from(distributionZip.flatMap { it.archiveFile })
+    from(distributionWithoutAotZip.flatMap { it.archiveFile })
     from(releaseMetadata.flatMap { it.destinationFile })
 }
 
-val installWithoutAot = tasks.register<InstallExecutable>("installWithoutAot") {
-    group = "distribution"
-    description = "Install glow-adoc to ~/.local/bin without AOT training."
+tasks.withType<InstallExecutable>().configureEach {
     jar = executableJar.flatMap { it.outputJar }
     launcherScript = layout.projectDirectory.file("src/main/scripts/installed-launcher.sh")
     executable = layout.file(providers.systemProperty("user.home").map { File("$it/.local/bin/glow-adoc") })
@@ -123,10 +160,22 @@ val installWithoutAot = tasks.register<InstallExecutable>("installWithoutAot") {
         .filter { File(it).isAbsolute }
         .orElse(providers.systemProperty("user.home").map { "$it/.local/share" })
     installedJar = layout.file(dataHome.map { File(it, "glow-adoc/glow-adoc.jar") })
+    installedAot = layout.dir(dataHome.map { File(it, "glow-adoc/aot") })
+}
+
+tasks.register<InstallExecutable>("installWithoutAot") {
+    group = "distribution"
+    description = "Install glow-adoc to ~/.local/bin without AOT."
+}
+
+tasks.register<InstallExecutable>("install") {
+    group = "distribution"
+    description = "Install glow-adoc and its packaged AOT cache."
+    aotCache = aotTrain.flatMap { it.cacheDirectory }
 }
 
 tasks.assemble {
-    dependsOn(executableJar, distributionZip)
+    dependsOn(executableJar, distributionZip, distributionWithoutAotZip)
 }
 
 tasks.jar {
@@ -157,24 +206,9 @@ tasks.test {
             jar = tasks.shadowJar.flatMap { it.archiveFile }
             executable = executableJar.flatMap { it.outputJar }
             distribution = distributionZip.flatMap { it.archiveFile }
+            distributionWithoutAot = distributionWithoutAotZip.flatMap { it.archiveFile }
+            aotJava = layout.file(aotRuntime.map { File(it.lineSequence().first()) })
             fixture = rootProject.layout.projectDirectory.file("fixtures/showcase.adoc")
         },
     )
-}
-
-val aotTrain = tasks.register<AotTrain>("aotTrain") {
-    group = "distribution"
-    description = "Pre-train an installable executable with the bundled AsciiDoc workload."
-    jar = executableJar.flatMap { it.outputJar }
-    executable = layout.buildDirectory.file("aot/glow-adoc.jar")
-}
-
-installWithoutAot.configure {
-    mustRunAfter(aotTrain)
-}
-
-tasks.register("install") {
-    group = "distribution"
-    description = "Pre-train locally, then install glow-adoc with a reusable AOT cache."
-    dependsOn(aotTrain, installWithoutAot)
 }

@@ -137,10 +137,8 @@ It disables progress inside tmux/screen; `always` forces emission. Direct output
 
 == Environment
 
-`JAVA_OPTS` supplies JVM options to the executable launcher. Its default Unsafe policy is
-`-Dsun.misc.unsafe.memory.access=allow`, the OpenJDK property behind
-`--sun-misc-unsafe-memory-access=allow`. The property lets older Java versions reach the bootstrap
-guard. JAVA_OPTS can override it with the property or the standard flag. Direct Java invocation retains JVM defaults.
+`JAVA_OPTS` supplies JVM options to the executable launcher. JRuby 10.1.2.0 runs with the JVM's default
+Unsafe policy; the launcher supplies no Unsafe override.
 `XDG_CACHE_HOME` selects the conversion, highlighting and AOT cache root, falling back to `~/.cache`.
 Conversion files use the same root under `glow-adoc/conversions`; Windows uses
 `%LOCALAPPDATA%/glow-adoc/conversions`, falling back to `~/AppData/Local/glow-adoc/conversions`.

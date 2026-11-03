@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -24,7 +25,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Properties;
 import java.util.jar.Attributes;
-import java.util.jar.JarInputStream;
+import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
@@ -93,9 +94,12 @@ public class Release {
         if (!tag.equals(System.getenv("RELEASE_TAG"))) {
             throw new IllegalArgumentException("Release tag does not match artifact version");
         }
-        Path distribution = directory.resolve("glow-adoc-" + version + ".zip");
-        validateDistribution(distribution, version);
-        var files = new ArrayList<>(List.of(distribution));
+        var files = new ArrayList<Path>();
+        for (String suffix : List.of("", "-without-aot")) {
+            Path distribution = directory.resolve("glow-adoc-" + version + suffix + ".zip");
+            validateDistribution(distribution, version, suffix.isEmpty());
+            files.add(distribution);
+        }
         var checksums = new StringBuilder();
         for (Path file : files) {
             var digest = MessageDigest.getInstance("SHA-256");
@@ -119,7 +123,7 @@ public class Release {
         publisher.update(draft, id, tag, System.getenv("GITHUB_SHA"), files);
     }
 
-    static void validateDistribution(Path distribution, String version) throws Exception {
+    static void validateDistribution(Path distribution, String version, boolean aot) throws Exception {
         try (var archive = new ZipFile(distribution.toFile())) {
             String root = "glow-adoc-" + version + "/";
             var launcher = archive.getEntry(root + "bin/glow-adoc");
@@ -127,12 +131,24 @@ public class Release {
             if (launcher == null || launcher.isDirectory() || jar == null || jar.isDirectory()) {
                 throw new IllegalStateException("Missing launcher or jar: " + distribution);
             }
-            try (var input = new JarInputStream(archive.getInputStream(jar))) {
-                var manifest = input.getManifest();
-                if (manifest == null
-                        || !version.equals(manifest.getMainAttributes().getValue("Implementation-Version"))) {
-                    throw new IllegalStateException("Jar version mismatch: " + distribution);
+            if (aot != (archive.getEntry(root + "lib/aot/cache.aot") != null)
+                    || aot != (archive.getEntry(root + "lib/aot/cache.key") != null)) {
+                throw new IllegalStateException("AOT contents mismatch: " + distribution);
+            }
+            Path staged = Files.createTempFile("glow-adoc-release-", ".jar");
+            try {
+                try (var input = archive.getInputStream(jar)) {
+                    Files.copy(input, staged, StandardCopyOption.REPLACE_EXISTING);
                 }
+                try (var input = new JarFile(staged.toFile())) {
+                    var manifest = input.getManifest();
+                    if (manifest == null
+                            || !version.equals(manifest.getMainAttributes().getValue("Implementation-Version"))) {
+                        throw new IllegalStateException("Jar version mismatch: " + distribution);
+                    }
+                }
+            } finally {
+                Files.deleteIfExists(staged);
             }
         }
     }
@@ -281,7 +297,8 @@ public class Release {
     static void selfTest() throws Exception {
         Path distribution = Files.createTempFile("glow-adoc-release-test-", ".zip");
         try {
-            for (String scenario : List.of("missing launcher", "wrong version", "valid")) {
+            for (String scenario :
+                    List.of("missing launcher", "wrong version", "missing aot", "unexpected aot", "valid", "valid aot")) {
                 try (var archive = new ZipOutputStream(Files.newOutputStream(distribution))) {
                     if (!scenario.equals("missing launcher")) {
                         archive.putNextEntry(new ZipEntry("glow-adoc-0.1.0/bin/glow-adoc"));
@@ -299,19 +316,37 @@ public class Release {
                     try (var output = new JarOutputStream(jar, manifest)) {
                         output.finish();
                     }
+                    archive.write("#!/bin/sh\nexit 0\n\n".getBytes(StandardCharsets.UTF_8));
                     archive.write(jar.toByteArray());
                     archive.closeEntry();
+                    if (scenario.equals("valid aot") || scenario.equals("unexpected aot")) {
+                        for (String name : List.of("cache.aot", "cache.key")) {
+                            archive.putNextEntry(new ZipEntry("glow-adoc-0.1.0/lib/aot/" + name));
+                            archive.write("cache".getBytes(StandardCharsets.UTF_8));
+                            archive.closeEntry();
+                        }
+                    }
                 }
                 try {
-                    validateDistribution(distribution, "0.1.0");
-                    if (!scenario.equals("valid")) {
+                    validateDistribution(
+                            distribution,
+                            "0.1.0",
+                            scenario.equals("valid aot") || scenario.equals("missing aot")
+                    );
+                    if (!scenario.startsWith("valid")) {
                         throw new AssertionError("Accepted distribution with " + scenario);
                     }
                 } catch (IllegalStateException expected) {
-                    if (scenario.equals("valid")
+                    if (scenario.startsWith("valid")
                             || !expected
                         .getMessage()
-                        .contains(scenario.equals("wrong version") ? "version mismatch" : "Missing launcher")) {
+                        .contains(
+                                switch (scenario) {
+                                    case "wrong version" -> "version mismatch";
+                                    case "missing aot", "unexpected aot" -> "AOT contents mismatch";
+                                    default -> "Missing launcher";
+                                }
+                        )) {
                         throw expected;
                     }
                 }
@@ -331,7 +366,11 @@ public class Release {
         if (fake.selectDraft().get("id").getAsLong() != 1) {
             throw new AssertionError("Selected the wrong draft");
         }
-        var files = List.of(Path.of("glow-adoc-0.2.0-rc.1.zip"), Path.of("checksums-0.2.0-rc.1.txt"));
+        var files = List.of(
+                Path.of("glow-adoc-0.2.0-rc.1.zip"),
+                Path.of("glow-adoc-0.2.0-rc.1-without-aot.zip"),
+                Path.of("checksums-0.2.0-rc.1.txt")
+        );
         new Fake().update(true, 1, "v0.2.0-rc.1", "head", files);
         fake.names.addAll(List.of(
                 "glow-adoc-0.1.0-SNAPSHOT.jar",
@@ -355,7 +394,7 @@ public class Release {
                 || !fake.name.equals("Human title")
                 || !fake.prerelease
                 || !fake.target.equals("head")
-                || fake.names.size() != 3
+                || fake.names.size() != 4
                 || !fake.names.contains("notes.pdf")) {
             throw new AssertionError("Lost draft metadata or left incorrect assets");
         }

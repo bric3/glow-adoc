@@ -119,9 +119,11 @@ Unsupported capabilities and failed renderers retain readable text.
 
 The Gradle daemon uses Java 27; application bytecode targets 25 and the bootstrap targets 8.
 Shadow preserves service registrations, JRuby resources and multi-release metadata.
-The downloadable ZIP contains a versioned root directory with `bin/glow-adoc`, the plain Shadow jar
-at `lib/glow-adoc.jar`, and licence notices. Its POSIX launcher selects Java and resolves the jar
-relative to the extracted directory, including when the launcher is symlinked into PATH.
+The downloadable ZIP contains a versioned root directory with `bin/glow-adoc`, the executable jar
+at `lib/glow-adoc.jar`, an AOT cache under `lib/aot`, and licence notices. A second ZIP with the
+`without-aot` classifier omits the cache. Both contain the shell-prefixed executable jar.
+Their POSIX launcher selects Java and resolves the jar relative to the extracted directory,
+including when the launcher is symlinked into PATH.
 The local executable jar prepends the same launcher to the Shadow jar.
 Both launcher templates live in `glowadoc-cli-jvm/src/main/scripts` and are declared file inputs
 to the packaging and installation tasks.
@@ -140,17 +142,25 @@ digest only for the matching runtime jar and a valid SHA-256 value; ordinary Jav
 Artifact ownership comes from live class-resource jar URLs. Archived protection domains can retain
 training-time paths, so their CodeSource URLs cannot identify a relocated runtime jar.
 
-AOT training uses a bundled, project-owned corpus. `install` trains a staged `glow-adoc.jar` before
-installing it; `installWithoutAot` skips training. The CLI extracts the declared corpus includes and
+AOT training uses a bundled, project-owned corpus. The cacheable `aotTrain` task uses the launcher's selected
+JDK and writes `cache.aot` and `cache.key` under `build/aot`. Its inputs are the executable and a hash of
+the selected JDK's release metadata, platform and complete JVM option environment, including manager-supplied
+options. Gradle resolves that hash through the launcher's internal runtime-identity query.
+Gradle training never writes to the user cache.
+`install` and `distributionZip` consume these outputs; their `WithoutAot` variants omit them.
+The CLI extracts the declared corpus includes and
 assets into a private temporary directory and removes it after rendering. Training and installation
-preserve the jar basename and timestamp so HotSpot
-can relocate the cache. Training and possible hits enter the selected manager's environment before
-resolving Java and reading its release metadata. An available `JAVA_HOME` inside that environment
+preserve the jar basename and use the fixed UTC timestamp `1980-02-01T00:00:00Z` so HotSpot
+can relocate the cache after build-cache restoration. The ZIP stores this timestamp in a UTC field
+so extraction in another time zone retains it. Explicit launcher training and possible hits enter the
+selected manager's environment before resolving Java and reading its release metadata.
+An available `JAVA_HOME` inside that environment
 resolves manager shims and gives aliases of the same JDK a stable cache identity. A different JDK
 selected directly on PATH takes precedence over an inherited `JAVA_HOME`.
 Unmanaged launches keep Java on PATH and skip the extra shell invocation.
-Cache identity includes jar bytes and filename, Java path and release metadata, OS/architecture
+Cache identity includes jar bytes and filename, JDK release metadata, OS/architecture
 and JVM option environment. The installation directory
-is excluded from identity; full executable bytes still validate candidates. Missing metadata disables
+and the Java installation path are excluded from identity; full executable bytes still validate candidates.
+The launcher checks explicitly trained user caches before the packaged cache. Missing metadata disables
 automatic AOT and prevents training. A missing cache selects ordinary startup.
 Source uses MPL 2.0; dependencies retain their own licences and notices.

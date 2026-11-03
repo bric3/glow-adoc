@@ -51,7 +51,10 @@ unzip glow-adoc-VERSION.zip
 ----
 
 Keep the `bin` and `lib` directories together. Add `bin` to `PATH` or symlink `bin/glow-adoc` into a directory on `PATH`.
-The archive includes the Shadow jar, launcher and licence notices. Use `glow-adoc --train-aot` to train a local AOT cache.
+The archive includes the executable jar, launcher, licence notices and an AOT cache trained by the release build.
+The cache requires the same JDK build and platform; other runtimes start normally.
+Download `glow-adoc-VERSION-without-aot.zip` for the distribution without AOT.
+Use `glow-adoc --train-aot` to train a cache for your runtime.
 
 === From source
 
@@ -63,9 +66,9 @@ From a checkout, with Java 27 installed:
 export PATH="$HOME/.local/bin:$PATH"
 ----
 
-Installation pretrains a local AOT cache and writes a small launcher to `~/.local/bin/glow-adoc`.
+Installation trains and packages an AOT cache and writes a small launcher to `~/.local/bin/glow-adoc`.
 The jar lives in `~/.local/share/glow-adoc/glow-adoc.jar`, or under `$XDG_DATA_HOME`.
-Use `:glowadoc-cli-jvm:installWithoutAot` to skip training.
+The cache lives beside the jar in `aot/`. Use `:glowadoc-cli-jvm:installWithoutAot` to install without it.
 
 == Read
 

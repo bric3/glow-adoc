@@ -33,18 +33,25 @@ class PackagedCliTest {
     Path directory;
     private final String java = Path.of(System.getProperty("java.home"), "bin/java").toString();
 
-    @Test
-    void distributionZipRunsAfterExtractionRelocationAndSymlinking() throws Exception {
-        String distribution = System.getProperty("glow.distribution");
+    @TableTest(
+            """
+        property                    | aot
+        glow.distribution           | true
+        glow.distributionWithoutAot | false
+        """
+    )
+    void distributionZipRunsAfterExtractionRelocationAndSymlinking(String property, boolean aot) throws Exception {
+        String distribution = System.getProperty(property);
         assertNotNull(distribution, "A ZIP distribution must be supplied to packaged tests");
         String version;
         try (var jar = new JarFile(System.getProperty("glow.jar"))) {
             version = jar.getManifest().getMainAttributes().getValue("Implementation-Version");
         }
         Path extracted = directory.resolve("downloaded release");
-        var unzip = new ProcessBuilder("unzip", "-q", distribution, "-d", extracted.toString())
-            .redirectErrorStream(true)
-            .start();
+        var unzipBuilder =
+                new ProcessBuilder("unzip", "-q", distribution, "-d", extracted.toString()).redirectErrorStream(true);
+        unzipBuilder.environment().put("TZ", "Pacific/Honolulu");
+        var unzip = unzipBuilder.start();
         try {
             assertTrue(unzip.waitFor(30, TimeUnit.SECONDS));
             assertEquals(
@@ -64,7 +71,13 @@ class PackagedCliTest {
                 Files.move(extracted.resolve("glow-adoc-" + version), directory.resolve("relocated app with spaces"));
         Path launcher = home.resolve("bin/glow-adoc");
         assertTrue(Files.isExecutable(launcher), "The ZIP preserves executable permissions");
-        assertEquals(-1L, Files.mismatch(Path.of(System.getProperty("glow.jar")), home.resolve("lib/glow-adoc.jar")));
+        assertEquals(
+                -1L,
+                Files.mismatch(Path.of(System.getProperty("glow.executable")), home.resolve("lib/glow-adoc.jar"))
+        );
+        Path cache = home.resolve("lib/aot/cache.aot");
+        assertEquals(aot, Files.exists(cache));
+        assertEquals(aot, Files.exists(home.resolve("lib/aot/cache.key")));
         Path link = Files.createSymbolicLink(directory.resolve("glow-adoc-link"), directory.relativize(launcher));
         Path output = directory.resolve("distribution-output");
         for (Path executable : List.of(launcher, link)) {
@@ -86,6 +99,7 @@ class PackagedCliTest {
         Files.writeString(document, "= Download\n\nA *bold* sentence.\n");
         var builder = new ProcessBuilder(
                 link.toString(),
+                "--timings",
                 "--no-pager",
                 "--no-cache",
                 "--color=never",
@@ -93,14 +107,69 @@ class PackagedCliTest {
         )
             .directory(directory.toFile())
             .redirectOutput(output.toFile())
-            .redirectErrorStream(true);
+            .redirectError(directory.resolve("distribution-errors").toFile());
         selectTestJava(builder);
         builder.environment().put("XDG_CONFIG_HOME", directory.resolve("config").toString());
+        builder.environment().put("XDG_CACHE_HOME", directory.resolve("cache").toString());
         var process = builder.start();
         try {
             assertTrue(process.waitFor(30, TimeUnit.SECONDS));
             assertEquals(0, process.exitValue(), Files.readString(output));
             assertTrue(Files.readString(output).contains("A bold sentence."));
+            assertEquals(aot, Files.readString(directory.resolve("distribution-errors")).contains("timing aot-cache:"));
+        } finally {
+            process.destroyForcibly();
+        }
+        if (aot) {
+            assertEquals(318211200000L, Files.getLastModifiedTime(home.resolve("lib/glow-adoc.jar")).toMillis());
+            process = new ProcessBuilder(
+                    System.getProperty("glow.aotJava"),
+                    "-XX:+UnlockDiagnosticVMOptions",
+                    "-XX:+AOTCompatibleOopCompression",
+                    "-XX:AOTMode=required",
+                    "-XX:AOTCache=" + cache,
+                    "-jar",
+                    home.resolve("lib/glow-adoc.jar").toString(),
+                    "--no-cache",
+                    "--no-pager",
+                    "--color=never",
+                    document.toString()
+            )
+                .redirectOutput(output.toFile())
+                .redirectErrorStream(true)
+                .start();
+            try {
+                assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+                assertEquals(0, process.exitValue(), Files.readString(output));
+                assertTrue(Files.readString(output).contains("A bold sentence."));
+            } finally {
+                process.destroyForcibly();
+            }
+        }
+    }
+
+    @Test
+    void jrubyAndHighlightingRunWithUnsafeMemoryAccessDenied() throws Exception {
+        Path output = directory.resolve("unsafe-output");
+        Path errors = directory.resolve("unsafe-errors");
+        var process = new ProcessBuilder(
+                java,
+                "--sun-misc-unsafe-memory-access=deny",
+                "-jar",
+                System.getProperty("glow.jar"),
+                "--no-cache",
+                "--no-pager",
+                "--color=always",
+                System.getProperty("glow.fixture")
+        )
+            .redirectOutput(output.toFile())
+            .redirectError(errors.toFile())
+            .start();
+        try {
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(0, process.exitValue(), Files.readString(errors));
+            assertFalse(Files.readString(errors).contains("sun.misc.Unsafe"), Files.readString(errors));
+            assertTrue(Files.size(output) > 0);
         } finally {
             process.destroyForcibly();
         }
@@ -150,7 +219,6 @@ class PackagedCliTest {
         for (String mode : List.of("miss", "hit", "bypass")) {
             var command = new ArrayList<>(List.of(
                     java,
-                    "--sun-misc-unsafe-memory-access=allow",
                     "-Xlog:class+load=info:file=" + classes,
                     "-jar",
                     System.getProperty("glow.jar"),
@@ -254,15 +322,7 @@ class PackagedCliTest {
     }
 
     private String cachedReadWithJar(Path input, String jar, String... options) throws Exception {
-        var command = new ArrayList<>(List.of(
-                java,
-                "--sun-misc-unsafe-memory-access=allow",
-                "-jar",
-                jar,
-                "--timings",
-                "--no-pager",
-                "--color=never"
-        ));
+        var command = new ArrayList<>(List.of(java, "-jar", jar, "--timings", "--no-pager", "--color=never"));
         command.addAll(List.of(options));
         command.add(input.toString());
         Path errors = directory.resolve("cache-errors");
@@ -1104,7 +1164,7 @@ class PackagedCliTest {
     }
 
     private void selectTestJava(ProcessBuilder builder) {
-        builder.environment().put("PATH", Path.of(System.getProperty("java.home"), "bin") + ":/usr/bin:/bin");
+        builder.environment().put("PATH", Path.of(System.getProperty("glow.aotJava")).getParent() + ":/usr/bin:/bin");
         builder.environment().put("SDKMAN_CANDIDATES_DIR", directory.resolve("unused-sdkman").toString());
     }
 

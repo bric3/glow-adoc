@@ -92,7 +92,6 @@ class JavaLauncherTest {
         assertEquals(
                 List.of(
                         name,
-                        "-Dsun.misc.unsafe.memory.access=allow",
                         "-Xmx64m",
                         "-Dexample=value",
                         "-jar",
@@ -338,6 +337,62 @@ class JavaLauncherTest {
     }
 
     @Test
+    void fingerprintsTheManagersRuntimeAndOptionsWithoutLaunchingJava() throws Exception {
+        Path selected = javaHome("managed JDK", "managed");
+        manager("mise", selected, "export JAVA_TOOL_OPTIONS='-Dmanager.setting=one'\n");
+        assertEquals(0, run("--aot-runtime-identity"));
+        var identity = Files.readAllLines(directory.resolve("output.txt"));
+        assertEquals(selected.resolve("bin/java").toString(), identity.getFirst());
+        assertTrue(identity.getLast().matches("[0-9a-f]{64}"));
+        assertFalse(Files.exists(capture));
+        manager("mise", selected, "export JAVA_TOOL_OPTIONS='-Dmanager.setting=two'\n");
+        assertEquals(0, run("--aot-runtime-identity"));
+        assertFalse(identity.equals(Files.readAllLines(directory.resolve("output.txt"))));
+        Files.delete(selected.resolve("release"));
+        assertEquals(2, run("--aot-runtime-identity"));
+        assertFalse(Files.exists(capture));
+    }
+
+    @Test
+    void selectsPackagedAotAcrossJdkLocationsAndValidatesItsInputs() throws Exception {
+        usePathJava("training JDK");
+        Path cacheHome = directory.resolve("training cache");
+        environment.put("XDG_CACHE_HOME", cacheHome.toString());
+        assertEquals(0, run("--train-aot"));
+        Path cache;
+        try (var files = Files.list(cacheHome.resolve("glow-adoc/aot"))) {
+            cache = files
+                .filter(path -> path.toString().endsWith(".aot"))
+                .findFirst()
+                .orElseThrow();
+        }
+        Path packaged = Files.createDirectory(launcher.getParent().resolve("aot"));
+        Files.copy(cache, packaged.resolve("cache.aot"));
+        Files.writeString(packaged.resolve("cache.key"), cache.getFileName().toString().replace(".aot", "") + "\n");
+        environment.put("XDG_CACHE_HOME", directory.resolve("empty cache").toString());
+        Path runtime = usePathJava("runtime JDK");
+        assertEquals(0, run("--timings", "other.adoc"));
+        assertTrue(arguments().contains("-XX:AOTCache=" + packaged.resolve("cache.aot")));
+        environment.put("JAVA_OPTS", "-Xmx128m");
+        assertEquals(0, run("other.adoc"));
+        assertFalse(arguments().contains("-XX:AOTMode=auto"));
+        environment.remove("JAVA_OPTS");
+        Files.writeString(runtime.resolve("release"), "different JDK");
+        assertEquals(0, run("other.adoc"));
+        assertFalse(arguments().contains("-XX:AOTMode=auto"));
+        Files.writeString(runtime.resolve("release"), "JAVA_VERSION=\"27\"\nIMPLEMENTOR=\"Example\"\n");
+        Files.writeString(launcher, "changed", StandardOpenOption.APPEND);
+        assertEquals(0, run("other.adoc"));
+        assertFalse(arguments().contains("-XX:AOTMode=auto"));
+        assertEquals(0, run("--train-aot"));
+        try (var files = Files.list(directory.resolve("empty cache/glow-adoc/aot"))) {
+            assertEquals(1L, files
+                .filter(path -> path.toString().endsWith(".aot"))
+                .count());
+        }
+    }
+
+    @Test
     void reusesTrainingAfterRelocationWithTheSameExecutableName() throws Exception {
         usePathJava("selected");
         environment.put("XDG_CACHE_HOME", directory.resolve("relocation-aot").toString());
@@ -489,13 +544,16 @@ class JavaLauncherTest {
         assertTrue(arguments().contains("-XX:AOTMode=auto"));
     }
 
-    @TableTest("""
+    @TableTest(
+            """
         variable
         JAVA_OPTS
         JAVA_TOOL_OPTIONS
         JDK_JAVA_OPTIONS
         _JAVA_OPTIONS
-        """)
+        JDK_AOT_VM_OPTIONS
+        """
+    )
     void automaticJvmOptionsInvalidateAndBypassAotCaches(String variable) throws Exception {
         usePathJava("selected");
         environment.put("XDG_CACHE_HOME", directory.resolve("automatic-aot").toString());

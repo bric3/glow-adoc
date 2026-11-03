@@ -4,7 +4,7 @@
 class GlowAdoc < Formula
   desc "Read AsciiDoc in the terminal"
   homepage "https://github.com/bric3/glow-adoc"
-  url "https://github.com/bric3/glow-adoc/releases/download/vVERSION/glow-adoc-VERSION.zip"
+  url "https://github.com/bric3/glow-adoc/releases/download/vVERSION/glow-adoc-VERSION-without-aot.zip"
   version "VERSION"
   sha256 "REPLACE_WITH_RELEASE_SHA256"
   license "MPL-2.0"

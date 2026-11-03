@@ -34,14 +34,7 @@ public class StartupMatrix {
             for (var flags : variants) {
                 for (var file : List.of(small.toString(), args[2], large.toString())) {
                     System.out.println("# flags=" + flags + " file=" + Path.of(file).getFileName());
-                    var command =
-                            new ArrayList<>(List.of(
-                                    "--runs",
-                                    "3",
-                                    "--",
-                                    args[0],
-                                    "--sun-misc-unsafe-memory-access=allow"
-                    ));
+                    var command = new ArrayList<>(List.of("--runs", "3", "--", args[0]));
                     command.addAll(flags);
                     command.addAll(List.of("-jar", args[1], "--no-pager", "--color=always", file));
                     try {

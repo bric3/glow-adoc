@@ -63,24 +63,32 @@ Idle time does not invalidate conversion entries or local AOT caches.
 The CLI disables JRuby native extensions by default because Java handles document files.
 `-Djruby.native.enabled=true` restores JRuby's native support. JVM compiler and GC defaults are retained.
 
-== Local AOT cache
+== Packaged and local AOT caches
 
-Pre-train locally before installation:
+Install with a packaged AOT cache:
 
 [source,sh]
 ----
 ./gradlew :glowadoc-cli-jvm:install
 ----
 
-The task trains a staged executable named `glow-adoc.jar`, then installs it with its original timestamp.
-The JVM permits relocation when the filename and timestamp match. The launcher validates the full
-executable bytes, filename and runtime before selecting that cache; its directory is not part of the key.
+The task trains a staged executable named `glow-adoc.jar` with the launcher's selected JDK, then installs the
+jar and cache together. Training, installation and ZIP extraction use the fixed UTC jar timestamp
+`1980-02-01T00:00:00Z`. HotSpot permits relocation when the filename and timestamp match.
+The launcher validates the full executable bytes, filename and runtime before selecting that cache.
 The jar lives under `$XDG_DATA_HOME/glow-adoc`, defaulting to `~/.local/share/glow-adoc`.
 The small script in `~/.local/bin/glow-adoc` reads it with zsh's sh emulation when available,
 falling back to `/bin/sh`. This avoids the measured macOS startup cost of large executable files under `/bin/sh`.
 Portable executable jars retain their embedded launcher.
-`:glowadoc-cli-jvm:installWithoutAot` installs both files without training. An existing compatible cache
-can still be selected at runtime.
+The packaged cache lives beside the jar in `aot/cache.aot`, with its identity in `aot/cache.key`.
+`:glowadoc-cli-jvm:installWithoutAot` installs without this cache and removes those two files from an
+earlier installation. A compatible cache trained explicitly in the user cache can still be selected.
+
+`:glowadoc-cli-jvm:distributionZip` includes the cache in `glow-adoc-VERSION.zip`.
+`:glowadoc-cli-jvm:distributionWithoutAotZip` creates `glow-adoc-VERSION-without-aot.zip` without training.
+Release and draft workflows publish both archives and checksum both files. CI also uploads both variants.
+The release cache is trained on Linux x86_64 with the workflow's Temurin 27 build; other JDK builds and
+platforms start normally. Train locally to use AOT with a different runtime.
 
 To train an existing installation:
 
@@ -97,24 +105,29 @@ extracts the listed files into a private temporary directory and removes them af
 Training does not read an external document or user/project configuration. It bypasses both document caches
 and does not open a pager or execute diagram programs. `--train-aot FILE` selects a custom workload.
 
-`./gradlew :glowadoc-cli-jvm:aotTrain` prepares the staged executable and local cache without installing.
-A later `:glowadoc-cli-jvm:installWithoutAot` can reuse them with the same runtime and JVM options.
+`./gradlew :glowadoc-cli-jvm:aotTrain` writes `cache.aot` and `cache.key` under
+`glowadoc-cli-jvm/build/aot` without installing or writing to the user cache. Gradle tracks the executable,
+selected JDK release metadata, platform and JVM option environment, including manager-supplied options.
+Unchanged inputs skip training;
+missing output can be restored from the Gradle build cache.
 
 A trained AOT cache can serve other documents: the document argument is not part of its identity.
 It does not preconvert other files or retain an AsciidoctorJ engine between CLI processes.
 Each document still needs its own valid conversion entry to bypass JRuby startup.
 Additional document features can load classes absent from training; they run normally.
 
-Caches live under `$XDG_CACHE_HOME/glow-adoc/aot`, falling back to `~/.cache/glow-adoc/aot`.
-Identity includes executable bytes and filename, selected Java path and complete JDK release metadata,
+Explicit `glow-adoc --train-aot` caches live under `$XDG_CACHE_HOME/glow-adoc/aot`, falling back to
+`~/.cache/glow-adoc/aot`. A matching local cache takes precedence over the packaged cache.
+Identity includes executable bytes and filename, complete JDK release metadata,
 OS/architecture and JVM option environment. `JAVA_OPTS`, `JAVA_TOOL_OPTIONS`, `JDK_JAVA_OPTIONS`
-and `_JAVA_OPTIONS` participate in identity. Train again after any of these change.
+`_JAVA_OPTIONS` and `JDK_AOT_VM_OPTIONS` participate in identity. Train again after any of these change.
+The Java installation path is excluded so matching JDK builds can share packaged caches.
 New cache filenames start with a build-generation hash covering the launcher template and Shadow jar.
 This hint only skips impossible lookups: training and possible hits still hash the entire executable
 and validate the complete runtime identity. Manually editing a jar while retaining its generation hint
 therefore invalidates existing caches. Caches from earlier launcher formats require retraining;
 an executable update already invalidates their identity.
-Pre-training uses the locally selected JDK. These caches are not universal release artifacts:
+Explicit training uses the launcher's selected JDK. These caches require compatible runtimes:
 application, JDK build, platform and JVM option changes require compatible training.
 No cache means normal startup; incompatible/corrupt cache loading
 uses the JVM's auto fallback and may report diagnostics on stderr.
@@ -135,8 +148,8 @@ For direct Java invocation, train and load an explicitly named cache with the sa
 
 [source,sh]
 ----
-java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTCacheOutput=glow-adoc.aot -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar --no-cache --no-pager --color=always fixtures/showcase.adoc
-java --sun-misc-unsafe-memory-access=allow -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=auto -XX:AOTCache=glow-adoc.aot -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar document.adoc
+java -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTCacheOutput=glow-adoc.aot -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.1-SNAPSHOT.jar --no-cache --no-pager --color=always fixtures/showcase.adoc
+java -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression -XX:AOTMode=auto -XX:AOTCache=glow-adoc.aot -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.1-SNAPSHOT.jar document.adoc
 ----
 
 == Reproduce measurements
@@ -212,8 +225,7 @@ Start async-profiler with the JVM to include startup work. Select the library fo
 
 [source,sh]
 ----
-java --sun-misc-unsafe-memory-access=allow \
-  -agentpath:/path/to/libasyncProfiler.dylib=start,event=cpu,interval=1ms,collapsed,file=cpu.collapsed \
+java -agentpath:/path/to/libasyncProfiler.dylib=start,event=cpu,interval=1ms,collapsed,file=cpu.collapsed \
   -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar \
   --no-pager --color=always document.adoc
 ----

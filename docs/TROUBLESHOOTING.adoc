@@ -75,9 +75,9 @@ Diagram execution has a 15-second deadline and bounded output.
 
 == Java warnings
 
-The launcher supplies the Unsafe warning policy. For direct invocation:
+JRuby 10.1.2.0 requires no Unsafe warning override. Direct invocation uses:
 
 [source,sh]
 ----
-java --sun-misc-unsafe-memory-access=allow -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.0-SNAPSHOT.jar FILE
+java -jar glowadoc-cli-jvm/build/libs/glow-adoc-0.1.1-SNAPSHOT.jar FILE
 ----

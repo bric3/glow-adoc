@@ -10,6 +10,7 @@ Read [Architecture](ARCHITECTURE.md) before changing module boundaries.
 ```sh
 ./gradlew checkAll
 ./gradlew :glowadoc-cli-jvm:distributionZip
+./gradlew :glowadoc-cli-jvm:distributionWithoutAotZip
 ./gradlew :glowadoc-cli-jvm:install
 ```
 
@@ -57,10 +58,13 @@ XDG_CACHE_HOME="$PWD/glowadoc-cli-jvm/build/install-check/cache" \
 ./glowadoc-cli-jvm/build/install-check/.local/bin/glow-adoc --version
 ```
 
-AOT training uses the executable launcher's selected JDK: `./gradlew :glowadoc-cli-jvm:aotTrain`.
-`install` trains before installation; `installWithoutAot` skips training. Native Image requires a separate runtime smoke test.
+AOT training uses the launcher's selected JDK: `./gradlew :glowadoc-cli-jvm:aotTrain`.
+The task writes `cache.aot` and `cache.key` under `glowadoc-cli-jvm/build/aot`, with Gradle up-to-date and build-cache support.
+`install` and `distributionZip` include that cache; `installWithoutAot` and `distributionWithoutAotZip` omit it.
+Native Image requires a separate runtime smoke test.
 Check the small script and its separate jar. The installed jar's bytes, basename and timestamp
-must match the staged `glow-adoc.jar` so AOT loading survives relocation.
+must match the staged `glow-adoc.jar` so AOT loading survives relocation. Training, installation and the ZIP
+use the fixed UTC jar timestamp `1980-02-01T00:00:00Z`, including after build-cache restoration.
 
 Dependency changes require licence review, updated locks and verified checksums:
 

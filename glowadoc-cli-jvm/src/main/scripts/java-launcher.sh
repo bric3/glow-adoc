@@ -69,15 +69,14 @@ launch_java() {
             "-Dglowadoc.launcher.sha256=$artifact_hash" "$@"
     fi
     launch_stage jvm-exec
-    # This JDK property also lets Java 8 reach the bootstrap's version guard.
     # JAVA_OPTS intentionally supplies JVM arguments; application arguments stay quoted.
     # shellcheck disable=SC2086
     if [ "$launch_mode" = cached ]; then
-        exec_selected "${java_executable:-java}" -Dsun.misc.unsafe.memory.access=allow \
+        exec_selected "${java_executable:-java}" \
             -Xlog:aot=off:stdout -Xlog:aot=warning:stderr ${JAVA_OPTS:-} "$@"
     fi
     # shellcheck disable=SC2086
-    exec_selected "${java_executable:-java}" -Dsun.misc.unsafe.memory.access=allow ${JAVA_OPTS:-} "$@"
+    exec_selected "${java_executable:-java}" ${JAVA_OPTS:-} "$@"
 }
 
 java_manager=PATH
@@ -118,13 +117,21 @@ if [ "$launch_timings" = yes ]; then
 fi
 
 aot_root=${XDG_CACHE_HOME:-"$HOME/.cache"}/glow-adoc/aot
+artifact_dir=${artifact%/*}
+[ "$artifact_dir" != "$artifact" ] || artifact_dir=.
+packaged_aot=$artifact_dir/aot
+packaged_key=
 aot_cache=
 artifact_hash=
 java_executable=
-aot_options="${JAVA_OPTS:-} ${JAVA_TOOL_OPTIONS:-} ${JDK_JAVA_OPTIONS:-} ${_JAVA_OPTIONS:-}"
+aot_options="${JAVA_OPTS:-} ${JAVA_TOOL_OPTIONS:-} ${JDK_JAVA_OPTIONS:-} ${_JAVA_OPTIONS:-} ${JDK_AOT_VM_OPTIONS:-}"
 case "$aot_options" in *AOT*|*-agent*|*-javaagent*|*StartFlightRecording*) use_cache=no ;; esac
 matching_generation=no
 if [ "$use_cache" = yes ]; then
+    if [ -r "$packaged_aot/cache.aot" ] && [ -r "$packaged_aot/cache.key" ]; then
+        IFS= read -r packaged_key < "$packaged_aot/cache.key"
+        case "$packaged_key" in "$cache_generation-"*) matching_generation=yes ;; esac
+    fi
     for stored_cache in "$aot_root/$cache_generation-"*.aot; do
         if [ -f "$stored_cache" ]; then
             matching_generation=yes
@@ -132,7 +139,7 @@ if [ "$use_cache" = yes ]; then
         fi
     done
 fi
-if [ "${1:-}" = --train-aot ] || [ "$matching_generation" = yes ]; then
+if [ "${1:-}" = --train-aot ] || [ "${1:-}" = --aot-runtime-identity ] || [ "$matching_generation" = yes ]; then
     if [ "$in_java_environment" = no ] && [ "$java_manager" != PATH ]; then
         # Resolve AOT identity inside the manager's environment, including its JVM option variables.
         export GLOW_ADOC_JAVA_CONTEXT=$cache_generation
@@ -165,6 +172,15 @@ if [ "${1:-}" = --train-aot ] || [ "$matching_generation" = yes ]; then
         done < "${java_executable%/*}/../release"
     fi
     if [ -n "$java_identity" ] && select_hash_tool; then
+        # Gradle fingerprints the same runtime and manager-supplied options used by training and loading.
+        runtime_key=$(printf '%s\n' "$java_identity" "${JAVA_OPTS:-}" "${JAVA_TOOL_OPTIONS:-}" \
+            "${JDK_JAVA_OPTIONS:-}" "${_JAVA_OPTIONS:-}" "${JDK_AOT_VM_OPTIONS:-}" "$(uname -sm)" \
+            | "$hash_program" "$hash_option") || runtime_key=
+        runtime_key=${runtime_key%% *}
+        if [ "${1:-}" = --aot-runtime-identity ] && [ -n "$runtime_key" ]; then
+            printf '%s\n%s\n' "$java_executable" "$runtime_key"
+            exit 0
+        fi
         [ "$launch_timings" != yes ] || printf 'glow-adoc timing java: %s\n' "$java_executable" >&2
         launch_stage artifact-hash-start
         # A simple command substitution avoids intermittent subshell delays on macOS.
@@ -172,17 +188,22 @@ if [ "${1:-}" = --train-aot ] || [ "$matching_generation" = yes ]; then
         artifact_hash=${artifact_hash%% *}
         launch_stage artifact-hash-ready
         if [ -n "$artifact_hash" ]; then
-            artifact_dir=${artifact%/*}
-            [ "$artifact_dir" != "$artifact" ] || artifact_dir=.
             launcher_location=$(CDPATH= cd "$artifact_dir" && printf '%s/%s' "$(pwd -P)" "${artifact##*/}")
-            aot_key=$(printf '%s\n' "$artifact_hash" "${artifact##*/}" "$java_executable" "$java_identity" \
-                "${JAVA_OPTS:-}" "${JAVA_TOOL_OPTIONS:-}" "${JDK_JAVA_OPTIONS:-}" "${_JAVA_OPTIONS:-}" \
-                "$(uname -sm)" | "$hash_program" "$hash_option") || aot_key=
+            aot_key=$(printf '%s\n' "$artifact_hash" "${artifact##*/}" "$runtime_key" \
+                | "$hash_program" "$hash_option") || aot_key=
             aot_key=${aot_key%% *}
             [ -z "$aot_key" ] || aot_cache=$aot_root/$cache_generation-$aot_key.aot
+            if [ "${1:-}" != --train-aot ] && [ ! -r "$aot_cache" ] \
+                && [ "$packaged_key" = "$cache_generation-$aot_key" ]; then
+                aot_cache=$packaged_aot/cache.aot
+            fi
             launch_stage cache-key-ready
         fi
     fi
+fi
+if [ "${1:-}" = --aot-runtime-identity ]; then
+    printf 'AOT requires JDK release metadata and sha256sum or shasum.\n' >&2
+    exit 2
 fi
 launch_stage cache-lookup-ready
 if [ "${1:-}" = --train-aot ]; then
@@ -203,7 +224,7 @@ if [ "${1:-}" = --train-aot ]; then
     trap 'exit 143' HUP TERM
     # Run in a child so the parent can publish the cache and remove temporary files.
     # shellcheck disable=SC2086
-    (exec_selected "$java_executable" -Dsun.misc.unsafe.memory.access=allow ${JAVA_OPTS:-} \
+    (exec_selected "$java_executable" ${JAVA_OPTS:-} \
         -XX:+UnlockDiagnosticVMOptions -XX:+AOTCompatibleOopCompression \
         -XX:AOTCacheOutput="$training_dir/cache.aot" -jar "$artifact" \
         --no-cache --no-pager --color=always "$@") > /dev/null || exit "$?"

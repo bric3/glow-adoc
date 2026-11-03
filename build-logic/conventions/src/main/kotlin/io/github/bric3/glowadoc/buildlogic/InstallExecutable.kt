@@ -3,8 +3,12 @@
 package io.github.bric3.glowadoc.buildlogic
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -34,13 +38,33 @@ abstract class InstallExecutable : DefaultTask() {
     @get:OutputFile
     abstract val installedJar: RegularFileProperty
 
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    @get:Optional
+    abstract val aotCache: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val installedAot: DirectoryProperty
+
     @TaskAction
     fun install() {
         val target = executable.get().asFile.toPath()
         val archive = installedJar.get().asFile.toPath()
         replace(archive) { staged ->
-            // COPY_ATTRIBUTES keeps the timestamp recorded by AOT training.
             Files.copy(jar.get().asFile.toPath(), staged, REPLACE_EXISTING, COPY_ATTRIBUTES)
+            if (aotCache.isPresent) {
+                Files.setLastModifiedTime(staged, AOT_JAR_TIMESTAMP)
+            }
+        }
+        val cache = installedAot.get().asFile.toPath()
+        for (name in listOf("cache.aot", "cache.key")) {
+            if (aotCache.isPresent) {
+                replace(cache.resolve(name)) { staged ->
+                    Files.copy(aotCache.file(name).get().asFile.toPath(), staged, REPLACE_EXISTING)
+                }
+            } else {
+                Files.deleteIfExists(cache.resolve(name))
+            }
         }
         val quotedJar = "'${archive.toAbsolutePath().toString().replace("'", "'\"'\"'")}'"
         replace(target) { staged ->
