@@ -144,7 +144,7 @@ jobs:
       - name: Check draft before updating
         if: steps.draft.outputs.id != ''
         id: current
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RELEASE_ID: ${{ steps.draft.outputs.id }}
           RELEASE_TAG: ${{ steps.draft.outputs.tag }}
